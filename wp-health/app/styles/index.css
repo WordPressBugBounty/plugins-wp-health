@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+img {
+	border: 0;
+}
+
+body.wp-umbrella-styles #wpbody{
+	background: #F7F6F9;
+}
+
+.wp-umbrella-styles #wpbody-content .notice{
+	display:none !important;
+}
+
+.wp-umbrella-styles #wpcontent {
+	padding-left:0 !important;
+	background-color:white;
+}
+
+.wp-umbrella-styles .wrap {
+	margin:0 !important;
+	height:100vh;
+}
+
+
+.module-wp-health{
+	height: 100%;
+	background: #F7F6F9;
+}
+
+.swal2-popup.swal2-modal{
+	width: 48em !important;
+}

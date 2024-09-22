@@ -1,0 +1,393 @@
+# Copyright (C) 2021 WP Umbrella
+# This file is distributed under the same license as the WP Umbrella plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: WP Umbrella 1.2.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-health\n"
+"Last-Translator: WP Umbrella <contact@wp-umbrella.com>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2021-02-14T18:35:35+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.4.0\n"
+"X-Domain: wp-health\n"
+
+#. Plugin Name of the plugin
+#. Author of the plugin
+msgid "WP Umbrella"
+msgstr ""
+
+#. Description of the plugin
+msgid "WP Umbrella Monitors the uptime, performance, health and security of your WordPress website! If anything goes wrong, you'll be alerted !"
+msgstr ""
+
+#. Author URI of the plugin
+msgid "https://wp-umbrella.com/"
+msgstr ""
+
+#: app/react/components/current-loading/index.js:17
+msgid "Oops!"
+msgstr ""
+
+#: app/react/components/current-loading/index.js:19
+msgid "You don't have any data yet. Think about adding one!"
+msgstr ""
+
+#: app/react/components/current-loading/index.js:25
+msgid "We may also have had trouble connecting to the API."
+msgstr ""
+
+#: app/react/components/current-loading/index.js:31
+msgid "We continue to check"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:104
+#: app/react/components/forms/register/index.js:187
+#: app/react/modules/overview/index.js:223
+#: app/react/modules/overview/index.js:301
+msgid "Great!"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:105
+msgid "Your monitor is updated"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:107
+#: app/react/components/forms/register/index.js:179
+#: app/react/components/forms/register/index.js:193
+#: app/react/modules/overview/index.js:216
+#: app/react/modules/overview/index.js:226
+#: app/react/modules/overview/index.js:307
+msgid "Close"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:125
+msgid "Ping interval"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:143
+msgid "Go premium to increase the monitoring frequency"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:151
+msgid "Choose the regions"
+msgstr ""
+
+#: app/react/components/forms/edit-monitor/index.js:205
+msgid "Update settings"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:176
+#: app/react/modules/overview/index.js:213
+msgid "Error!"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:188
+msgid "You are registered and we have configured your API key"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:202
+msgid "First name"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:215
+msgid "It's nicer if we have your first name :)"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:224
+msgid "Last name"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:237
+msgid "You must enter your name"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:258
+msgid "No email, no chocolate."
+msgstr ""
+
+#: app/react/components/forms/register/index.js:264
+msgid "Hosting provider"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:276
+msgid "To help you best in your monitoring, it is important for us to know your hosting provider."
+msgstr ""
+
+#: app/react/components/forms/register/index.js:329
+msgid "You need to have a password."
+msgstr ""
+
+#: app/react/components/forms/register/index.js:339
+msgid "Who's your hosting ?"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:363
+msgid "I agree to WP"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:365
+msgid "Umbrella's Terms of Service"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:379
+msgid "News and features updates, as well as occasional company announcements."
+msgstr ""
+
+#: app/react/components/forms/register/index.js:388
+msgid "The registration form is not complete."
+msgstr ""
+
+#: app/react/components/forms/register/index.js:394
+msgid "This email is not available"
+msgstr ""
+
+#: app/react/components/forms/register/index.js:408
+msgid "Register"
+msgstr ""
+
+#: app/react/components/issues/chart-date-error/index.js:32
+#: app/react/components/issues/chart-error-php-version/index.js:28
+#: app/react/components/issues/chart-error-version/index.js:28
+#: app/react/components/issues/chart-error-wordpress-version/index.js:28
+msgid "error"
+msgstr ""
+
+#: app/react/components/issues/pagination-issues/index.js:20
+msgid "Previous"
+msgstr ""
+
+#: app/react/components/issues/pagination-issues/index.js:39
+msgid "Next"
+msgstr ""
+
+#: app/react/layouts/need-register/index.js:23
+msgid "You must register"
+msgstr ""
+
+#: app/react/layouts/need-register/index.js:25
+msgid "To access our features, you must register"
+msgstr ""
+
+#: app/react/layouts/need-register/index.js:31
+msgid "by going to the 'Overview'"
+msgstr ""
+
+#: app/react/layouts/need-register/index.js:33
+msgid "tab. All of our features are free to test."
+msgstr ""
+
+#: app/react/modules/healthcheck/index.js:24
+msgid "At WP Umbrella we take your privacy very seriously."
+msgstr ""
+
+#: app/react/modules/healthcheck/index.js:30
+msgid "To make the plugin work properly, we need your consent."
+msgstr ""
+
+#: app/react/modules/healthcheck/index.js:37
+msgid "In order to identify the errors generated by your plugins, themes and hosting provider (such as downtimes and performance) we need to collect some informations."
+msgstr ""
+
+#: app/react/modules/healthcheck/index.js:43
+msgid "These information help us to offer you patches, tutorials and adapted help. The complete list of data we use and our terms and conditions are available here. We never use your data for advertising purposes."
+msgstr ""
+
+#: app/react/modules/healthcheck/index.js:57
+msgid "I agree"
+msgstr ""
+
+#: app/react/modules/healthcheck/server.js:11
+msgid "Server information"
+msgstr ""
+
+#: app/react/modules/overview/index.js:58
+msgid "Account info"
+msgstr ""
+
+#: app/react/modules/overview/index.js:72
+msgid "View my account"
+msgstr ""
+
+#: app/react/modules/overview/index.js:88
+msgid "Free Trial"
+msgstr ""
+
+#: app/react/modules/overview/index.js:111
+msgid "Upgrade to WP Umbrella Premium"
+msgstr ""
+
+#: app/react/modules/overview/index.js:117
+msgid "Your trial is over. Go premium (10% off with the promo code 'PREMIUM')"
+msgstr ""
+
+#: app/react/modules/overview/index.js:127
+msgid "+ PHP Errors Monitoring"
+msgstr ""
+
+#: app/react/modules/overview/index.js:132
+msgid "+ Uptime Monitoring"
+msgstr ""
+
+#: app/react/modules/overview/index.js:137
+msgid "+ Performance Monitoring"
+msgstr ""
+
+#: app/react/modules/overview/index.js:145
+msgid "+ Instant Alerts"
+msgstr ""
+
+#: app/react/modules/overview/index.js:150
+msgid "+ Weekly Performance Report "
+msgstr ""
+
+#: app/react/modules/overview/index.js:158
+msgid "+ Premium Support"
+msgstr ""
+
+#: app/react/modules/overview/index.js:163
+msgid "+ Monitor several websites from one place"
+msgstr ""
+
+#: app/react/modules/overview/index.js:175
+msgid "Get WP Umbrella Premium"
+msgstr ""
+
+#: app/react/modules/overview/index.js:214
+msgid "Your API key is not valid"
+msgstr ""
+
+#: app/react/modules/overview/index.js:224
+msgid "Your API key is registered"
+msgstr ""
+
+#: app/react/modules/overview/index.js:234
+msgid "Your API Key"
+msgstr ""
+
+#: app/react/modules/overview/index.js:253
+#: app/react/modules/overview/index.js:264
+msgid "Validate your API KEY"
+msgstr ""
+
+#: app/react/modules/overview/index.js:273
+msgid "WordPress Health Check"
+msgstr ""
+
+#: app/react/modules/overview/index.js:280
+msgid "Read our Privacy Policy"
+msgstr ""
+
+#: app/react/modules/overview/index.js:302
+msgid "We have saved the change"
+msgstr ""
+
+#: app/react/modules/overview/index.js:311
+msgid "Enable WordPress Health Check"
+msgstr ""
+
+#: app/react/modules/overview/index.js:407
+msgid "Welcome on board!"
+msgstr ""
+
+#: app/react/modules/overview/index.js:411
+msgid "Take a look at"
+msgstr ""
+
+#: app/react/modules/overview/index.js:420
+msgid "the notification tab"
+msgstr ""
+
+#: app/react/modules/overview/index.js:425
+msgid "to complete the plugin configuration."
+msgstr ""
+
+#: app/react/modules/overview/index.js:454
+msgid "Congratulations"
+msgstr ""
+
+#: app/react/modules/overview/index.js:458
+msgid "Your website is monitored and you will be alerted at"
+msgstr ""
+
+#: app/react/modules/overview/index.js:463
+msgid "if something bad happens."
+msgstr ""
+
+#: app/react/modules/overview/index.js:475
+msgid "Go to notifications"
+msgstr ""
+
+#: app/react/modules/overview/index.js:477
+msgid "to edit your contact information and to"
+msgstr ""
+
+#: app/react/modules/overview/index.js:490
+msgid "'Monitor Settings'"
+msgstr ""
+
+#: app/react/modules/overview/index.js:492
+msgid "to modify the monitoring region."
+msgstr ""
+
+#: app/react/modules/overview/index.js:517
+msgid "Create an account to get your API Key - It's free !"
+msgstr ""
+
+#: app/react/modules/overview/index.js:523
+msgid "You need to register so we can alert you if downtime or problems happen."
+msgstr ""
+
+#: app/react/modules/overview/index.js:555
+msgid "Getting Started"
+msgstr ""
+
+#: app/react/modules/overview/index.js:566
+msgid "How to activate WordPress health check?"
+msgstr ""
+
+#: app/react/modules/overview/index.js:579
+msgid "Set up the monitor"
+msgstr ""
+
+#: app/react/modules/overview/index.js:592
+msgid "Understanding the PHP errors monitoring"
+msgstr ""
+
+#: app/react/modules/overview/index.js:603
+msgid "Frequently Ask Questions"
+msgstr ""
+
+#: app/react/modules/overview/index.js:624
+msgid "Why is uptime and performance monitoring important ?"
+msgstr ""
+
+#: app/react/modules/overview/index.js:630
+msgid "Downtime occurs more often than people think. Being aware of the situation will allow you to mitigate their impact."
+msgstr ""
+
+#: app/react/modules/overview/index.js:650
+msgid "Why do I need to use the health check?"
+msgstr ""
+
+#: app/react/modules/overview/index.js:656
+msgid "Better safe than sorry: Follow our advices to improve your WordPress website performance, security and SEO."
+msgstr ""
+
+#: app/react/modules/overview/index.js:676
+msgid "Can WP Umbrella slow or overload your website?"
+msgstr ""
+
+#: app/react/modules/overview/index.js:682
+msgid "No, we use our own external servers  so your website performance is not impacted. "
+msgstr ""
+
+#: app/react/modules/overview/index.js:702
+msgid "Is it possible to monitor several websites?"
+msgstr ""
+
+#: app/react/modules/overview/index.js:708
+msgid "Yes, our web application is ideal to manage hundreds of websites from a single place!"
+msgstr ""
