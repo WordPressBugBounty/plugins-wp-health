@@ -39,6 +39,8 @@ class Delete extends AbstractController
             return $this->returnResponse(['code' => 'missing_parameters', 'message' => 'No theme'], 400);
         }
 
+        define('WP_UMBRELLA_PROCESS_FROM_UMBRELLA', true);
+
         $manageTheme = \wp_umbrella_get_service('ManageTheme');
 
         try {

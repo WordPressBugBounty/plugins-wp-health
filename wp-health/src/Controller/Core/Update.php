@@ -14,6 +14,8 @@ class Update extends AbstractController
         try {
             $type = $params['type'] ?? 'classic';
 
+            define('WP_UMBRELLA_PROCESS_FROM_UMBRELLA', true);
+
             if ($type === 'core_upgrader') {
                 $data = wp_umbrella_get_service('CoreUpdate')->upgradeByCoreUpgrader();
             } else {

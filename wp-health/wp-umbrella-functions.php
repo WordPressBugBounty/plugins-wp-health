@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.16.2');
+    define('WP_UMBRELLA_VERSION', '2.16.3');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.2');
 

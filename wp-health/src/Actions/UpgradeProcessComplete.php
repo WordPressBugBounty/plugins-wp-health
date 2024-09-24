@@ -15,6 +15,10 @@ class UpgradeProcessComplete implements ExecuteHooks
 
     public function getOldVersionWordPressCore()
     {
+        if (defined('WP_UMBRELLA_PROCESS_FROM_UMBRELLA') && WP_UMBRELLA_PROCESS_FROM_UMBRELLA) {
+            return;
+        }
+
         global $umbrellaPreUpdateData;
 
         $umbrellaPreUpdateData = [
