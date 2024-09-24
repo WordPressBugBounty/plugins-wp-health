@@ -81,6 +81,19 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/move-backup-module' => [
+                'route' => '/move-backup-module',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\BackupV4\MoveBackupModule::class,
+
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/cleanup-module' => [
                 'route' => '/cleanup-module',
                 'methods' => [
@@ -176,6 +189,15 @@ abstract class Controllers
                 'methods' => [
                     [
                         'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\RegenerateSecretToken::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_ONLY_API_TOKEN,
+                        ]
+                    ],
+                    // Thanks some hostings
+                    [
+                        'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Options\RegenerateSecretToken::class,
                         'options' => [
                             'prevent_active' => true,

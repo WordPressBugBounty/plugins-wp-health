@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restoration, update
 Requires at least: 5.8
 Tested up to: 6.6
 Requires PHP: 7.2
-Stable tag: v2.16.1
+Stable tag: v2.16.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -80,6 +80,12 @@ Yes, multisite networks are fully supported, including the ability to backup and
 WP Umbrella is easier to use and faster than managewp. It's also a fantastic alternative to MainWP and WPRemote.
 
 == Changelog ==
+
+= 2.16.2 (09-24-2024) =
+- New: retrieve theme updates from your WordPress
+- New: retrieve core updates from your WordPress
+- Improved: regenerate secret token
+- Improved: backup communication
 
 = 2.16.1 (08-20-2024) =
 - New: compatibility with Pressable

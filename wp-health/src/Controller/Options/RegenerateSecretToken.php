@@ -5,7 +5,7 @@ use WPUmbrella\Core\Models\AbstractController;
 
 class RegenerateSecretToken extends AbstractController
 {
-    public function executePost($params)
+    protected function generateSecretToken()
     {
         $secretToken = wp_umbrella_generate_random_string(128);
         $options = wp_umbrella_get_options([
@@ -50,5 +50,15 @@ class RegenerateSecretToken extends AbstractController
         return $this->returnResponse([
             'code' => 'success'
         ]);
+    }
+
+    public function executeGet($params)
+    {
+        return $this->generateSecretToken();
+    }
+
+    public function executePost($params)
+    {
+        return $this->generateSecretToken();
     }
 }

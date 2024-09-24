@@ -12,6 +12,9 @@ class TrackUpgradeProcess
         return null;
     }
 
+    /**
+     * @param array $plugins [plugin-slug]
+     */
     public function prepareDataBeforePluginUpdate($plugins)
     {
         global $umbrellaPreUpdateData;
@@ -31,6 +34,9 @@ class TrackUpgradeProcess
         }
     }
 
+    /**
+     * @param array $plugins [plugin-slug]
+     */
     public function getDataAfterPluginUpdate($plugins)
     {
         global $umbrellaPreUpdateData;
@@ -44,6 +50,61 @@ class TrackUpgradeProcess
 
             $umbrellaPreUpdateData = array_map(function ($item) use ($newVersion, $plugin) {
                 if ($item['plugin'] !== $plugin) {
+                    return $item;
+                }
+
+                $item['new_version'] = $newVersion;
+                return $item;
+            }, $umbrellaPreUpdateData);
+        }
+
+        return $umbrellaPreUpdateData;
+    }
+
+    public function getThemeVersionFromFile($theme)
+    {
+        $content = file_get_contents($theme);
+        if (preg_match('/Version:\s*(\S+)/', $content, $matches)) {
+            return $matches[1];
+        }
+        return null;
+    }
+
+    /**
+     * @param array $themes [theme-slug]
+     */
+    public function prepareDataBeforeThemeUpdate($themes)
+    {
+        global $umbrellaPreUpdateData;
+
+        $umbrellaPreUpdateData = [];
+
+        foreach ($themes as $theme) {
+            $themeData = wp_get_theme($theme);
+            $oldVersion = $this->getThemeVersionFromFile(get_theme_root() . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'style.css');
+
+            $umbrellaPreUpdateData[] = [
+                'name' => $themeData['Name'],
+                'theme' => $theme,
+                'old_version' => $oldVersion,
+                'new_version' => null,
+            ];
+        }
+    }
+
+    public function getDataAfterThemeUpdate($themes)
+    {
+        global $umbrellaPreUpdateData;
+
+        foreach ($themes as $theme) {
+            $newVersion = $this->getThemeVersionFromFile(get_theme_root() . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'style.css');
+
+            if (!is_array($umbrellaPreUpdateData)) {
+                return $umbrellaPreUpdateData;
+            }
+
+            $umbrellaPreUpdateData = array_map(function ($item) use ($newVersion, $theme) {
+                if ($item['theme'] !== $theme) {
                     return $item;
                 }
 

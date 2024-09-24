@@ -10,6 +10,16 @@ class UpgradeProcessComplete implements ExecuteHooks
     {
         add_action('upgrader_package_options', [$this, 'getOldVersion'], 10, 1);
         add_action('upgrader_process_complete', [$this, 'processComplete'], 10, 2);
+        add_action('core_upgrade_preamble', [$this, 'getOldVersionWordPressCore']);
+    }
+
+    public function getOldVersionWordPressCore()
+    {
+        global $umbrellaPreUpdateData;
+
+        $umbrellaPreUpdateData = [
+            'old_version' => wp_umbrella_get_service('WordPressProvider')->getWordPressVersion(),
+        ];
     }
 
     public function getOldVersion($options)
@@ -20,6 +30,10 @@ class UpgradeProcessComplete implements ExecuteHooks
 
         if (isset($options['hook_extra']['plugin'])) {
             wp_umbrella_get_service('TrackUpgradeProcess')->prepareDataBeforePluginUpdate([$options['hook_extra']['plugin']]);
+        }
+
+        if (isset($options['hook_extra']['theme'])) {
+            wp_umbrella_get_service('TrackUpgradeProcess')->prepareDataBeforeThemeUpdate([$options['hook_extra']['theme']]);
         }
 
         return $options;
@@ -39,9 +53,30 @@ class UpgradeProcessComplete implements ExecuteHooks
 
         switch ($options['type']) {
             case 'core':
-                return $upgraderObject; // Not implemented yet
+                global $umbrellaPreUpdateData;
+
+                $oldVersion = get_bloginfo('version');
+                if (isset($umbrellaPreUpdateData['old_version'])) {
+                    $oldVersion = $umbrellaPreUpdateData['old_version'];
+                }
+
+                $json = [
+                    'type' => 'core',
+                    'action' => 'update',
+                    'values' => [
+                        [
+                            'old_version' => $oldVersion,
+                            'new_version' => wp_umbrella_get_service('WordPressProvider')->getWordPressVersion(),
+                        ]
+                    ],
+                ];
+
                 break;
             case 'plugin':
+                if (!isset($options['plugins'])) {
+                    return $upgraderObject;
+                }
+
                 $data = wp_umbrella_get_service('TrackUpgradeProcess')->getDataAfterPluginUpdate($options['plugins']);
 
                 if (empty($data)) {
@@ -71,7 +106,37 @@ class UpgradeProcessComplete implements ExecuteHooks
                 ];
                 break;
             case 'theme':
-                return $upgraderObject; // Not implemented yet
+                if (!isset($options['themes'])) {
+                    return $upgraderObject;
+                }
+
+                $data = wp_umbrella_get_service('TrackUpgradeProcess')->getDataAfterThemeUpdate($options['themes']);
+
+                if (empty($data)) {
+                    return $upgraderObject;
+                }
+
+                foreach ($data as $theme) {
+                    $safeRemove = false;
+                    if ($theme['old_version'] === $theme['new_version']) {
+                        $safeRemove = true;
+                    }
+
+                    if (empty($theme['new_version']) || empty($theme['old_version'])) {
+                        $safeRemove = true;
+                    }
+
+                    if ($safeRemove) {
+                        $key = array_search($theme, $data);
+                        unset($data[$key]);
+                    }
+                }
+
+                $json = [
+                    'type' => 'theme',
+                    'action' => 'update',
+                    'values' => $data,
+                ];
                 break;
         }
 

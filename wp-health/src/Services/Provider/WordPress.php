@@ -315,7 +315,7 @@ class WordPress
         $data['php_version'] = $this->getPhpVersion();
         $data['defined_data'] = $this->getConstants();
         $data['wordpress_up_to_date'] = $this->isUpToDate();
-        $data['php_extensions'] = $this->getPhpExtensions();
+        // $data['php_extensions'] = $this->getPhpExtensions();
         $data['is_ssl'] = wp_is_using_https();
         $data['is_multisite'] = is_multisite();
         $data['urls'] = [
@@ -326,17 +326,19 @@ class WordPress
             'wp_umbrella_url' => WP_UMBRELLA_DIRURL
         ];
         $data['base_directory'] = wp_umbrella_get_service('BackupFinderConfiguration')->getDefaultSource();
+        $data['wp_content_directory'] = WP_CONTENT_DIR;
+        $data['wp_plugin_directory'] = WP_PLUGIN_DIR;
 
         $data['wordpress_version'] = $this->getWordPressVersion();
 
-        $data['disk_free_space'] = null;
-        try {
-            if (function_exists('disk_free_space')) {
-                $data['disk_free_space'] = @disk_free_space(ABSPATH);
-            }
-        } catch (\Exception $e) {
-            // No black magic
-        }
+        // $data['disk_free_space'] = null;
+        // try {
+        //     if (function_exists('disk_free_space')) {
+        //         $data['disk_free_space'] = @disk_free_space(ABSPATH);
+        //     }
+        // } catch (\Exception $e) {
+        //     // No black magic
+        // }
 
         try {
             $data['memory_limit'] = @ini_get('memory_limit');
@@ -350,16 +352,18 @@ class WordPress
             'hosting' => 'hosting',
             'is_ssl' => 'is_ssl',
             'is_multisite' => 'is_multisite',
-            'disk_free_space' => 'disk_free_space',
+            // 'disk_free_space' => 'disk_free_space',
             'memory_limit' => 'memory_limit',
             'urls' => 'urls',
             'php_version' => 'php_version',
-            'php_extensions' => 'php_extensions',
+            // 'php_extensions' => 'php_extensions',
             'is_indexable' => 'is_indexable',
             'curl_is_defined' => 'curl_is_defined',
             'zip_is_defined' => 'zip_is_defined',
             'defined_data' => 'defined_data',
             'base_directory' => 'base_directory',
+            'wp_content_directory' => 'wp_content_directory',
+            'wp_plugin_directory' => 'wp_plugin_directory',
             'latest' => (object) [
                 'path' => 'wordpress_up_to_date.latest',
                 'fn' => function ($data) {
