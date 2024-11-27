@@ -24,6 +24,61 @@ class ManagePlugin
         set_site_transient($key, $response);
     }
 
+    public function getVersionFromPluginFile($pluginFile)
+    {
+        try {
+            if (!file_exists(WP_PLUGIN_DIR . '/' . $pluginFile)) {
+                return false;
+            }
+
+            $content = file_get_contents(WP_PLUGIN_DIR . '/' . $pluginFile);
+            if (!$content) {
+                return false;
+            }
+
+            // Look for version in standard plugin header format
+            if (preg_match('/Version:\s*(.+)$/mi', $content, $matches)) {
+                return trim($matches[1]);
+            }
+
+            return false;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    public function directoryPluginExist($plugin)
+    {
+        if (!$plugin) {
+            return [
+                'success' => false,
+                'code' => 'missing_parameters',
+            ];
+        }
+
+        $pluginDir = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . dirname($plugin);
+
+        if (!file_exists($pluginDir) || !is_dir($pluginDir)) {
+            return [
+                'success' => false,
+                'code' => 'plugin_directory_not_exist',
+            ];
+        }
+
+        // Check if directory is not empty
+        $files = scandir($pluginDir);
+        if (count($files) <= 3) { // More than . and .. / Maybe .DS_Store or only 1 file is not enough
+            return [
+                'success' => false,
+                'code' => 'plugin_directory_empty',
+            ];
+        }
+
+        return [
+            'success' => true,
+        ];
+    }
+
     public function install($pluginUri, $overwrite = true)
     {
         $response = wp_umbrella_get_service('PluginInstall')->install($pluginUri);
@@ -49,6 +104,13 @@ class ManagePlugin
                 'message' => sprintf(__('Plugin %s not exist', 'wp-umbrella'), $plugin)
             ];
         }
+
+        // As a precaution, we advise you to move the plugin in all cases, as plugins are sometimes deleted.
+        $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
+            'slug' => dirname($plugin),
+            'src' => WP_PLUGIN_DIR,
+            'dir' => 'plugins'
+        ]);
 
         $isActive = wp_umbrella_get_service('PluginActivate')->isActive($plugin);
 
@@ -84,20 +146,21 @@ class ManagePlugin
     {
         wp_umbrella_get_service('ManagePlugin')->clearUpdates();
 
-        if (isset($options['safe_update']) && $options['safe_update']) {
-            // It's necessary because we update only one plugin even if it's a bulk update
-            if (is_array($plugins)) {
-                $plugin = $plugins[0];
-            } else {
-                $plugin = $plugins;
-            }
+        // It's necessary because we update only one plugin even if it's a bulk update
+        if (is_array($plugins)) {
+            $plugin = $plugins[0];
+        } else {
+            $plugin = $plugins;
+        }
 
-            $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
-                'slug' => dirname($plugin),
-                'src' => WP_PLUGIN_DIR,
-                'dir' => 'plugins'
-            ]);
+        // As a precaution, we advise you to move the plugin in all cases, as plugins are sometimes deleted.
+        $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
+            'slug' => dirname($plugin),
+            'src' => WP_PLUGIN_DIR,
+            'dir' => 'plugins'
+        ]);
 
+        if (isset($options['safe_update']) && $options['safe_update']) { // This condition is only required for safe update.
             if (!$result['success']) {
                 return [
                     'status' => 'error',
@@ -112,18 +175,19 @@ class ManagePlugin
         $pluginUpdate = wp_umbrella_get_service('PluginUpdate');
 
         $pluginUpdate->ithemesCompatibility();
-        $data = $pluginUpdate->bulkUpdate($plugins, $options);
+        $data = $pluginUpdate->bulkUpdate([$plugin], $options);
 
         $pluginUpdate->ithemesCompatibility();
         @flush();
         @ob_clean();
         @ob_end_clean();
 
-        if (isset($options['safe_update']) && $options['safe_update']) {
-            $result = wp_umbrella_get_service('UpgraderTempBackup')->deleteTempBackup([
-                'slug' => dirname($plugin),
-                'dir' => 'plugins'
-            ]);
+        $isActive = wp_umbrella_get_service('PluginActivate')->isActive($plugin);
+
+        if (!$isActive && $plugin !== 'wp-health/wp-health.php') {
+            wp_umbrella_get_service('PluginDeactivate')->deactivate($plugin);
+        } elseif ($isActive || $plugin === 'wp-health/wp-health.php') {
+            wp_umbrella_get_service('PluginActivate')->activate($plugin);
         }
 
         return $data;

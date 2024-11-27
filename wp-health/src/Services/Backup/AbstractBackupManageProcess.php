@@ -93,7 +93,7 @@ abstract class AbstractBackupManageProcess
 
         $maxSizeInBytes = wp_umbrella_get_service('BackupFinderConfiguration')->getMaxMoInBytesBatchSize($moBatchSize);
 
-        $host = DB_HOST;
+        $host = wp_umbrella_get_service('WordPressContext')->getDbHost();
         // Prevent DB_HOST with port
         if (
             apply_filters('wp_umbrella_explode_host', true) &&

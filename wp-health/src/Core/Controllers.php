@@ -301,6 +301,32 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/plugin-directory-exist' => [
+                'route' => '/plugin-directory-exist',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Plugin\DirectoryExist::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/restore-from-safe-backup' => [
+                'route' => '/restore-from-safe-backup',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Plugin\MoveOldPlugin::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/plugin-upgrade-database' => [
                 'route' => '/plugin-upgrade-database',
                 'hook' => 'wp_loaded',

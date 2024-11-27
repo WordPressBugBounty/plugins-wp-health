@@ -7,6 +7,69 @@ class UpgraderTempBackup
 {
     protected $dirName = 'umbrella-upgrade-temp-backup';
 
+    public function rollbackBackupDir($args)
+    {
+        global $wp_filesystem;
+
+        if ($wp_filesystem === null) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+
+        if (empty($args['slug']) || empty($args['dir'])) {
+            return [
+                'code' => 'missing_parameters',
+                'success' => false
+            ];
+        }
+
+        if (!$wp_filesystem->wp_content_dir()) {
+            return [
+                'code' => 'fs_no_content_dir',
+                'success' => false
+            ];
+        }
+
+        $srcDirectory = $wp_filesystem->wp_content_dir() . $this->dirName . DIRECTORY_SEPARATOR . $args['dir'] . DIRECTORY_SEPARATOR . $args['slug'];
+
+        if (!$wp_filesystem->is_dir($srcDirectory)) {
+            return [
+                'code' => 'temp_backup_not_found',
+                'success' => false
+            ];
+        }
+
+        $destDirectory = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $args['slug'];
+
+        // Create the temporary backup directory if it does not exist.
+        if (!$wp_filesystem->is_dir($destDirectory)) {
+            if (!$wp_filesystem->is_dir($destDirectory)) {
+                $wp_filesystem->mkdir($destDirectory, FS_CHMOD_DIR);
+            }
+
+            if (!$wp_filesystem->is_dir($destDirectory)) {
+                // Could not create the backup directory.
+                return [
+                    'code' => 'fs_backup_mkdir',
+                    'success' => false
+                ];
+            }
+        }
+
+        // copy to the temporary backup directory.
+        $result = copy_dir($srcDirectory, $destDirectory);
+        if (is_wp_error($result)) {
+            return [
+                'code' => 'fs_temp_backup_move',
+                'success' => false
+            ];
+        }
+
+        return [
+            'success' => true
+        ];
+    }
+
     /**
      * @from wp-admin/includes/class-wp-upgrader.php
      * Move a plugin or theme to a temporary backup directory.
@@ -81,8 +144,9 @@ class UpgraderTempBackup
             $wp_filesystem->delete($dest, true);
         }
 
-        // Move to the temporary backup directory.
-        $result = move_dir($src, $dest, true);
+        // copy to the temporary backup directory.
+        $result = copy_dir($src, $dest);
+
         if (is_wp_error($result)) {
             return [
                 'code' => 'fs_temp_backup_move',

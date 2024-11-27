@@ -113,8 +113,10 @@ class MoveBackupModule extends AbstractController
 
             $fileContent = $wp_filesystem->get_contents($destinationPath);
 
+            $dbHost = wp_umbrella_get_service('WordPressContext')->getDbHost();
+
             $fileContent = str_replace("define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');", "define('UMBRELLA_BACKUP_KEY', '" . $requestId . "');", $fileContent);
-            $fileContent = str_replace("define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');", "define('UMBRELLA_DB_HOST', '" . DB_HOST . "');", $fileContent);
+            $fileContent = str_replace("define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');", "define('UMBRELLA_DB_HOST', '" . $dbHost . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');", "define('UMBRELLA_DB_NAME', '" . DB_NAME . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_USER', '[[UMBRELLA_DB_USER]]');", "define('UMBRELLA_DB_USER', '" . DB_USER . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_SSL', '[[UMBRELLA_DB_SSL]]');", "define('UMBRELLA_DB_SSL', " . (defined('DB_SSL') ? 'true' : 'false') . ');', $fileContent);
@@ -140,7 +142,13 @@ class MoveBackupModule extends AbstractController
                 $fileContent = str_replace('//[[REPLACE]]//', $str, $fileContent);
             }
 
-            $wp_filesystem->put_contents($destinationPath, $fileContent);
+            $result = $wp_filesystem->put_contents($destinationPath, $fileContent);
+            if (!$result) {
+                return $this->returnResponse([
+                    'success' => false,
+                    'code' => 'write_error',
+                ]);
+            }
         } catch (\Exception $e) {
             return $this->returnResponse([
                 'success' => false,

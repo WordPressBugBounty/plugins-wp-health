@@ -62,9 +62,13 @@ class CleanupModule extends AbstractController
                 }
             }
 
-            $data = scandir($dir);
+            $data = [];
 
-            if (!is_array($data)) {
+            if (file_exists($dir)) {
+                $data = scandir($dir);
+            }
+
+            if (!is_array($data) && file_exists($dir)) {
                 return rmdir($dir);
             }
 
@@ -80,7 +84,9 @@ class CleanupModule extends AbstractController
                 };
             }
 
-            return rmdir($dir);
+            if (file_exists($dir)) {
+                return rmdir($dir);
+            }
         } catch (\Exception $e) {
             return null;
         }

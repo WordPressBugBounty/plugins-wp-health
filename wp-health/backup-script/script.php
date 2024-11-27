@@ -124,20 +124,16 @@ if (!isset($request['host'])) {
 
 $host = $request['host'];
 
-$validHosts = [
-    '127.0.0.1',
-    '1.mirror.wp-umbrella.com',
-    '2.mirror.wp-umbrella.com',
-    '3.mirror.wp-umbrella.com',
-    '4.mirror.wp-umbrella.com',
-    '5.mirror.wp-umbrella.com',
-    '6.mirror.wp-umbrella.com',
-    '7.mirror.wp-umbrella.com',
-    '8.mirror.wp-umbrella.com',
-    '9.mirror.wp-umbrella.com',
-];
+function validHost($host)
+{
+    if (strpos($host, 'mirror.wp-umbrella.com') !== false) {
+        return true;
+    }
 
-if (!in_array($host, $validHosts, true)) {
+    return $host === '127.0.0.1';
+}
+
+if (!validHost($host)) {
     $html->render();
     return;
 }
@@ -243,6 +239,8 @@ try {
     $dbName = defined('UMBRELLA_DB_NAME') && UMBRELLA_DB_NAME !== '[[UMBRELLA_DB_NAME]]' ? UMBRELLA_DB_NAME : htmlspecialchars($request['database']['db_name'], FILTER_SANITIZE_SPECIAL_CHARS);
     $dbSsl = defined('UMBRELLA_DB_SSL') && UMBRELLA_DB_SSL !== '[[UMBRELLA_DB_SSL]]' ? UMBRELLA_DB_SSL : htmlspecialchars($request['database']['db_ssl'], FILTER_SANITIZE_SPECIAL_CHARS);
 
+    $connection = null;
+
     /**
      * If the action is backup_directory, we only need to get a directory
      */
@@ -282,6 +280,8 @@ try {
         } else {
             $finishDictionary = true;
         }
+
+        $connection->close();
 
         /**
          * Internal request = only if we want to try to send the dictionary without any backup
@@ -376,19 +376,21 @@ try {
 } catch (\UmbrellaSocketException $e) {
     $cleanup->handleDatabase();
     $cleanup->handleEndProcess();
-} catch (\UmbrellaException $e) {
-    $socket->sendLog('Error: ' . $e->getMessage());
-    $socket->sendError($e);
-    $cleanup->handleDatabase();
-    $cleanup->handleEndProcess();
 } catch (\UmbrellaPreventMaxExecutionTime $e) {
+    $socket->sendLog('UmbrellaPreventMaxExecutionTime: ' . $e->getMessage());
     $finish = false;
     $socket->sendPreventMaxExecutionTime($e->getCursor());
 } catch (\UmbrellaDatabasePreventMaxExecutionTime $e) {
+    $socket->sendLog('UmbrellaDatabasePreventMaxExecutionTime: ' . $e->getMessage());
     $finish = false;
     $socket->sendPreventDatabaseMaxExecutionTime($e->getCursor());
 } catch (\UmbrellaInternalRequestException $e) {
     $socket->sendLog('Internal Exception Error: ' . $e->getMessage());
+    $cleanup->handleEndProcess();
+} catch (\UmbrellaException $e) {
+    $socket->sendLog('Error: ' . $e->getMessage());
+    $socket->sendError($e);
+    $cleanup->handleDatabase();
     $cleanup->handleEndProcess();
 } catch (\Exception $e) {
     $socket->sendLog('Unknown Exception Error: ' . $e->getMessage());
@@ -396,7 +398,9 @@ try {
     $cleanup->handleDatabase();
     $cleanup->handleEndProcess();
 } finally {
-    if (isset($connection) && $connection instanceof UmbrellaConnectionInterface) {
+    $socket->sendLog('Finally: Close connection');
+
+    if ($connection !== null) {
         $connection->close();
     }
 
@@ -409,7 +413,8 @@ try {
 
     unset($totalFilesSent, $startTimer, $safeTimeLimit);
 
-    if ($finish && file_exists(__FILE__)) {
+    if ($finish) {
+        $socket->sendLog('Finally: is finish');
         $cleanup->handleDatabase();
         removeScript();
     }

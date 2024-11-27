@@ -17,12 +17,14 @@ class AlphabeticalOrderIterator implements \Iterator
      */
     private $reverse = false;
 
+    #[\ReturnTypeWillChange]
     public function __construct($collection, $reverse = false)
     {
         $this->collection = $collection;
         $this->reverse = $reverse;
     }
 
+    #[\ReturnTypeWillChange]
     public function rewind()
     {
         $this->position = $this->reverse ?
@@ -35,16 +37,19 @@ class AlphabeticalOrderIterator implements \Iterator
         return $this->collection->getItems()[$this->position];
     }
 
+    #[\ReturnTypeWillChange]
     public function key()
     {
         return $this->position;
     }
 
+    #[\ReturnTypeWillChange]
     public function next()
     {
         $this->position = $this->position + ($this->reverse ? -1 : 1);
     }
 
+    #[\ReturnTypeWillChange]
     public function valid()
     {
         return isset($this->collection->getItems()[$this->position]);

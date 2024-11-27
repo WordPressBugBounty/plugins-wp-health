@@ -47,6 +47,7 @@ class CheckBackupCapabilities extends AbstractController
                 'post_b64' => $this->checkNinjaFirewall(),
             ],
             'can_create_database_folder' => $this->canCreateDatabaseFolder(),
+            'class_phar_data' => class_exists('PharData'),
         ]);
     }
 }

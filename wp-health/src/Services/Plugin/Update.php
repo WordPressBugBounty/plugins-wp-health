@@ -149,7 +149,7 @@ class Update extends BaseManageUpdate
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
 
-        if ($onlyAjax) {
+        if ($onlyAjax) { // If only ajax, we don't try to update by admin-ajax.php
             $tryAjax = false;
         }
 
@@ -163,7 +163,12 @@ class Update extends BaseManageUpdate
                 $plugins = [$plugins];
             }
 
-            if (!$onlyAjax) {
+            $oldVersions = [];
+            foreach ($plugins as $plugin) {
+                $oldVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+            }
+
+            if (!$onlyAjax) { // If not only ajax, we try to update by bulk_upgrade
                 $skin = new WP_Ajax_Upgrader_Skin();
                 $upgrader = new Plugin_Upgrader($skin);
                 $response = $upgrader->bulk_upgrade($plugins);
@@ -183,12 +188,25 @@ class Update extends BaseManageUpdate
                         $return[$plugin_slug] = $this->getError($plugin_info);
                     }
 
-                    if ($tryAjax) {
+                    // We'll need to get the new version of the plugin
+                    $newVersions = [];
+                    foreach ($plugins as $plugin) {
+                        $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                    }
+
+                    // Only try ajax if the version is the same (not updated)
+                    if ($tryAjax && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) { // Need to try ajax and the version is the same
                         $result = $this->tryUpdateByAdminAjax($plugin_slug);
                         $return[$plugin_slug] = $result['code'];
+
+                        $newVersions = [];
+                        foreach ($plugins as $plugin) {
+                            $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                        }
                     }
                 }
             } else {
+                // No verification with old version because we only use ajax here
                 foreach ($plugins as $plugin) {
                     $result = $this->tryUpdateByAdminAjax($plugin);
                     $return[$plugin] = $result['code'];

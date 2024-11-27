@@ -123,12 +123,16 @@ if (!class_exists('UmbrellaWebSocket', false)):
             stream_set_timeout($this->connection, $this->timeout);
             // Check if the connection is still open
             if (feof($this->connection)) {
-                throw new UmbrellaSocketException('connection_closed', 'Connection closed');
+                // It's better to send this exception because we can't send any message to the server
+                // We could create like a "safe exception" to handle this case and not End the process
+                throw new UmbrellaPreventMaxExecutionTime();
             }
 
             $written = @fwrite($this->connection, $frame);
             if ($written === false) {
-                throw new UmbrellaSocketException('write_failed', 'Write failed');
+                // It's better to send this exception because we can't send any message to the server
+                // We could create like a "safe exception" to handle this case and not End the process
+                throw new UmbrellaPreventMaxExecutionTime();
             }
 
             unset($frame);

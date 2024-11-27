@@ -27,7 +27,7 @@ class BackupProcessedData
 
     public function createDefaultName($suffix = '', $database = false)
     {
-        $title = str_replace(["%"], ["-"], sanitize_title(get_bloginfo('name')));
+        $title = str_replace(['%'], ['-'], sanitize_title(get_bloginfo('name')));
         $name = 'backup-';
         if ($database) {
             $name .= 'database-';
@@ -255,7 +255,7 @@ class BackupProcessedData
             $total = count($tables);
         }
 
-        $host = DB_HOST;
+        $host = wp_umbrella_get_service('WordPressContext')->getDbHost();
         if (apply_filters('wp_umbrella_explode_host', true) && strpos($host, 'localhost') !== false && strpos($host, ':') !== false) {
             $host = explode(':', $host)[0];
         }

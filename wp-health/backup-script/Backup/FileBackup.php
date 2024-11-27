@@ -129,6 +129,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                 $currentTime = time();
                 if (($currentTime - $startTimer) >= $safeTimeLimit) {
                     $this->closeDictionaries();
+                    $this->socket->sendLog('During while: throw UmbrellaPreventMaxExecutionTime');
                     throw new UmbrellaPreventMaxExecutionTime($lineNumber);
                     break; // Stop if we are close to the time limit
                 }
@@ -163,6 +164,14 @@ if (!class_exists('UmbrellaFileBackup', false)):
                             continue;
                         }
 
+                        $currentTime = time();
+                        if (($currentTime - $startTimer) >= $safeTimeLimit) {
+                            $this->closeDictionaries();
+                            $this->socket->sendLog('During while directory fileinfo: throw UmbrellaPreventMaxExecutionTime');
+                            throw new UmbrellaPreventMaxExecutionTime($lineNumber);
+                            break; // Stop if we are close to the time limit
+                        }
+
                         $filePath = $fileInfo->getPathname();
 
                         if (!$this->canProcessFile($filePath)) {
@@ -176,56 +185,6 @@ if (!class_exists('UmbrellaFileBackup', false)):
                         $this->socket->send($filePath);
                         $totalFilesSent++;
                     }
-                }
-            }
-
-            return true;
-        }
-
-        public function backupDirectory($directory)
-        {
-            if($this->context === null || $this->socket === null) {
-                return;
-            }
-            global $startTimer, $totalFilesSent, $safeTimeLimit;
-
-            $startProcessing = false;
-
-            try {
-                $dirIterator = new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS);
-                $filterIterator = new ReadableRecursiveFilterIterator($dirIterator);
-                $iterator = new RecursiveIteratorIterator($filterIterator, RecursiveIteratorIterator::SELF_FIRST);
-            } catch (Exception $e) {
-                throw new UmbrellaException('Could not open directory: ' . $directory, 'directory_open_failed');
-            }
-
-            foreach ($dirIterator as $fileInfo) {
-                $currentTime = time();
-                if (($currentTime - $startTimer) >= $safeTimeLimit) {
-                    throw new UmbrellaInternalRequestException();
-                    break; // Stop if we are close to the time limit
-                }
-
-                $filePath = $fileInfo->getPathname();
-
-                if ($this->isDir($fileInfo)) {
-                    $this->backupDirectory($filePath);
-                }
-
-                if($this->hasWordPressInSubfolder($filePath)) {
-                    continue;
-                }
-
-                if(!$this->canProcessDirectory($filePath)) {
-                    continue;
-                }
-
-                $filePath = trim($filePath);
-
-                if ($this->canProcessFile($filePath)) {
-                    $this->socket->send($filePath);
-
-                    $totalFilesSent++;
                 }
             }
 

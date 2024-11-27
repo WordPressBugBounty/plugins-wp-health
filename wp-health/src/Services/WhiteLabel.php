@@ -24,9 +24,9 @@ class WhiteLabel
         ];
     }
 
-    public function hideMenu()
+    public function hideMenu($withCache = true)
     {
-        $data = $this->getData();
+        $data = $this->getData($withCache);
         return apply_filters('wp_umbrella_white_label_hide_menu', $data['hide_plugin']);
     }
 
@@ -35,15 +35,15 @@ class WhiteLabel
         set_transient($this->key, $data, apply_filters($this->key . '_duration', MINUTE_IN_SECONDS * 60));
     }
 
-    public function getData()
+    public function getData($withCache = true)
     {
         $data = DataTemporary::getDataByKey($this->key);
-        if ($data !== null && apply_filters($this->key . '_active', true)) {
+        if ($data !== null && apply_filters($this->key . '_active', $withCache)) {
             return apply_filters('wp_umbrella_white_label_data', $data);
         }
 
         $cacheData = get_transient($this->key);
-        if ($cacheData && apply_filters($this->key . '_active', true)) {
+        if ($cacheData && apply_filters($this->key . '_active', $withCache)) {
             DataTemporary::setDataByKey($this->key, $cacheData);
             return apply_filters('wp_umbrella_white_label_data', $cacheData);
         }

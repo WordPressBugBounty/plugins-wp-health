@@ -8,12 +8,11 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
 {
     protected $isActiveWhiteLabel = null;
 
-	protected $getOwnerService;
+    protected $getOwnerService;
 
     public function __construct()
     {
         $this->getOwnerService = wp_umbrella_get_service('Owner');
-
     }
 
     public function hooks()
@@ -24,10 +23,10 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
         add_action('admin_enqueue_scripts', [$this, 'adminEnqueueCSS']);
     }
 
-	public function deactivate(){
-		delete_transient('wp_umbrella_white_label_data_cache');
-	}
-
+    public function deactivate()
+    {
+        delete_transient('wp_umbrella_white_label_data_cache');
+    }
 
     public function adminEnqueueCSS($page)
     {
@@ -39,23 +38,26 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
             return;
         }
 
-		$whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData();
+        $withCache = true;
+        if ($page === 'plugins.php') {
+            $withCache = false;
+        }
 
-		if($whiteLabelData['plugin_name'] !== 'WP Umbrella' || $whiteLabelData['hide_plugin']){
-			echo '<style>
+        $whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData($withCache);
+
+        if ($whiteLabelData['plugin_name'] !== 'WP Umbrella' || $whiteLabelData['hide_plugin']) {
+            echo '<style>
 			table.plugins [data-plugin="_WPHealthHandlerMU.php"],
 			table.plugins [data-plugin="InitUmbrella.php"] {
 				display: none;
 			}
 		  </style>
 		  ';
-		}
+        }
 
-
-		if($page === 'update-core.php') {
-
-			if($whiteLabelData['hide_plugin']){
-				?>
+        if ($page === 'update-core.php') {
+            if ($whiteLabelData['hide_plugin']) {
+                ?>
 				<script>
 					document.addEventListener("DOMContentLoaded", function(event) {
 						const checkbox = document.querySelector("input[value=\'wp-health/wp-health.php\']")
@@ -67,9 +69,8 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
 
 				</script>
 				<?php
-			}
-			else if($whiteLabelData['plugin_name'] !== 'WP Umbrella'){
-				?>
+            } elseif ($whiteLabelData['plugin_name'] !== 'WP Umbrella') {
+                ?>
 				<script>
 					document.addEventListener("DOMContentLoaded", function(event) {
 
@@ -85,12 +86,8 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
 
 				</script>
 				<?php
-			}
-
-
-
-
-		}
+            }
+        }
     }
 
     /**
@@ -98,12 +95,11 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
      */
     public function pluginInfoFilter($plugins)
     {
-
         if (!isset($plugins[WP_UMBRELLA_BNAME])) {
             return $plugins;
         }
 
-		$whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData();
+        $whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData();
 
         if ($whiteLabelData['hide_plugin']) {
             unset($plugins[WP_UMBRELLA_BNAME]);

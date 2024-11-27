@@ -9,7 +9,7 @@ class WPServer implements CacheCollectionItem
 {
     public static function isAvailable()
     {
-        return (defined('DB_HOST') && strpos(DB_HOST, '.wpserveur.net') !== false);
+        return (defined('DB_HOST') && strpos(wp_umbrella_get_service('WordPressContext')->getDbHost(), '.wpserveur.net') !== false);
     }
 
     public function clear()

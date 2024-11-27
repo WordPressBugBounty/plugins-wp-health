@@ -1,37 +1,37 @@
 <?php
-
 namespace WPUmbrella\Services\WordPress;
-
 
 use WP_Rewrite;
 
 class WordPressContext
 {
-	protected $multisite = false;
+    protected $multisite = false;
 
-	public function __construct(){
-		if(!function_exists('is_multisite')){
-			return;
-		}
-
-		if (is_multisite()) {
-			global $blog_id;
-            $this->multisite         = $blog_id;
+    public function __construct()
+    {
+        if (!function_exists('is_multisite')) {
+            return;
         }
-	}
 
-	public function isMultiSite(){
-		return $this->multisite;
-	}
+        if (is_multisite()) {
+            global $blog_id;
+            $this->multisite = $blog_id;
+        }
+    }
+
+    public function isMultiSite()
+    {
+        return $this->multisite;
+    }
 
     public function set($name, $value)
     {
-		$GLOBALS[$name] = $value;
+        $GLOBALS[$name] = $value;
     }
 
     public function get($name)
     {
-		return isset($GLOBALS[$name]) ? $GLOBALS[$name] : null;
+        return isset($GLOBALS[$name]) ? $GLOBALS[$name] : null;
     }
 
     /**
@@ -62,6 +62,15 @@ class WordPressContext
         define($name, $value);
     }
 
+    public function getDbHost()
+    {
+        if (!$this->hasConstant('DB_HOST')) {
+            return '';
+        }
+
+        return DB_HOST;
+    }
+
     public function getCurrentUser()
     {
         $this->requirePluggable();
@@ -70,10 +79,9 @@ class WordPressContext
         return wp_get_current_user();
     }
 
-
     public function requirePluggable()
     {
-        require_once $this->getConstant('ABSPATH').$this->getConstant('WPINC').'/pluggable.php';
+        require_once $this->getConstant('ABSPATH') . $this->getConstant('WPINC') . '/pluggable.php';
     }
 
     public function requireCookieConstants()
@@ -83,27 +91,25 @@ class WordPressContext
 
     public function requireAdminUserLibrary()
     {
-        require_once $this->getConstant('ABSPATH').'wp-admin/includes/user.php';
+        require_once $this->getConstant('ABSPATH') . 'wp-admin/includes/user.php';
     }
 
+    public function getTransient($option)
+    {
+        return get_site_transient($option);
+    }
 
-	public function getTransient($option)
-	{
-		return get_site_transient($option);
+    public function getSitemetaTransient($option)
+    {
+        /** @var wpdb $wpdb */
+        global $wpdb;
+        $option = '_site_transient_' . $option;
 
-	}
+        $result = $wpdb->get_var($wpdb->prepare("SELECT `meta_value` FROM `{$wpdb->sitemeta}` WHERE meta_key = '%s' AND `site_id` = '%s'", $option, $this->multisite));
+        $result = maybe_unserialize($result);
 
-	public function getSitemetaTransient($option)
-	{
-		/** @var wpdb $wpdb */
-		global $wpdb;
-		$option = '_site_transient_'.$option;
-
-		$result = $wpdb->get_var($wpdb->prepare("SELECT `meta_value` FROM `{$wpdb->sitemeta}` WHERE meta_key = '%s' AND `site_id` = '%s'", $option, $this->multisite));
-		$result = maybe_unserialize($result);
-
-		return $result;
-	}
+        return $result;
+    }
 
     /**
      * @param WP_User|stdClass $user
@@ -126,7 +132,7 @@ class WordPressContext
         $this->set('wp_rewrite', new WP_Rewrite());
     }
 
-	public function requireTaxonomies()
+    public function requireTaxonomies()
     {
         $wpTaxonomies = $this->get('wp_taxonomies');
 
@@ -148,20 +154,20 @@ class WordPressContext
         create_initial_post_types();
     }
 
-	public function getUserData($userId){
-		$this->requirePluggable();
-		$this->requireCookieConstants();
+    public function getUserData($userId)
+    {
+        $this->requirePluggable();
+        $this->requireCookieConstants();
 
-		return get_userdata($userId);
+        return get_userdata($userId);
+    }
 
-	}
+    public function getHash($value)
+    {
+        if (!function_exists('wp_hash')) {
+            include_once ABSPATH . '/wp-includes/pluggable.php';
+        }
 
-	public function getHash($value){
-		if(!function_exists('wp_hash')){
-			include_once ABSPATH . '/wp-includes/pluggable.php';
-		}
-
-		return wp_hash($value);
-	}
-
+        return wp_hash($value);
+    }
 }

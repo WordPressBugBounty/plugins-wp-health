@@ -11,9 +11,10 @@ class CleanupSafeUpdate extends AbstractController
      */
     public function executeGet($params)
     {
-        $slug = $params['slug'];
+        // Like "hello-world/hello-world.php"
+        $plugin = isset($params['plugin']) ? $params['plugin'] : null;
 
-        if (!isset($slug)) {
+        if (!$plugin) {
             return $this->returnResponse([
                 'success' => false,
                 'code' => 'missing_parameters',
@@ -21,7 +22,7 @@ class CleanupSafeUpdate extends AbstractController
         }
 
         $response = wp_umbrella_get_service('UpgraderTempBackup')->deleteTempBackup([
-            'slug' => dirname($slug),
+            'slug' => dirname($plugin),
             'dir' => 'plugins'
         ]);
 

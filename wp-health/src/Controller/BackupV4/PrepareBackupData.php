@@ -14,7 +14,7 @@ class PrepareBackupData extends AbstractController
             'prefix' => $wpdb->prefix,
             'baseDirectory' => wp_umbrella_get_service('BackupFinderConfiguration')->getDefaultSource(),
             'database' => [
-                'db_host' => DB_HOST,
+                'db_host' => wp_umbrella_get_service('WordPressContext')->getDbHost(),
                 'db_name' => DB_NAME,
                 'db_user' => DB_USER,
                 'db_password' => DB_PASSWORD,
