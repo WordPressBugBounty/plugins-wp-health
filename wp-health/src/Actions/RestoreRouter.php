@@ -33,7 +33,7 @@ class RestoreRouter implements ExecuteHooks, ActivationHook
 
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
 
-        $filename = isset($_GET['filename']) ? $_GET['filename'] : 'restore.php';
+        $filename = 'restore.php';
 
         $filePath = $source . $filename;
 

@@ -33,7 +33,7 @@ class BackupRouter implements ExecuteHooks, ActivationHook
 
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
 
-        $filename = isset($_GET['filename']) ? $_GET['filename'] : 'cloner.php';
+        $filename = 'cloner.php';
 
         $filePath = $source . $filename;
         if (!file_exists($filePath)) {
