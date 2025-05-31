@@ -122,7 +122,7 @@ function wp_umbrella_send_errors()
             ]);
 
             if (is_wp_error($response)) {
-                $response = wp_remote_post(WP_UMBRELLA_API_URL . '/v1/errors', [
+                $response = wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/errors', [
                     'headers' => [
                         'Content-Type' => 'application/json',
                         'Authorization' => sprintf('Bearer %s', wp_umbrella_get_api_key()),

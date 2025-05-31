@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('UmbrellaSqlInstruction', false)):
+if (!class_exists('UmbrellaSqlInstruction', false)):
     class UmbrellaSqlInstruction
     {
         public static function createSelectQuery($tableName, array $columns)
@@ -93,7 +93,7 @@ if(!class_exists('UmbrellaSqlInstruction', false)):
 
             $time = date('c');
             $fetchAllQuery = self::createSelectQuery($tableName, $columns);
-            $haltCompiler = '#<?php die(); ?>';
+            $haltCompiler = '--<?php die(); ?>';
             $dumper = get_class($connection);
             $phpVersion = phpversion();
             $header = <<<SQL

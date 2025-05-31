@@ -9,11 +9,6 @@ if (isset($_GET['support']) && $_GET['support'] === '1') {
     return;
 }
 
-if (isset($_GET['logs']) && $_GET['logs'] === '1') {
-    require_once __DIR__ . '/_logs.php';
-    return;
-}
-
 $data = wp_umbrella_get_service('GetSettingsData')->getData();
 
 ?>

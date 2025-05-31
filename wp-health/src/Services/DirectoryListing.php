@@ -43,8 +43,10 @@ class DirectoryListing
         $directories = [];
         $files = [];
 
+        $realAbsPath = wp_umbrella_get_service('BackupFinderConfiguration')->getDefaultSource();
+
         foreach ($finderFiles as $key => $file) {
-            $path = \str_replace(ABSPATH, '', $file->getRealPath());
+            $path = \str_replace($realAbsPath, '', $file->getRealPath());
             $size = 0;
             try {
                 $size = $file->getSize();
@@ -58,7 +60,7 @@ class DirectoryListing
             ];
         }
         foreach ($finderDirectories as $key => $file) {
-            $path = \str_replace(ABSPATH, '', $file->getRealPath());
+            $path = \str_replace($realAbsPath, '', $file->getRealPath());
             $size = 0;
             try {
                 $size = $file->getSize();

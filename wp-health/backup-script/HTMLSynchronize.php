@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('UmbrellaHTMLSynchronize', false)):
+if (!class_exists('UmbrellaHTMLSynchronize', false)):
     class UmbrellaHTMLSynchronize
     {
         public function render()

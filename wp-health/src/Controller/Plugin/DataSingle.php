@@ -12,19 +12,22 @@ class DataSingle extends AbstractController
     public function executeGet($params)
     {
         try {
+            $plugin = isset($params['plugin']) ? $params['plugin'] : null;
 
-			$plugin = isset($params['plugin']) ? $params['plugin'] : null;
+            if (!$plugin) {
+                return $this->returnResponse(['code' => 'missing_parameters', 'message' => 'No plugin'], 400);
+            }
 
-			if (!$plugin) {
-				return $this->returnResponse(['code' => 'missing_parameters', 'message' => 'No plugin'], 400);
-			}
-
-			$plugin = wp_umbrella_get_service('PluginsProvider')->getPlugin($params['plugin']);
+            $plugin = wp_umbrella_get_service('PluginsProvider')->getPlugin($params['plugin']);
 
             wp_umbrella_get_service('ManagePlugin')->clearUpdates();
-            return $this->returnResponse($plugin);
+            return $this->returnResponse([
+                'success' => true,
+                'data' => $plugin
+            ]);
         } catch (\Exception $e) {
             return $this->returnResponse([
+                'success' => false,
                 'code' => 'unknown_error',
                 'messsage' => $e->getMessage()
             ]);

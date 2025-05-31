@@ -33,25 +33,31 @@ if (!class_exists('UmbrellaContext', false)):
             '.duplicacy',
             '.tmb',
             '.wp-cli',
-            '/cgi-bin',
-            '/cache',
-            '/lscache',
-            '/rb-plugins',
-            '/wp-content/cache',
-            '/wp-content/upgrade',
-            '/wp-content/updraft',
-            '/wp-content/ai1wm-backups',
-            '/wp-content/aiowps_backups',
-            '/wp-content/wpvividbackup',
-            '/wp-content/error_log',
-            '/wp-content/et-cache',
-            '/wp-content/nginx_cache',
-            '/wp-content/uploads/wpdm-cache',
-            '/wp-content/instawpbackups',
-            '/wp-content/wphb-cache',
-            '/wp-content/backups',
-            '/wp-content/backup',
-            '/wp-content/nfwlog',
+            'php_errorlog',
+            DIRECTORY_SEPARATOR . 'cgi-bin',
+            DIRECTORY_SEPARATOR . 'cache',
+            DIRECTORY_SEPARATOR . 'lscache',
+            DIRECTORY_SEPARATOR . 'rb-plugins',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed', // Take care of this one
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'upgrade',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'updraft',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'ai1wm-backups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'aiowps_backups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvividbackup',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'error_log',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'et-cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'nginx_cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'wpdm-cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'ShortpixelBackups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'et_temp',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'instawpbackups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wphb-cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backup',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'nfwlog',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wflogs',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'webtoffee_iew_log',
         ];
 
         const DEFAULT_EXCLUDE_FILES = [
@@ -91,6 +97,8 @@ if (!class_exists('UmbrellaContext', false)):
         protected $retryFromWebsocketServer;
 
         protected $rootDirectory;
+
+        protected $signedUrl;
 
         public function __construct($params)
         {
@@ -133,8 +141,8 @@ if (!class_exists('UmbrellaContext', false)):
 
             // Add the same directories with a leading slash
             $excludedDirectories = array_reduce($excludedDirectories, function ($carry, $item) {
-                if($item[0] !== '/') {
-                    $carry[] = '/' . $item;
+                if ($item[0] !== DIRECTORY_SEPARATOR) {
+                    $carry[] = DIRECTORY_SEPARATOR . $item;
                 } else {
                     $carry[] = substr($item, 1);
                 }
@@ -273,24 +281,15 @@ if (!class_exists('UmbrellaContext', false)):
 
             try {
                 $response = $this->testDirectoryCreation($rootDirectory, $filenameTest);
-                if($response['code'] === 'success') {
+                if ($response['code'] === 'success') {
                     $this->rootDirectory = $rootDirectory;
                     return;
                 }
 
-                // // /wp-content/umb_database
-                // $rootDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'umb_database';
-
-                // $response = $this->testDirectoryCreation($rootDirectory, $filenameTest);
-                // if($response['code'] === 'success') {
-                //     $this->rootDirectory = $rootDirectory;
-                //     return;
-                // }
-
                 // By default, we use the base directory
                 $this->rootDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . self::SUFFIX;
             } catch (Exception $e) {
-                if(file_exists($rootDirectory . DIRECTORY_SEPARATOR . $filenameTest)) {
+                if (file_exists($rootDirectory . DIRECTORY_SEPARATOR . $filenameTest)) {
                     unlink($rootDirectory . DIRECTORY_SEPARATOR . $filenameTest);
                 }
             }
@@ -317,12 +316,12 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function getDictionaryPath()
         {
-            return  sprintf('%s/dictionary.php', $this->getBaseDirectory());
+            return  sprintf('%s' . DIRECTORY_SEPARATOR . '%s-dictionary.php', $this->getBaseDirectory(), $this->getRequestId());
         }
 
         public function getDirectoryDictionaryPath()
         {
-            return  sprintf('%s/%s-directory-dictionary.php', $this->getBaseDirectory(), $this->getRequestId());
+            return  sprintf('%s' . DIRECTORY_SEPARATOR . '%s-directory-dictionary.php', $this->getBaseDirectory(), $this->getRequestId());
         }
 
         public function getIncrementalDate()

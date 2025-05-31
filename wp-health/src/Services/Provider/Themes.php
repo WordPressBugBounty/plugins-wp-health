@@ -47,14 +47,34 @@ class Themes
 
             if (!empty($lastChecked->response) && isset($lastChecked->response['Divi'])) {
                 if (isset($lastChecked->checked['Divi']) && $lastChecked->response['Divi']['new_version'] !== $lastChecked->checked['Divi']) {
-                    $themes['Divi']['latest_version'] = $lastChecked->response['Divi']['new_version'];
+                    // Create a copy of lastChecked before modifying transient
+                    $lastCheckedCopy = clone $lastChecked;
 
                     // Update the transient with Divi transient
                     $transient->checked['Divi'] = $lastChecked->response['Divi']['new_version'];
-                    $transient->response['Divi'] = $transientDivi->response['Divi'];
+                    $transient->response['Divi'] = empty($transientDivi->response) ? $lastChecked->response['Divi'] : $transientDivi->response['Divi'];
                     set_site_transient('update_themes', $transient);
+
+                    // Return the unmodified copy
+                    return $lastCheckedCopy;
                 }
             }
+
+            // After 4.27.1
+            if (isset($transientDivi->response['Divi']) && isset($transientDivi->checked['Divi']) && $transientDivi->response['Divi']['new_version'] !== $transientDivi->checked['Divi']) {
+                $transientCopy = clone $transient;
+
+                // Update the transient with Divi transient
+                $transientCopy->checked['Divi'] = $transientDivi->response['Divi']['new_version'];
+                $transientCopy->response['Divi'] = $transientDivi->response['Divi'];
+                if (isset($transientCopy->no_update['Divi'])) {
+                    unset($transientCopy->no_update['Divi']);
+                }
+
+                // Return the unmodified copy
+                return $transientCopy;
+            }
+
             return $lastChecked;
         } catch (\Exception $e) {
             return;
@@ -193,6 +213,10 @@ class Themes
             if (!empty($lastChecked->response) && isset($lastChecked->response['Divi'])) {
                 if ($lastChecked->response['Divi']['new_version'] !== $lastChecked->checked['Divi']) {
                     $themes['Divi']['latest_version'] = $lastChecked->response['Divi']['new_version'];
+                }
+
+                if (is_null($themes['Divi']['latest_version'])) {
+                    $themes['Divi']['response'] = $lastChecked->response['Divi']['new_version'];
                 }
             }
         }

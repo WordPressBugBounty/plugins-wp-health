@@ -128,6 +128,10 @@ class Plugins
             wp_umbrella_get_service('ManagePlugin')->clearUpdates();
         }
 
+        if (!file_exists(sprintf('%s/%s', untrailingslashit(WP_PLUGIN_DIR), $plugin))) {
+            return null;
+        }
+
         $path = sprintf('%s/%s', untrailingslashit(WP_PLUGIN_DIR), $plugin);
         $data = get_plugin_data($path);
 

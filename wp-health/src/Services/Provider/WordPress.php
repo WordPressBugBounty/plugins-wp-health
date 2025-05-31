@@ -242,27 +242,26 @@ class WordPress
         $wp_version = $this->getWordPressVersion();
 
         if (!$isUpToDate) {
+            $isUpToDate = is_object($latest) && $latest->current == $wp_version;
+        }
+
+        if (!$isUpToDate) {
             require_once ABSPATH . 'wp-admin/includes/update.php';
             $findCoreUpdate = find_core_update($wp_version, get_locale());
             $isUpToDate = is_object($findCoreUpdate) && $findCoreUpdate->current == $wp_version;
         }
 
         if (!$isUpToDate) {
-            return [
-                'is_up_to_date' => $isUpToDate,
-                'latest' => $latest
-            ];
-        }
+            $cores = wp_umbrella_get_service('CoreProvider')->getCoreVersions();
+            if (!empty($cores) && isset($cores[0])) {
+                $core = $cores[0];
+                if (!empty($core)) {
+                    $isUpToDate = $core->version === $wp_version;
+                }
 
-        $cores = wp_umbrella_get_service('CoreProvider')->getCoreVersions();
-        if (!empty($cores) && isset($cores[0])) {
-            $core = $cores[0];
-            if (!empty($core)) {
-                $isUpToDate = $core->version === $wp_version;
-            }
-
-            if (!$isUpToDate) {
-                $latest = $core;
+                if (!$isUpToDate) {
+                    $latest = $core;
+                }
             }
         }
 
@@ -317,6 +316,10 @@ class WordPress
         $data['wordpress_up_to_date'] = $this->isUpToDate();
         // $data['php_extensions'] = $this->getPhpExtensions();
         $data['is_ssl'] = wp_is_using_https();
+        if (!$data['is_ssl'] && function_exists('is_ssl')) {
+            $data['is_ssl'] = is_ssl();
+        }
+
         $data['is_multisite'] = is_multisite();
         $data['urls'] = [
             'base_url' => site_url(),

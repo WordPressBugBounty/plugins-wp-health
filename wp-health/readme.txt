@@ -4,8 +4,8 @@ Contributors: gmulti, truchot, wplio
 Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 6.7
-Requires PHP: 7.2
-Stable tag: v2.17.1
+Requires PHP: 7.4
+Stable tag: v2.18.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -41,7 +41,7 @@ Create an account and enjoy 14 day trial with all features (backup, uptime monit
 
 = Minimum Requirements for WP Umbrella =
 * WordPress 5.8 or greater
-* PHP version 7.2 or greater
+* PHP version 7.4 or greater
 
 == Frequently Asked Questions ==
 
@@ -78,6 +78,15 @@ Yes, WP Umbrella fully supports Multisite networks, allowing backups, updates, a
 WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP, and WP Remote. Features include accurate monitoring (no false positives), GDPR backups, and a user-friendly dashboard.
 
 == Changelog ==
+
+= 2.18.0 (05-31-2025) =
+- New: Patchstack integration
+- New: clear cache from Nginx purger
+- Improved: backup process
+- Improved: directory listing with bedrock
+- Bugfix: remove sanitize_file_name on backup script to prevent error filename
+- Bugfix: internal error on restore script
+- Bugfix: check core update
 
 = 2.17.1 (12-05-2024) =
 - Security Fix: Unauthenticated Local File Inclusion

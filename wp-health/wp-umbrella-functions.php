@@ -8,9 +8,9 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.17.1');
+    define('WP_UMBRELLA_VERSION', '2.18.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
-    define('WP_UMBRELLA_PHP_MIN', '7.2');
+    define('WP_UMBRELLA_PHP_MIN', '7.4');
 
     define('WP_UMBRELLA_DIR', __DIR__);
     define('WP_UMBRELLA_DIR_MAIN_FILE', WP_UMBRELLA_DIR . '/wp-health.php');
@@ -24,14 +24,12 @@ function wp_umbrella_init_defined_standalone()
 
     $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local'];
     if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $local, true)) {
-        define('WP_UMBRELLA_API_URL', 'http://localhost:3002');
         define('WP_UMBRELLA_NEW_API_URL', 'http://localhost:3001');
         define('WP_UMBRELLA_APP_URL', 'http://localhost:3000');
         define('WP_UMBRELLA_DEBUG', true);
     } elseif (file_exists(ABSPATH . 'wp-umbrella-config.php')) {
         require_once ABSPATH . '/wp-umbrella-config.php';
     } else {
-        define('WP_UMBRELLA_API_URL', 'https://api.wp-umbrella.com');
         define('WP_UMBRELLA_NEW_API_URL', 'https://api-umb1.wp-umbrella.com');
         define('WP_UMBRELLA_APP_URL', 'https://app.wp-umbrella.com');
         define('WP_UMBRELLA_DEBUG', false);

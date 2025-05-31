@@ -60,7 +60,16 @@ class HostResolver
                 return Host::GODADDY;
             }
 
+            if (wp_umbrella_get_service('WordPressContext')->getConstant('GRIDPANE')) {
+                return Host::GRIDPANE;
+            }
+
             $hostname = function_exists('gethostname') ? gethostname() : Host::OTHER;
+
+            if (function_exists('apply_filters')) {
+                return apply_filters('wp_umbrella_current_host', $hostname);
+            }
+
             return $hostname;
         } catch (\Exception $e) {
             return Host::OTHER;

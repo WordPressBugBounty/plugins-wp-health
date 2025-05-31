@@ -140,7 +140,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendError(UmbrellaDefaultException $e)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -154,7 +154,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendFileCursor($cursor)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -167,7 +167,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendDatabaseCursor($cursor)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -180,7 +180,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendScanCursor($cursor)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -193,7 +193,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendDatabaseDumpCursor($cursor)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -206,28 +206,29 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendFinish()
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
             $this->writeFrame('FINISH');
         }
 
-        public function sendLog($message)
+        public function sendLog($message, $internal = false)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
             $data = json_encode([
                 'message' => $message,
+                'internal' => $internal,
             ]);
             $this->writeFrame('LOG:' . $data);
         }
 
         public function sendPreventMaxExecutionTime($cursor = 0)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -240,7 +241,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendPreventDatabaseMaxExecutionTime($cursor)
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -282,7 +283,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function send($filePath)
         {
-            if(!file_exists($filePath)) {
+            if (!file_exists($filePath)) {
                 return;
             }
 
@@ -292,13 +293,17 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 $relativePath = UmbrellaUTF8::encodeNonUTF8($relativePath);
             }
 
+            if ($relativePath !== '/') {
+                $relativePath = str_replace('\\', '/', $relativePath);
+            }
+
             $sequence = 0;
             try {
                 if (file_exists($filePath)) {
                     $fileHandle = fopen($filePath, 'rb');
 
-                    if($fileHandle === false) {
-                        $this->sendLog('Error sending file: ' . $filePath);
+                    if ($fileHandle === false) {
+                        $this->sendLog('Error sending file: ' . $filePath, true);
                         return false;
                     }
 
@@ -326,7 +331,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                     return $this->waitForAck($relativePath);
                 }
             } catch (\Exception $e) {
-                $this->sendLog('Error while sending file: ' . $filePath);
+                $this->sendLog('Error while sending file: ' . $filePath, true);
                 echo 'Error while sending file: ' . $filePath . "\n";
                 return false;
             }
@@ -334,7 +339,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function sendFinishDictionary()
         {
-            if($this->connection === null) {
+            if ($this->connection === null) {
                 return;
             }
 
@@ -368,7 +373,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $jsonPayload = substr($message, $startOfJson);
 
             // Remove the first character if it is a comma
-            if(substr($jsonPayload, 1, 1) == '{') {
+            if (substr($jsonPayload, 1, 1) == '{') {
                 $jsonPayload = substr($jsonPayload, 1);
             }
 
@@ -381,7 +386,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 return;
             }
 
-            if(is_resource($this->connection)) {
+            if (is_resource($this->connection)) {
                 fclose($this->connection);
             }
 

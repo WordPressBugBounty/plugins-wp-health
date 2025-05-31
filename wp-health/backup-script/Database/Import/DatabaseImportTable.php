@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('DatabaseImportTable', false)):
+if (!class_exists('DatabaseImportTable', false)):
     class DatabaseImportTable
     {
         public function filterStatement($statement, array $filters)
@@ -11,6 +11,25 @@ if(!class_exists('DatabaseImportTable', false)):
             return $statement;
         }
 
+        public function formatQueryError($message, $statements, $path, $processed, $cursor, $size)
+        {
+            $max = 2 * 1024;
+            $len = strlen($statements);
+            if ($len > $max) {
+                $statements = substr($statements, 0, $max / 2) . sprintf('[truncated %d bytes]', strlen($statements) - $max) . substr($statements, -$max / 2);
+            }
+            if (!UmbrellaUTF8::seemsUTF8($statements)) {
+                if (function_exists('mb_convert_encoding')) {
+                    // http://php.net/manual/en/function.iconv.php#108643
+                    ini_set('mbstring.substitute_character', 'none');
+                    $statements = mb_convert_encoding($statements, 'UTF-8', 'UTF-8');
+                } else {
+                    $statements = 'base64:' . base64_encode($statements);
+                }
+            }
+            return sprintf('%s; query: %s (file %s at %d-%d out of %d bytes)', $message, $statements, $path, $processed, $cursor, $size);
+        }
+
         public function import(UmbrellaConnectionInterface $connection, UmbrellaImportState $state, $maxCount = 10000, $filters = [])
         {
             clearstatcache();
@@ -19,6 +38,7 @@ if(!class_exists('DatabaseImportTable', false)):
             if (is_array($maxPacketResult = $connection->query("SHOW VARIABLES LIKE 'max_allowed_packet'")->fetch())) {
                 $maxPacket = $realMaxPacket = (int)end($maxPacketResult);
             }
+
             if (!$maxPacket) {
                 $maxPacket = 128 << 10;
             } elseif ($maxPacket > 512 << 10) {
@@ -56,6 +76,10 @@ if(!class_exists('DatabaseImportTable', false)):
 
                     try {
                         $statements = $this->filterStatement($statements, $filters);
+
+                        // Remove PHP die statement if present
+                        $statements = preg_replace('/^--\s*<\?php\s+die\(\);\s*\?>/i', '', $statements);
+
                         $connection->execute($statements);
                         $shifts = 0;
 
@@ -89,7 +113,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                     $shifts++;
                                     continue 3;
                                 }
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '1115':
                             case '1273':
                                 $newStatements = preg_replace_callback('{utf8mb4[a-z0-9_]*}', [$charsetFixer, 'replaceCharsetOrCollation'], $statements, -1, $count);
@@ -100,7 +124,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                     } catch (UmbrellaException $e2) {
                                     }
                                 }
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '2013':
                                 // 2013 Lost connection to MySQL server during query
                             case '2006':
@@ -124,7 +148,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                     }
                                 }
                                 // We aren't certain of what happened here. Maybe reconnect once?
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '1231':
                                 // Ignore errors like this:
                                 // SQLSTATE[42000]: Syntax error or access violation: 1231 Variable 'character_set_client' can't be set to the value of 'NULL'
@@ -156,7 +180,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                         trigger_error($e2->getMessage());
                                     }
                                 }
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '1064':
                                 // MariaDB compatibility cases.
                                 // This is regarding the PAGE_CHECKSUM property.
@@ -175,7 +199,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                     ]));
                                     break;
                                 }
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '1298':
                                 // 1298 Unknown or incorrect time zone
                                 break;
@@ -224,7 +248,7 @@ if(!class_exists('DatabaseImportTable', false)):
                                     break;
                                 }
 
-                                throw new UmbrellaException(cloner_format_query_error($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
+                                throw new UmbrellaException($this->formatQueryError($e->getMessage(), $statements, $dump->path, $dump->processed, $scanner->tell(), $dump->size), 'db_query_error', $e->getInternalError());
                             case '3167':
                                 if (strpos($statements, '@is_rocksdb_supported') !== false) {
                                     // RocksDB support handling for the following case:

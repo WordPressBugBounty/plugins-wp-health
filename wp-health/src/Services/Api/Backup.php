@@ -61,15 +61,6 @@ class Backup extends BaseClient
                 'sslverify' => false,
                 'timeout' => 50,
             ]);
-
-            if (is_wp_error($response)) {
-                $url = sprintf('%s/v1/projects/%s/backups/signed-url?filename=%s', WP_UMBRELLA_API_URL, $projectId, $filename);
-                $response = wp_remote_get($url, [
-                    'headers' => $this->getHeadersV2(),
-                    'sslverify' => false,
-                    'timeout' => 50,
-                ]);
-            }
         } catch (\Exception $e) {
             return null;
         }
@@ -122,16 +113,6 @@ class Backup extends BaseClient
                 'timeout' => 55,
             ]);
 
-            if (is_wp_error($response)) {
-                $url = sprintf(WP_UMBRELLA_API_URL . '/v1/projects/%s/backups/init', $projectId);
-
-                $response = wp_remote_post($url, [
-                    'headers' => $this->getHeadersV2(),
-                    'body' => $json,
-                    'timeout' => 55,
-                ]);
-            }
-
             $body = json_decode(wp_remote_retrieve_body($response), true);
 
             return $body;
@@ -159,17 +140,6 @@ class Backup extends BaseClient
                 'timeout' => 55,
             ]);
 
-            if (is_wp_error($response)) {
-                $url = sprintf(WP_UMBRELLA_API_URL . '/v1/projects/%s/backups/%s', $projectId, $data['backupId']);
-
-                $response = wp_remote_request($url, [
-                    'method' => 'PUT',
-                    'headers' => $this->getHeadersV2(),
-                    'body' => json_encode($data),
-                    'timeout' => 55,
-                ]);
-            }
-
             $body = json_decode(wp_remote_retrieve_body($response), true);
 
             return $body;
@@ -196,16 +166,6 @@ class Backup extends BaseClient
                 'timeout' => 55,
             ]);
 
-            if (is_wp_error($response)) {
-                $url = sprintf(WP_UMBRELLA_API_URL . '/v1/projects/%s/backups/%s/error', $projectId, $data['backupId']);
-
-                $response = wp_remote_post($url, [
-                    'headers' => $this->getHeadersV2(),
-                    'body' => json_encode($data),
-                    'timeout' => 55,
-                ]);
-            }
-
             return $response;
         } catch (\Exception $e) {
             return null;
@@ -228,15 +188,6 @@ class Backup extends BaseClient
                 'body' => json_encode($data),
                 'timeout' => 55,
             ]);
-
-            if (is_wp_error($response)) {
-                $url = sprintf(WP_UMBRELLA_API_URL . '/v1/projects/%s/backups/%s/finish', $projectId, $data['backupId']);
-                $response = wp_remote_post($url, [
-                    'headers' => $this->getHeadersV2(),
-                    'body' => json_encode($data),
-                    'timeout' => 55,
-                ]);
-            }
 
             return $response;
         } catch (\Exception $e) {

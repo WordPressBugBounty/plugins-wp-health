@@ -9,6 +9,7 @@ if (!class_exists('UmbrellaErrorHandler', false)):
         private $reservedMemory;
         private static $lastError;
         private $requestID;
+        private $socket;
 
         public function __construct($logFile)
         {
@@ -25,9 +26,14 @@ if (!class_exists('UmbrellaErrorHandler', false)):
 
         public function unregister()
         {
-            if(file_exists($this->logFile)) {
+            if (file_exists($this->logFile)) {
                 @unlink($this->logFile);
             }
+        }
+
+        public function setSocket($socket)
+        {
+            $this->socket = $socket;
         }
 
         /**
@@ -123,7 +129,14 @@ if (!class_exists('UmbrellaErrorHandler', false)):
                 fclose($fp);
                 return;
             }
-            if (fwrite($fp, sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message)) === false) {
+
+            $value = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);
+
+            if ($this->socket !== null) {
+                $this->socket->sendLog($value, true);
+            }
+
+            if (fwrite($fp, $value) === false) {
                 fclose($fp);
                 return;
             }

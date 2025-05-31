@@ -1,13 +1,13 @@
 <?php
 
-if(!class_exists('UmbrellaDatabaseFunction', false)):
+if (!class_exists('UmbrellaDatabaseFunction', false)):
     abstract class UmbrellaDatabaseFunction
     {
         protected static $connection;
 
         public static function getConnection($params)
         {
-            if(null !== self::$connection) {
+            if (null !== self::$connection) {
                 return self::$connection;
             }
 
@@ -66,10 +66,16 @@ if(!class_exists('UmbrellaDatabaseFunction', false)):
                 'amelia_notifications_log',
                 'bookly_log',
                 'actionscheduler_actions',
-                'actionscheduler_logs'
+                'actionscheduler_logs',
+                'wffilemods',
+                'wfknownfilelist',
+                'eum_logs',
+                'pp_activity_logs',
+                'wpmailsmtp_emails_log',
+                'wfblockediplog'
             ]);
 
-            if(in_array($tableName, $ignored)) {
+            if (in_array($tableName, $ignored)) {
                 return true;
             }
 
@@ -95,7 +101,7 @@ if(!class_exists('UmbrellaDatabaseFunction', false)):
         {
             $tableNames = $context->getTables();
 
-            if(empty($tableNames)) {
+            if (empty($tableNames)) {
                 return [];
             }
 

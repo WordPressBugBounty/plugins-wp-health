@@ -21,15 +21,6 @@ class Projects extends BaseClient
                 'sslverify' => false,
                 'timeout' => 50,
             ]);
-
-            if (is_wp_error($response)) {
-                $response = wp_remote_post(WP_UMBRELLA_API_URL . '/v1/projects/validation-secret-token', [
-                    'headers' => $this->getHeadersV2($token),
-                    'body' => json_encode($data),
-                    'sslverify' => false,
-                    'timeout' => 50,
-                ]);
-            }
         } catch (\Exception $e) {
             return null;
         }
@@ -52,15 +43,6 @@ class Projects extends BaseClient
                 'sslverify' => false,
                 'timeout' => 50,
             ]);
-
-            if (is_wp_error($response)) {
-                $response = wp_remote_post(WP_UMBRELLA_API_URL . '/v1/external/projects', [
-                    'headers' => $this->getHeadersV2($token),
-                    'body' => json_encode($data),
-                    'sslverify' => false,
-                    'timeout' => 50,
-                ]);
-            }
         } catch (\Exception $e) {
             return null;
         }

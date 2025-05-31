@@ -51,30 +51,7 @@ class Register
         ]);
 
         if (is_wp_error($response)) {
-            // Try with old API_URL
-            $response = wp_remote_post(WP_UMBRELLA_API_URL . '/v1/register', [
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                ],
-                'body' => json_encode([
-                    'email' => $data['email'],
-                    'password' => $data['password'],
-                    'firstname' => $data['firstname'],
-                    'lastname' => $data['lastname'],
-                    'hosting' => $hosting,
-                    'newsletters' => $data['newsletters'],
-                    'with_project' => true,
-                    'base_url' => site_url(),
-                    'home_url' => home_url(),
-                    'secret_token' => $secretToken,
-                    'project_name' => get_bloginfo('name'),
-                    'terms' => true,
-                ]),
-                'timeout' => 50,
-            ]);
-            if (is_wp_error($response)) {
-                return null;
-            }
+            return null;
         }
 
         $body = json_decode(wp_remote_retrieve_body($response), true);

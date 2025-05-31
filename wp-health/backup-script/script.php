@@ -223,6 +223,8 @@ if (!in_array($transport, ['ssl', 'tcp'], true)) {
     die();
 }
 
+$connection = null;
+
 try {
     $socket = new UmbrellaWebSocket([
         'host' => $host,
@@ -233,13 +235,13 @@ try {
 
     $socket->connect();
 
+    $errorHandler->setSocket($socket);
+
     $dbUser = defined('UMBRELLA_DB_USER') && UMBRELLA_DB_USER !== '[[UMBRELLA_DB_USER]]' ? UMBRELLA_DB_USER : htmlspecialchars($request['database']['db_user'], FILTER_SANITIZE_SPECIAL_CHARS);
     $dbPassword = defined('UMBRELLA_DB_PASSWORD') && UMBRELLA_DB_PASSWORD !== '[[UMBRELLA_DB_PASSWORD]]' ? UMBRELLA_DB_PASSWORD : htmlspecialchars($request['database']['db_password'], FILTER_SANITIZE_SPECIAL_CHARS);
     $dbHost = defined('UMBRELLA_DB_HOST') && UMBRELLA_DB_HOST !== '[[UMBRELLA_DB_HOST]]' ? UMBRELLA_DB_HOST : htmlspecialchars($request['database']['db_host'], FILTER_SANITIZE_SPECIAL_CHARS);
     $dbName = defined('UMBRELLA_DB_NAME') && UMBRELLA_DB_NAME !== '[[UMBRELLA_DB_NAME]]' ? UMBRELLA_DB_NAME : htmlspecialchars($request['database']['db_name'], FILTER_SANITIZE_SPECIAL_CHARS);
     $dbSsl = defined('UMBRELLA_DB_SSL') && UMBRELLA_DB_SSL !== '[[UMBRELLA_DB_SSL]]' ? UMBRELLA_DB_SSL : htmlspecialchars($request['database']['db_ssl'], FILTER_SANITIZE_SPECIAL_CHARS);
-
-    $connection = null;
 
     /**
      * If the action is backup_directory, we only need to get a directory
@@ -338,9 +340,10 @@ try {
         // If need file backup
         // =======================
         if ($request['request_file_backup'] === true) {
-            $socket->sendLog('Directory path: ' . $context->getDirectoryDictionaryPath());
+            $socket->sendLog('Base directory path: ' . $context->getBaseDirectory(), true);
+            $socket->sendLog('Directory dictionary path: ' . $context->getDirectoryDictionaryPath(), true);
             if (!file_exists($context->getDirectoryDictionaryPath())) {
-                $socket->sendLog('Directory dictionary not found. Start directory scan.');
+                $socket->sendLog('Directory dictionary not found. Start directory scan.', true);
                 $scanBackup = new UmbrellaScanBackup([
                     'context' => $context,
                     'socket' => $socket,
@@ -362,7 +365,7 @@ try {
 
             $finish = $backupFile->backup();
             $socket->sendLog('Finish file backup: ' . $finish ? 'true' : 'false');
-            $socket->sendLog("Total files sent by PHP: $totalFilesSent");
+            $socket->sendLog("Total files sent by PHP: $totalFilesSent", true);
         }
 
         // =======================
@@ -377,23 +380,23 @@ try {
     $cleanup->handleDatabase();
     $cleanup->handleEndProcess();
 } catch (\UmbrellaPreventMaxExecutionTime $e) {
-    $socket->sendLog('UmbrellaPreventMaxExecutionTime: ' . $e->getMessage());
+    $socket->sendLog('UmbrellaPreventMaxExecutionTime: ' . $e->getMessage(), true);
     $finish = false;
     $socket->sendPreventMaxExecutionTime($e->getCursor());
 } catch (\UmbrellaDatabasePreventMaxExecutionTime $e) {
-    $socket->sendLog('UmbrellaDatabasePreventMaxExecutionTime: ' . $e->getMessage());
+    $socket->sendLog('UmbrellaDatabasePreventMaxExecutionTime: ' . $e->getMessage(), true);
     $finish = false;
     $socket->sendPreventDatabaseMaxExecutionTime($e->getCursor());
 } catch (\UmbrellaInternalRequestException $e) {
-    $socket->sendLog('Internal Exception Error: ' . $e->getMessage());
+    $socket->sendLog('Internal Exception Error: ' . $e->getMessage(), true);
     $cleanup->handleEndProcess();
 } catch (\UmbrellaException $e) {
-    $socket->sendLog('Error: ' . $e->getMessage());
+    $socket->sendLog('Error: ' . $e->getMessage(), true);
     $socket->sendError($e);
     $cleanup->handleDatabase();
     $cleanup->handleEndProcess();
 } catch (\Exception $e) {
-    $socket->sendLog('Unknown Exception Error: ' . $e->getMessage());
+    $socket->sendLog('Unknown Exception Error: ' . $e->getMessage(), true);
     $socket->sendError(new UmbrellaException($e->getMessage(), 'unknown_error', true));
     $cleanup->handleDatabase();
     $cleanup->handleEndProcess();

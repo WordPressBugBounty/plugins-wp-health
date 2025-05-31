@@ -16,6 +16,7 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\Flywheel",
             "\WPUmbrella\Thirds\Cache\WPServer",
             "\WPUmbrella\Thirds\Cache\Breeze",
+            "\WPUmbrella\Thirds\Cache\GlobalNginx",
         ]);
     }
 }

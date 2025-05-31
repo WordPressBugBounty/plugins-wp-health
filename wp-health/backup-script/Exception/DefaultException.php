@@ -31,6 +31,11 @@ if (!class_exists('UmbrellaDefaultException', false)):
             return $this->errorCode;
         }
 
+        public function getInternalError()
+        {
+            return $this->internalError;
+        }
+
         public function getErrorMessage()
         {
             return $this->message;

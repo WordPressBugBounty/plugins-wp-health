@@ -15,36 +15,40 @@ class BackupFinderConfiguration
     {
         return [
             WP_UMBRELLA_DIR_WPU_BACKUP_BOX,
-            WP_CONTENT_DIR . '/cache', // like wp-rocket
-            WP_CONTENT_DIR . '/updraft', // backup updraft
-            WP_CONTENT_DIR . '/ai1wm-backups', // backup ai1wm-backups
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'cache', // like wp-rocket
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'updraft', // backup updraft
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'ai1wm-backups', // backup ai1wm-backups
             'node_modules',
             'scratch-backup',
             ABSPATH . 'error_log',
-            WP_CONTENT_DIR . '/error_log',
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'error_log',
             'logs',
             'node_modules',
             ABSPATH . 'lscache', //lite speed cache
             'lscache', //lite speed cache
             ABSPATH . 'umbrella-backup.php',
             ABSPATH . 'rb-plugins', // raidboxes,
-            WP_CONTENT_DIR . '/nginx_cache', // nginx cache
-            WP_CONTENT_DIR . '/et-cache',
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'nginx_cache', // nginx cache
+            WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'et-cache',
             'umbrella-backup.php'
         ];
     }
 
+    /**
+     * This function is used to get the root backup module "/cloner.php"
+     * It's totally different with "getDefaultSource()", use to know from where we need to start the backup directory
+     */
     public function getRootBackupModule()
     {
         $host = wp_umbrella_get_service('HostResolver')->getCurrentHost();
 
         $source = ABSPATH;
 
-        switch($host) {
-			case Host::FLYWHEEL:
+        switch ($host) {
+            case Host::FLYWHEEL:
             case Host::PRESSABLE:
-				$source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
-				break;
+                $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
+                break;
         }
 
         if (empty($source)) {
@@ -62,23 +66,33 @@ class BackupFinderConfiguration
     {
         $host = wp_umbrella_get_service('HostResolver')->getCurrentHost();
 
-        $source = ABSPATH;
-        if ($host === Host::FLYWHEEL || $host === Host::PRESSABLE) {
-            $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
-        } else {
-            try {
-                if (!is_dir(untrailingslashit(ABSPATH) . '/wp-content')) { // Compatibility with Bedrock
-                    $source = dirname(ABSPATH);
-                }
+        // Prevent Windows compatibility issues
+        $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, ABSPATH), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
 
-                // Try to find wp-config.php for some problem with Bedrock
-                if (!file_exists($source . '/wp-config.php')) {
-                    // If the file is not found, we try to find it in the parent directory
-                    $source = dirname(ABSPATH);
+        switch ($host) {
+            case Host::FLYWHEEL:
+            case Host::PRESSABLE:
+                $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, WP_CONTENT_DIR), DIRECTORY_SEPARATOR)
+                    . DIRECTORY_SEPARATOR
+                    . '..'
+                    . DIRECTORY_SEPARATOR;
+                break;
+
+            default:
+                try {
+                    if (!is_dir(untrailingslashit($source) . DIRECTORY_SEPARATOR . 'wp-content')) {
+                        $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, dirname(ABSPATH)), DIRECTORY_SEPARATOR)
+                            . DIRECTORY_SEPARATOR;
+                    }
+
+                    if (!file_exists($source . 'wp-config.php')) {
+                        $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, dirname(ABSPATH)), DIRECTORY_SEPARATOR)
+                            . DIRECTORY_SEPARATOR;
+                    }
+                } catch (\Exception $e) {
+                    // Do nothing
                 }
-            } catch (\Exception $e) {
-                // Do nothing
-            }
+                break;
         }
 
         if (empty($source)) {
@@ -125,12 +139,12 @@ class BackupFinderConfiguration
             // No black magic
         }
 
-        $lastCharIsSlash = substr($source, -1) === '/';
+        $lastCharIsSlash = substr($source, -1) === DIRECTORY_SEPARATOR;
 
         foreach ($excludes as $key => $value) {
             $value = str_replace($source, '', $value);
 
-            if ($lastCharIsSlash && isset($value[0]) && $value[0] === '/') {
+            if ($lastCharIsSlash && isset($value[0]) && $value[0] === DIRECTORY_SEPARATOR) {
                 $value = \substr($value, 1);
             }
 

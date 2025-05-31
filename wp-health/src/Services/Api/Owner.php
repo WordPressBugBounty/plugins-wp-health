@@ -61,14 +61,6 @@ class Owner extends BaseClient
                 'sslverify' => false,
                 'timeout' => 40,
             ]);
-
-            if (is_wp_error($response)) {
-                $response = wp_remote_get(WP_UMBRELLA_API_URL . '/v1/external/me', [
-                    'headers' => $this->getHeadersV2($apiKey),
-                    'sslverify' => false,
-                    'timeout' => 40,
-                ]);
-            }
         } catch (\Exception $e) {
             return null;
         }
@@ -95,14 +87,6 @@ class Owner extends BaseClient
                 'sslverify' => false,
                 'timeout' => 20,
             ]);
-
-            if (is_wp_error($response)) {
-                $response = wp_remote_get(WP_UMBRELLA_API_URL . '/v1/me', [
-                    'headers' => $this->getHeadersV2($apiKey),
-                    'sslverify' => false,
-                    'timeout' => 20,
-                ]);
-            }
         } catch (\Exception $e) {
             return null;
         }

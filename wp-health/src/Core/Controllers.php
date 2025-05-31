@@ -8,6 +8,46 @@ abstract class Controllers
     public static function getControllers()
     {
         return [
+            '/v1/patchstack/license-activation' => [
+                'route' => '/patchstack/license-activation',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Third\Patchstack\PatchstackLicenseActivation::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        // Some hosting providers don't like "POST" method
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Third\Patchstack\PatchstackLicenseActivation::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ]
+                ]
+            ],
+            '/v1/patchstack/license-deactivation' => [
+                'route' => '/patchstack/license-deactivation',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Third\Patchstack\PatchstackLicenseDeactivation::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        // Some hosting providers don't like "POST" method
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Third\Patchstack\PatchstackLicenseDeactivation::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ]
+                ]
+            ],
             '/v1/cleanup-safe-update' => [
                 'route' => '/cleanup-safe-update',
                 'methods' => [
@@ -173,7 +213,7 @@ abstract class Controllers
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
                         ]
                     ],
-                    // Thanks some hostings
+                    // Some hosting providers don't like "POST" method
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Options\ValidateApplicationToken::class,
@@ -195,7 +235,7 @@ abstract class Controllers
                             'permission' => Controller::PERMISSION_ONLY_API_TOKEN,
                         ]
                     ],
-                    // Thanks some hostings
+                    // Some hosting providers don't like "POST" method
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Options\RegenerateSecretToken::class,

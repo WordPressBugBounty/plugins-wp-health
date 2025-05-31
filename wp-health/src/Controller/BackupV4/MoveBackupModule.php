@@ -79,16 +79,8 @@ class MoveBackupModule extends AbstractController
     public function executeGet($params)
     {
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
-
-        $filename = sanitize_file_name($params['filename'] ?? null);
+        $filename = 'cloner.php';
         $requestId = sanitize_text_field($params['requestId'] ?? null);
-
-        if (empty($filename)) {
-            return $this->returnResponse([
-                'success' => false,
-                'code' => 'no_filename',
-            ]);
-        }
 
         if (empty($requestId)) {
             return $this->returnResponse([

@@ -72,15 +72,15 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             'secure' => false,
         ]);
 
-        if (isset($_POST['secret_token']) && $_POST['secret_token'] !== self::SECURED_VALUE) {
+        if (isset($_POST['secret_token']) && $_POST['secret_token'] !== self::SECURED_VALUE && strlen($_POST['secret_token']) < 400) {
             $options['secret_token'] = !empty($_POST['secret_token']) ? wp_umbrella_get_service('WordPressContext')->getHash(sanitize_text_field($_POST['secret_token'])) : '';
         }
 
-        if (isset($_POST['api_key']) && $_POST['api_key'] !== self::SECURED_VALUE) {
+        if (isset($_POST['api_key']) && $_POST['api_key'] !== self::SECURED_VALUE && strlen($_POST['api_key']) < 400) {
             $options['api_key'] = !empty($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
         }
 
-        if (isset($_POST['project_id']) && $_POST['project_id'] !== self::SECURED_VALUE) {
+        if (isset($_POST['project_id']) && $_POST['project_id'] !== self::SECURED_VALUE && strlen($_POST['project_id']) < 100) {
             $options['project_id'] = isset($_POST['project_id']) ? sanitize_text_field($_POST['project_id']) : '';
         }
 

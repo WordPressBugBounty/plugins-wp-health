@@ -29,12 +29,12 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                 }
 
                 // Skip first element if dumpDatabaseCursor is not 0
-                if($key === 0 && $dumpDatabaseCursor !== 0) {
+                if ($key === 0 && $dumpDatabaseCursor !== 0) {
                     continue;
                 }
 
                 // Skip all elements before dumpDatabaseCursor
-                if($key !== 0 && $key <= $dumpDatabaseCursor) {
+                if ($key !== 0 && $key <= $dumpDatabaseCursor) {
                     continue;
                 }
 
@@ -46,7 +46,7 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
 
                 try {
                     $fileHandle = new UmbrellaFileHandle($tablePath, 'wb');
-                    if($fileHandle->isInError()) {
+                    if ($fileHandle->isInError()) {
                         continue;
                     }
 
@@ -65,7 +65,7 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                 @unlink($tablePath);
                 $this->socket->sendDatabaseDumpCursor($key);
 
-                if (function_exists('ob_flush')) {
+                if (function_exists('ob_flush') && @ob_get_level() > 0) {
                     @ob_flush();
                 }
                 @flush();
