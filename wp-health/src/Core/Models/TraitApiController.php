@@ -95,7 +95,12 @@ trait TraitApiController
     public function getResponseApi($data, $status = 200)
     {
         $restResponse = new WP_REST_Response($data, $status);
-        $restResponse->set_headers(['Cache-Control' => 'no-cache']);
+
+        $restResponse->set_headers([
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
         return $restResponse;
     }
 }

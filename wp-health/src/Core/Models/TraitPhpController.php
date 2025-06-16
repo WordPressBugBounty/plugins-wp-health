@@ -162,7 +162,9 @@ trait TraitPhpController
 
     public function getResponsePhp($data, $status = 200)
     {
-        header('Cache-Control: no-cache');
+        header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        header('Pragma: no-cache');
+        header('Expires: 0');
         header('Content-Type: application/json');
 
         http_response_code($status);

@@ -53,6 +53,15 @@ class UploadModule extends AbstractController
 
         $result = file_put_contents($source . $params['filename'], $str);
 
+        if (function_exists('opcache_invalidate')) {
+            $result = opcache_invalidate($source . $params['filename'], true);
+            if (!$result) {
+                if (function_exists('opcache_reset')) {
+                    opcache_reset();
+                }
+            }
+        }
+
         return $this->returnResponse([
             'success' => $result === false ? false : true,
             'code' => $result === false ? 'upload_error' : 'upload_success',

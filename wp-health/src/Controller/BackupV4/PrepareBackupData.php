@@ -3,12 +3,44 @@ namespace WPUmbrella\Controller\BackupV4;
 
 use WPUmbrella\Core\Models\AbstractController;
 use WPUmbrella\Helper\Host;
+use WPUmbrella\Services\DirectoryFunctions;
 
 class PrepareBackupData extends AbstractController
 {
     public function executeGet($params)
     {
         global $wpdb;
+
+        $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
+
+        // Clean up old backup files
+        $files = [
+            $source . 'cloner.php',
+            $source . 'cloner_error_log'
+        ];
+
+        // Find any dictionary files matching pattern
+        $dictionaryFiles = glob($source . '*-dictionary.php');
+        $directoryDictionaryFiles = glob($source . '*-directory-dictionary.php');
+
+        $files = array_merge($files, $dictionaryFiles, $directoryDictionaryFiles);
+
+        foreach ($files as $file) {
+            if (!file_exists($file)) {
+                continue;
+            }
+            @unlink($file);
+        }
+
+        // Clean up database directories
+        $directories = [
+            $source . 'umb_database',
+            $source . 'wp-content' . DIRECTORY_SEPARATOR . 'umb_database',
+        ];
+
+        foreach ($directories as $directory) {
+            DirectoryFunctions::destroyDir($directory);
+        }
 
         return $this->returnResponse([
             'prefix' => $wpdb->prefix,

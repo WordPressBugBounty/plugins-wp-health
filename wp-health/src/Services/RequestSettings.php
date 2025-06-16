@@ -8,7 +8,7 @@ class RequestSettings
 
     public function getWPEngineCookieValue()
     {
-        return hash('sha256', 'wpe_auth_salty_dog|' . WPE_APIKEY);
+        return hash('sha256', 'wpe_auth_salty_dog|' . \WPE_APIKEY);
     }
 
     /**
@@ -40,10 +40,12 @@ class RequestSettings
 
     public function preventWPEngine()
     {
-        if (defined('WPE_APIKEY')) {
-            $cookieValue = $this->getWPEngineCookieValue();
-            setcookie('wpe-auth', $cookieValue, 0, '/', '', force_ssl_admin(), true);
+        if (!defined('WPE_APIKEY')) {
+            return;
         }
+
+        $cookieValue = $this->getWPEngineCookieValue();
+        setcookie('wpe-auth', $cookieValue, 0, '/', '', is_ssl(), true);
     }
 
     public function setupAdminConstants()
@@ -192,7 +194,7 @@ class RequestSettings
                 'timeout' => 30,
                 'blocking' => false,
                 'sslverify' => false,
-				'user-agent' => 'WPUmbrella',
+                'user-agent' => 'WPUmbrella',
                 'body' => [
                     'action' => 'wp_umbrella_snapshot_data',
                     'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),

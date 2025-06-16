@@ -48,6 +48,7 @@ class CheckBackupCapabilities extends AbstractController
             ],
             'can_create_database_folder' => $this->canCreateDatabaseFolder(),
             'class_phar_data' => class_exists('PharData'),
+            'fsockopen' => function_exists('fsockopen'),
         ]);
     }
 }

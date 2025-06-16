@@ -12,6 +12,7 @@ class Plugin
     public $require_wp_version;
     public $require_php_version;
     public $title;
+    public $changelog;
     public $need_update;
 
     public function getPropertiesValues()
@@ -19,6 +20,7 @@ class Plugin
         return [
             'name' => $this->name,
             'slug' => $this->slug,
+            'changelog' => $this->changelog,
             'is_active' => $this->is_active,
             'key' => $this->key,
             'version' => $this->version,

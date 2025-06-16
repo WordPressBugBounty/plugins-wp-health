@@ -1,6 +1,6 @@
 <?php
 
-if (!class_exists('UmbrellaConnectionInterface', false)):
+if (!interface_exists('UmbrellaConnectionInterface', false)):
     interface UmbrellaConnectionInterface
     {
         /**
@@ -12,7 +12,7 @@ if (!class_exists('UmbrellaConnectionInterface', false)):
          * @return UmbrellaDatabaseStatementInterface
          *
          */
-        public function query($query, array $parameters = array(), $unbuffered = false);
+        public function query($query, array $parameters = [], $unbuffered = false);
 
         /**
          * No-return-value version of the query() method. Allows adapters

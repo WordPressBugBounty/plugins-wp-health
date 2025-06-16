@@ -328,6 +328,25 @@ abstract class Kernel
         });
     }
 
+    public static function pluginLoadedWithSetupAdmin()
+    {
+        add_action('plugins_loaded', function () {
+            $hostname = gethostname();
+
+            $hostNameIncompatibleWithSetupAdmin = apply_filters('wp_umbrella_host_name_incompatible_with_setup_admin', [
+                'myukcloud.com'
+            ], $hostname);
+
+            foreach ($hostNameIncompatibleWithSetupAdmin as $hostName) {
+                if (strpos($hostname, $hostName) !== false) {
+                    return;
+                }
+            }
+
+            wp_umbrella_get_service('RequestSettings')->setupAdmin();
+        }, 1);
+    }
+
     public static function execute($data)
     {
         if (!class_exists('ActionScheduler')) {
@@ -388,21 +407,7 @@ abstract class Kernel
 
             wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
 
-            add_action('plugins_loaded', function () {
-                $hostNameIncompatibleWithSetupAdmin = apply_filters('wp_umbrella_host_name_incompatible_with_setup_admin', [
-                    'myukcloud.com'
-                ], gethostname());
-
-                $hostname = gethostname();
-
-                foreach ($hostNameIncompatibleWithSetupAdmin as $hostName) {
-                    if (strpos($hostname, $hostName) !== false) {
-                        return;
-                    }
-                }
-
-                wp_umbrella_get_service('RequestSettings')->setupAdmin();
-            }, 1);
+            self::pluginLoadedWithSetupAdmin();
 
             add_action('wp_loaded', function () {
                 // Prevent for WooCommerce error
@@ -418,21 +423,7 @@ abstract class Kernel
         if (self::$apiLoad) {
             self::hookThirdParties();
 
-            add_action('plugins_loaded', function () {
-                $hostNameIncompatibleWithSetupAdmin = apply_filters('wp_umbrella_host_name_incompatible_with_setup_admin', [
-                    'myukcloud.com'
-                ], gethostname());
-
-                $hostname = gethostname();
-
-                foreach ($hostNameIncompatibleWithSetupAdmin as $hostName) {
-                    if (strpos($hostname, $hostName) !== false) {
-                        return;
-                    }
-                }
-
-                wp_umbrella_get_service('RequestSettings')->setupAdmin();
-            }, 1);
+            self::pluginLoadedWithSetupAdmin();
         }
 
         add_action('wp_ajax_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);

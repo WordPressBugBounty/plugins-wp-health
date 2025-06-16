@@ -1,7 +1,6 @@
 <?php
 
-
-if (!class_exists('UmbrellaDatabaseStatementInterface', false)):
+if (!interface_exists('UmbrellaDatabaseStatementInterface', false)):
     interface UmbrellaDatabaseStatementInterface
     {
         /**

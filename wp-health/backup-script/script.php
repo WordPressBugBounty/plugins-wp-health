@@ -1,5 +1,13 @@
 <?php
 
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+if (function_exists('opcache_invalidate')) {
+    opcache_invalidate(__FILE__, true);
+}
+
 define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');
 define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');
 define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');
@@ -22,9 +30,11 @@ if (!isset($_GET['umbrella-backup-key'])) {
     return;
 }
 
-function removeScript()
-{
-    @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
+if (!function_exists('removeScript')) {
+    function removeScript()
+    {
+        @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
+    }
 }
 
 //[[REPLACE]]//
@@ -41,6 +51,10 @@ ini_set('log_errors', 0);
 
 date_default_timezone_set('UTC');
 ini_set('memory_limit', '512M');
+
+if (function_exists('ignore_user_abort')) {
+    ignore_user_abort(true);
+}
 
 $request = [];
 try {
@@ -87,19 +101,19 @@ $key = $_GET['umbrella-backup-key'];
 
 if (!hash_equals(UMBRELLA_BACKUP_KEY, $_GET['umbrella-backup-key'])) {
     $html->render();
-    removeScript();
+    // removeScript();
     return;
 }
 
 if (!isset($request['host']) || !isset($request['port'])) {
     $html->render();
-    removeScript();
+    // removeScript();
     return;
 }
 
 if (!isset($request['request_id']) || !isset($request['base_directory']) || !isset($request['database_prefix'])) {
     $html->render();
-    removeScript();
+    // removeScript();
     return;
 }
 
@@ -113,24 +127,27 @@ $actionsAvailable = [
 
 if (!in_array($action, $actionsAvailable, true)) {
     $html->render();
-    removeScript();
+    // removeScript();
     return;
 }
 
 if (!isset($request['host'])) {
-    removeScript();
+    $html->render();
+    // removeScript();
     return;
 }
 
 $host = $request['host'];
 
-function validHost($host)
-{
-    if (strpos($host, 'mirror.wp-umbrella.com') !== false) {
-        return true;
-    }
+if (!function_exists('validHost')) {
+    function validHost($host)
+    {
+        if (strpos($host, 'mirror.wp-umbrella.com') !== false) {
+            return true;
+        }
 
-    return $host === '127.0.0.1';
+        return $host === '127.0.0.1';
+    }
 }
 
 if (!validHost($host)) {
@@ -189,6 +206,29 @@ $cleanup = new UmbrellaCleanup([
     'context' => $context,
 ]);
 
+if (!function_exists('clearStatCacheUmbrella')) {
+    function clearStatCacheUmbrella($path = null)
+    {
+        if (PHP_VERSION_ID < 50300 || $path === null) {
+            clearstatcache();
+            return;
+        }
+        clearstatcache(true, $path);
+    }
+}
+
+if (!function_exists('clearMemoryAndCache')) {
+    function clearMemoryAndCache($socket)
+    {
+        if (function_exists('gc_collect_cycles')) {
+            $socket->sendLog('Cleared memory');
+            gc_collect_cycles();
+        } else {
+            $socket->sendLog('No gc_collect_cycles function');
+        }
+    }
+}
+
 try {
     switch ($action) {
         case 'scan':
@@ -219,8 +259,9 @@ $finish = false;
 
 $transport = isset($request['transport']) ? $request['transport'] : 'ssl';
 if (!in_array($transport, ['ssl', 'tcp'], true)) {
-    removeScript();
-    die();
+    $html->render();
+    // removeScript();
+    return;
 }
 
 $connection = null;
@@ -234,6 +275,9 @@ try {
     ]);
 
     $socket->connect();
+
+    clearMemoryAndCache($socket);
+    clearStatCacheUmbrella(__FILE__);
 
     $errorHandler->setSocket($socket);
 
@@ -289,7 +333,7 @@ try {
          * Internal request = only if we want to try to send the dictionary without any backup
          */
         if ($finishDictionary && $context->getInternalRequest()) {
-            $cleanup->handleEndProcess();
+            // $cleanup->handleEndProcess();
         }
 
         if ($finishDictionary) {
@@ -377,8 +421,8 @@ try {
         $socket->sendFinish();
     }
 } catch (\UmbrellaSocketException $e) {
-    $cleanup->handleDatabase();
-    $cleanup->handleEndProcess();
+    // $cleanup->handleDatabase();
+    // $cleanup->handleEndProcess();
 } catch (\UmbrellaPreventMaxExecutionTime $e) {
     $socket->sendLog('UmbrellaPreventMaxExecutionTime: ' . $e->getMessage(), true);
     $finish = false;
@@ -389,17 +433,17 @@ try {
     $socket->sendPreventDatabaseMaxExecutionTime($e->getCursor());
 } catch (\UmbrellaInternalRequestException $e) {
     $socket->sendLog('Internal Exception Error: ' . $e->getMessage(), true);
-    $cleanup->handleEndProcess();
+    // $cleanup->handleEndProcess();
 } catch (\UmbrellaException $e) {
     $socket->sendLog('Error: ' . $e->getMessage(), true);
     $socket->sendError($e);
-    $cleanup->handleDatabase();
-    $cleanup->handleEndProcess();
+    // $cleanup->handleDatabase();
+    // $cleanup->handleEndProcess();
 } catch (\Exception $e) {
     $socket->sendLog('Unknown Exception Error: ' . $e->getMessage(), true);
     $socket->sendError(new UmbrellaException($e->getMessage(), 'unknown_error', true));
-    $cleanup->handleDatabase();
-    $cleanup->handleEndProcess();
+    // $cleanup->handleDatabase();
+    // $cleanup->handleEndProcess();
 } finally {
     $socket->sendLog('Finally: Close connection');
 
@@ -420,6 +464,56 @@ try {
         $socket->sendLog('Finally: is finish');
         $cleanup->handleDatabase();
         removeScript();
+    } else {
+        ?>
+		<!doctype html>
+		<html lang="en">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport"
+				content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+			<meta http-equiv="X-UA-Compatible" content="ie=edge">
+			<title>Synchronize</title>
+			<style>
+				body {
+					color: #333;
+					margin: 0;
+					height: 100vh;
+					background-color: #4f46e5;
+					font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+				}
+				.content {
+					display:flex;
+					align-items: center;
+					justify-content: center;
+
+				}
+
+				.box{
+					margin-top: 32px;
+					background-color: #fff;
+					padding:16px;
+					max-width: 600px;
+					border-radius: 16px;
+				}
+
+
+			</style>
+		</head>
+		<body>
+
+		<div class="content">
+			<div class="box">
+				<p>
+In Progress
+				</p>
+			</div>
+		</div>
+
+
+		</body>
+		</html>
+	<?php
     }
 }
 

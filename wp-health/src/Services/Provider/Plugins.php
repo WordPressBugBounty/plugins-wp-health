@@ -145,8 +145,14 @@ class Plugins
 
         if (!empty($needUpdates) && is_array($needUpdates)) {
             if (isset($needUpdates[$plugin])) {
-                $data['update'] = $pluginUpdate->update;
+                $data['update'] = $needUpdates[$plugin]->update;
             }
+        }
+
+        $informations = $this->getPluginChangelog($slugExplode[0]);
+
+        if ($informations && isset($informations->sections['changelog'])) {
+            $data['changelog'] = $informations->sections['changelog'];
         }
 
         $schema = $this->schema->getSchema([
@@ -190,5 +196,30 @@ class Plugins
         }
 
         return json_decode(wp_remote_retrieve_body($response), true);
+    }
+
+    public function getPluginChangelog($slug)
+    {
+        if (empty($slug)) {
+            return null;
+        }
+
+        if (!function_exists('plugins_api')) {
+            require_once \ABSPATH . 'wp-admin/includes/plugin-install.php';
+        }
+
+        $api = \plugins_api('plugin_information', [
+            'slug' => $slug,
+            'fields' => [
+                'sections' => true,
+                'changelog' => true,
+            ]
+        ]);
+
+        if (is_wp_error($api)) {
+            return null;
+        }
+
+        return $api;
     }
 }

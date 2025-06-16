@@ -13,6 +13,10 @@ class GlobalNginx implements CacheCollectionItem
             return false;
         }
 
+        if (is_null($nginx_purger)) {
+            return false;
+        }
+
         return true;
     }
 
