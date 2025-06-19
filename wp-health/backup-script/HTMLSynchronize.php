@@ -3,7 +3,7 @@
 if (!class_exists('UmbrellaHTMLSynchronize', false)):
     class UmbrellaHTMLSynchronize
     {
-        public function render()
+        public function render($str = '')
         {
             ?>
             <!doctype html>
@@ -48,6 +48,7 @@ if (!class_exists('UmbrellaHTMLSynchronize', false)):
                         A process is running in the background to synchronize your website
                     </p>
                     <p>This file will be deleted when the process is finished</p>
+					<p><?php echo $str; ?></p>
                 </div>
             </div>
 

@@ -149,7 +149,7 @@ class Plugins
             }
         }
 
-        $informations = $this->getPluginChangelog($slugExplode[0]);
+        $informations = $this->getPluginChangelog($plugin);
 
         if ($informations && isset($informations->sections['changelog'])) {
             $data['changelog'] = $informations->sections['changelog'];
@@ -208,13 +208,35 @@ class Plugins
             require_once \ABSPATH . 'wp-admin/includes/plugin-install.php';
         }
 
-        $api = \plugins_api('plugin_information', [
-            'slug' => $slug,
-            'fields' => [
-                'sections' => true,
-                'changelog' => true,
-            ]
-        ]);
+        $slugExplode = explode('/', $slug);
+
+        if (isset($slugExplode[0])) {
+            $api = \plugins_api('plugin_information', [
+                'slug' => $slugExplode[0],
+                'fields' => [
+                    'sections' => true,
+                    'changelog' => true,
+                ]
+            ]);
+
+            if ($api && isset($api->errors)) {
+                $api = \plugins_api('plugin_information', [
+                    'slug' => $slug,
+                    'fields' => [
+                        'sections' => true,
+                        'changelog' => true,
+                    ]
+                ]);
+            }
+        } else {
+            $api = \plugins_api('plugin_information', [
+                'slug' => $slug,
+                'fields' => [
+                    'sections' => true,
+                    'changelog' => true,
+                ]
+            ]);
+        }
 
         if (is_wp_error($api)) {
             return null;

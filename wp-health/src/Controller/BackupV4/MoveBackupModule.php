@@ -137,10 +137,10 @@ class MoveBackupModule extends AbstractController
             $result = $wp_filesystem->put_contents($destinationPath, $fileContent);
 
             if (function_exists('opcache_invalidate')) {
-                $result = opcache_invalidate($destinationPath, true);
-                if (!$result) {
+                $resultOpcache = @opcache_invalidate($destinationPath, true);
+                if (!$resultOpcache) {
                     if (function_exists('opcache_reset')) {
-                        opcache_reset();
+                        @opcache_reset();
                     }
                 }
             }
@@ -158,6 +158,7 @@ class MoveBackupModule extends AbstractController
                 'message' => $e->getMessage(),
             ]);
         }
+
         return $this->returnResponse([
             'success' => true,
             'code' => 'success',

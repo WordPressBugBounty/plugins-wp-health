@@ -26,9 +26,9 @@ abstract class DirectoryFunctions
                 if ($file == '.' || $file == '..') {
                     continue;
                 }
-                if (!$this->destroyDir($dir . DIRECTORY_SEPARATOR . $file)) {
+                if (!self::destroyDir($dir . DIRECTORY_SEPARATOR . $file)) {
                     chmod($dir . DIRECTORY_SEPARATOR . $file, 0777);
-                    if (!$this->destroyDir($dir . DIRECTORY_SEPARATOR . $file)) {
+                    if (!self::destroyDir($dir . DIRECTORY_SEPARATOR . $file)) {
                         return false;
                     }
                 };

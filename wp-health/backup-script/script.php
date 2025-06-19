@@ -1,11 +1,15 @@
 <?php
+try {
+    if (function_exists('header')) {
+        @header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+        @header('Pragma: no-cache');
+        @header('Expires: 0');
+    }
 
-header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-header('Pragma: no-cache');
-header('Expires: 0');
-
-if (function_exists('opcache_invalidate')) {
-    opcache_invalidate(__FILE__, true);
+    if (function_exists('opcache_invalidate')) {
+        @opcache_invalidate(__FILE__, true);
+    }
+} catch (\Exception $e) {
 }
 
 define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');
@@ -93,26 +97,26 @@ if (isset($_GET['action']) && is_string($_GET['action']) && strlen($_GET['action
 switch ($action) {
     case '':
     case 'check-communication':
-        $html->render();
+        $html->render('check-communication');
         return;
 }
 
 $key = $_GET['umbrella-backup-key'];
 
 if (!hash_equals(UMBRELLA_BACKUP_KEY, $_GET['umbrella-backup-key'])) {
-    $html->render();
+    $html->render('hash-not-equal');
     // removeScript();
     return;
 }
 
 if (!isset($request['host']) || !isset($request['port'])) {
-    $html->render();
+    $html->render('host-or-port-not-set');
     // removeScript();
     return;
 }
 
-if (!isset($request['request_id']) || !isset($request['base_directory']) || !isset($request['database_prefix'])) {
-    $html->render();
+if (!isset($request['request_id']) || !isset($request['database_prefix'])) {
+    $html->render('request-id-or-base-directory-or-database-prefix-not-set');
     // removeScript();
     return;
 }
@@ -126,13 +130,13 @@ $actionsAvailable = [
 ];
 
 if (!in_array($action, $actionsAvailable, true)) {
-    $html->render();
+    $html->render('action-not-available');
     // removeScript();
     return;
 }
 
 if (!isset($request['host'])) {
-    $html->render();
+    $html->render('host-not-set');
     // removeScript();
     return;
 }
@@ -151,7 +155,7 @@ if (!function_exists('validHost')) {
 }
 
 if (!validHost($host)) {
-    $html->render();
+    $html->render('host-not-valid');
     return;
 }
 
@@ -259,7 +263,7 @@ $finish = false;
 
 $transport = isset($request['transport']) ? $request['transport'] : 'ssl';
 if (!in_array($transport, ['ssl', 'tcp'], true)) {
-    $html->render();
+    $html->render('transport-not-valid');
     // removeScript();
     return;
 }
