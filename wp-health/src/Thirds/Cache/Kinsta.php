@@ -1,8 +1,6 @@
 <?php
 namespace WPUmbrella\Thirds\Cache;
 
-defined('ABSPATH') or exit('Cheatin&#8217; uh?');
-
 use WPUmbrella\Core\Collections\CacheCollectionItem;
 
 class Kinsta implements CacheCollectionItem

@@ -96,7 +96,7 @@ if (!class_exists('UmbrellaErrorHandler', false)):
             exit;
         }
 
-        public function handleFatalError(array $error = null)
+        public function handleFatalError(?array $error = null)
         {
             $this->reservedMemory = null;
             if ($error === null) {

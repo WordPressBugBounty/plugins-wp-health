@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: v2.18.2
+Stable tag: v2.18.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -79,11 +79,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 
 == Changelog ==
 
+= 2.18.3 (06-27-2025) =
+- Improved: add LiteSpeed, WP Fatest Cache and WP Super Cache to the cache control
+- Improved: get changelog from premium plugins with admin_init hook
+
 = 2.18.2 (06-19-2025) =
 - Improved: remove query monitors headers during API request
 - Fix: PHP warning on directory functions
 - Fix: Prevent header already sent on backup script
-
 
 = 2.18.1 (06-16-2025) =
 - Improved: backup process with op cache
