@@ -429,11 +429,18 @@ abstract class Kernel
 
         if (self::$apiLoad) {
             self::hookThirdParties();
-
             self::pluginLoadedWithSetupAdmin();
         }
 
-        self::ajaxActions();
+        if ($request->getToken() === wp_umbrella_get_api_key()) {
+            self::ajaxActions();
+        }
+
+        add_action('wp_ajax_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
+        add_action('wp_ajax_nopriv_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
+
+        add_action('wp_ajax_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
+        add_action('wp_ajax_nopriv_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
 
         add_action('plugins_loaded', [__CLASS__, 'handleHooksPlugin'], 10);
         register_activation_hook($data['file'], [__CLASS__, 'handleHooksPlugin']);
@@ -442,12 +449,6 @@ abstract class Kernel
 
     public static function ajaxActions()
     {
-        add_action('wp_ajax_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
-        add_action('wp_ajax_nopriv_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
-
-        add_action('wp_ajax_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
-        add_action('wp_ajax_nopriv_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
-
         add_action('wp_ajax_' . \WPUmbrella\Controller\Plugin\DataSingle::NONCE_ACTION, [\WPUmbrella\Controller\Plugin\DataSingle::class, 'getPluginDataByAjaxRouting']);
         add_action('wp_ajax_nopriv_' . \WPUmbrella\Controller\Plugin\DataSingle::NONCE_ACTION, [\WPUmbrella\Controller\Plugin\DataSingle::class, 'getPluginDataByAjaxRouting']);
     }

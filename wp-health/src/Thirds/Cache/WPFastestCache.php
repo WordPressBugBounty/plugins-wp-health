@@ -17,7 +17,7 @@ class WPFastestCache implements CacheCollectionItem
         }
 
         try {
-            $wpfc = new WpFastestCache();
+            $wpfc = new \WpFastestCache();
             $wpfc->deleteCache();
         } catch (\Exception $e) {
         }

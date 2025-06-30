@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: v2.18.3
+Stable tag: v2.18.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -77,7 +77,14 @@ Yes, WP Umbrella fully supports Multisite networks, allowing backups, updates, a
 
 WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP, and WP Remote. Features include accurate monitoring (no false positives), GDPR backups, and a user-friendly dashboard.
 
+= How can I report security bugs? =
+
+You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
+
 == Changelog ==
+
+= 2.18.4 (06-30-2025) =
+- Fix: PHP warning on WP Fastest Cache
 
 = 2.18.3 (06-27-2025) =
 - Improved: add LiteSpeed, WP Fatest Cache and WP Super Cache to the cache control

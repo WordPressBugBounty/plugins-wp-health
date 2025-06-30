@@ -274,6 +274,9 @@ class Update extends BaseManageUpdate
             'timeout' => 45,
             'cookies' => [],
             'sslverify' => false,
+            'headers' => [
+                'X-Umbrella' => wp_umbrella_get_api_key(),
+            ],
             'body' => [
                 'action' => 'wp_umbrella_update_admin_request',
                 'nonce' => $nonce,

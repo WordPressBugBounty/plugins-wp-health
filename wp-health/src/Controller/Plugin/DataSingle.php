@@ -13,29 +13,16 @@ class DataSingle extends AbstractController
 
     public static function getPluginDataByAjaxRouting($plugin)
     {
-        // Make sure required values are set.
-        $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         $plugin = isset($_POST['plugin']) ? $_POST['plugin'] : '';
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdmin();
 
-        // Nonce and hash are required.
-        if (empty($nonce)) {
+        if (empty($plugin)) {
             wp_send_json_error(
                 [
                     'code' => 'invalid_params',
                     'message' => __('Required parameters are missing', 'wp-health'),
-                ]
-            );
-        }
-
-        // If nonce check failed.
-        if (!wp_verify_nonce($nonce, self::NONCE_ACTION)) {
-            wp_send_json_error(
-                [
-                    'code' => 'nonce_failed',
-                    'message' => __('Admin request nonce check failed', 'wp-health'),
                 ]
             );
         }
@@ -55,6 +42,9 @@ class DataSingle extends AbstractController
             'timeout' => 45,
             'cookies' => [],
             'sslverify' => false,
+            'headers' => [
+                'X-Umbrella' => wp_umbrella_get_api_key(),
+            ],
             'body' => [
                 'action' => self::NONCE_ACTION,
                 'nonce' => $nonce,
