@@ -11,9 +11,6 @@ use WPUmbrella\Core\Hooks\DeactivationHook;
 
 class CleanTableRunner implements ExecuteHooks, DeactivationHook
 {
-    use QueueRunner;
-    use AsyncQueueRunner;
-
     const CRON_HOOK = 'wp_umbrella_clean_table_run_queue';
     const CRON_SCHEDULE = 'daily';
     const LOCK_KEY = 'wp_umbrella_clean_table_queue_runner';
@@ -25,31 +22,10 @@ class CleanTableRunner implements ExecuteHooks, DeactivationHook
     }
 
     /**
-     * @var ScheduleErrorCheck
-     */
-    protected $scheduler;
-
-    /**
-     * @var SchedulerLock
-     */
-    protected $schedulerLock;
-
-    public function __construct()
-    {
-        $this->scheduler = wp_umbrella_get_service('ScheduleCleanTable');
-        $this->schedulerLock = wp_umbrella_get_service('SchedulerLock');
-    }
-
-    /**
      * @throws Exception
      */
     public function hooks()
     {
-        $backupVersion = get_option('wp_umbrella_backup_version');
-        if ($backupVersion === 'v4') {
-            return;
-        }
-
-        $this->cronHooks();
+        return;
     }
 }

@@ -26,7 +26,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
         protected function createDefaultFilesDictionary()
         {
             $dictionaryPath = $this->context->getDictionaryPath();
-            if($this->context->getScanCursor() === 0) {
+            if ($this->context->getScanCursor() === 0) {
                 file_put_contents($dictionaryPath, '<?php if(!defined(\'UMBRELLA_BACKUP_KEY\')){  exit; } /*' . PHP_EOL . '["dictionary.json"');
             }
         }
@@ -34,7 +34,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
         protected function createDefaultDirectoryDictionary()
         {
             $directoryDictionaryPath = $this->context->getDirectoryDictionaryPath();
-            if(!file_exists($directoryDictionaryPath)) {
+            if (!file_exists($directoryDictionaryPath)) {
                 file_put_contents($directoryDictionaryPath, '<?php if(!defined(\'UMBRELLA_BACKUP_KEY\')){  exit; } /*' . PHP_EOL);
             }
         }
@@ -56,7 +56,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
          */
         public function closeDirectoryDictionary()
         {
-            if($this->directoryDictionaryHandle === null) {
+            if ($this->directoryDictionaryHandle === null) {
                 return;
             }
 
@@ -72,7 +72,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
          */
         public function closeFilesDictionary()
         {
-            if($this->filesDictionaryHandle === null) {
+            if ($this->filesDictionaryHandle === null) {
                 return;
             }
 
@@ -161,7 +161,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
 
         protected function canProcessDirectory($directory)
         {
-            if(!file_exists($directory)) {
+            if (!file_exists($directory)) {
                 return false;
             }
 
@@ -170,7 +170,20 @@ if (!class_exists('UmbrellaScanBackup', false)):
 
             // Check if the directory is in the excluded directories without in_array
             foreach ($directoriesExcluded as $dir) {
-                if (strpos($dirnameForFilepath, $dir) !== false) {
+                // Check if the directory name matches exactly with the excluded directory
+                $cleanDir = DIRECTORY_SEPARATOR . ltrim($dir, DIRECTORY_SEPARATOR);
+                $cleanDirname = DIRECTORY_SEPARATOR . ltrim($dirnameForFilepath, DIRECTORY_SEPARATOR);
+
+                // Check with separator at start
+                if (strpos($cleanDirname, $cleanDir) === 0) {
+                    return false;
+                }
+
+                // Check without separator at start
+                $cleanDirNoSep = rtrim(ltrim($dir, DIRECTORY_SEPARATOR), DIRECTORY_SEPARATOR);
+                $cleanDirnameNoSep = rtrim(ltrim($dirnameForFilepath, DIRECTORY_SEPARATOR), DIRECTORY_SEPARATOR);
+
+                if (strpos($cleanDirnameNoSep, $cleanDirNoSep) === 0) {
                     return false;
                 }
             }
@@ -184,12 +197,12 @@ if (!class_exists('UmbrellaScanBackup', false)):
          */
         protected function canProcessFile($filePath, $options = [])
         {
-            if(!file_exists($filePath)) {
+            if (!file_exists($filePath)) {
                 return false;
             }
 
             // filepath contain dictionary.php ; we send this manually
-            if(strpos($filePath, 'dictionary.php') !== false) {
+            if (strpos($filePath, 'dictionary.php') !== false) {
                 return false;
             }
 
@@ -201,7 +214,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
-            if(in_array(basename($filePath), $this->context->getFilesExcluded())) {
+            if (in_array(basename($filePath), $this->context->getFilesExcluded())) {
                 return false;
             }
 
@@ -212,7 +225,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
         {
             try {
                 return $fileInfo->isDir();
-            } catch(Exception $e) {
+            } catch (Exception $e) {
                 return false;
             }
         }
@@ -249,12 +262,12 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 try {
                     $filePath = $fileInfo->getPathname();
 
-                    if(!$canScan && $filePath === $lastLine) {
+                    if (!$canScan && $filePath === $lastLine) {
                         $canScan = true;
                         continue;
                     }
 
-                    if(!$canScan) {
+                    if (!$canScan) {
                         continue;
                     }
 
@@ -262,18 +275,18 @@ if (!class_exists('UmbrellaScanBackup', false)):
                         continue;
                     }
 
-                    if($this->hasWordPressInSubfolder($filePath)) {
+                    if ($this->hasWordPressInSubfolder($filePath)) {
                         continue;
                     }
 
-                    if(!$this->canProcessDirectory($filePath)) {
+                    if (!$this->canProcessDirectory($filePath)) {
                         continue;
                     }
 
                     $lineNumber++;
 
                     $this->writeToDirectoryDictionary($filePath);
-                } catch(Exception $e) {
+                } catch (Exception $e) {
                     continue;
                 }
             }
@@ -285,7 +298,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
 
         public function scanAndCreateDictionary()
         {
-            if($this->context === null || $this->socket === null) {
+            if ($this->context === null || $this->socket === null) {
                 return;
             }
 

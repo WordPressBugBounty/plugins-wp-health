@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: v2.18.4
+Stable tag: v2.18.5
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,10 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.18.5 (07-25-2025) =
+- Bugfix: support Divi cache directory on a backup
+- Improved: change to SQL file comment to avoid error on restore
 
 = 2.18.4 (06-30-2025) =
 - Fix: PHP warning on WP Fastest Cache

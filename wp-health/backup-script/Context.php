@@ -29,17 +29,18 @@ if (!class_exists('UmbrellaContext', false)):
         ];
 
         const DEFAULT_DIRECTORY_EXCLUDED = [
-            '.quarantine',
-            '.duplicacy',
-            '.tmb',
-            '.wp-cli',
-            'php_errorlog',
             DIRECTORY_SEPARATOR . 'cgi-bin',
+            DIRECTORY_SEPARATOR . '.quarantine',
+            DIRECTORY_SEPARATOR . '.duplicacy',
+            DIRECTORY_SEPARATOR . '.tmb',
+            DIRECTORY_SEPARATOR . '.wp-cli',
+            DIRECTORY_SEPARATOR . 'php_errorlog',
             DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'lscache',
             DIRECTORY_SEPARATOR . 'rb-plugins',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed', // Take care of this one
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed-cache', // From website with ~20Go of cache
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'upgrade',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'updraft',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'ai1wm-backups',
@@ -56,8 +57,10 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backups',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backup',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'nfwlog',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'flying-press',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wflogs',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'webtoffee_iew_log',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'umbrella-upgrade-temp-backup',
         ];
 
         const DEFAULT_EXCLUDE_FILES = [
@@ -197,6 +200,10 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function getBaseDirectory()
         {
+            if (empty($this->baseDirectory)) {
+                return DIRECTORY_SEPARATOR;
+            }
+
             return $this->baseDirectory;
         }
 

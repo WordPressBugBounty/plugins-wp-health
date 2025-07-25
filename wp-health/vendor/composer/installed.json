@@ -67,7 +67,7 @@
                     "dev-master": "1.0.x-dev"
                 }
             },
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "psr-4": {
                     "Psr\\Container\\": "src/"
@@ -191,7 +191,7 @@
             },
             "time": "2023-05-31T13:04:02+00:00",
             "type": "library",
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "psr-4": {
                     "Symfony\\Component\\Filesystem\\": ""
@@ -257,7 +257,7 @@
             },
             "time": "2023-07-31T08:02:31+00:00",
             "type": "library",
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "psr-4": {
                     "Symfony\\Component\\Finder\\": ""
@@ -336,7 +336,7 @@
                     "url": "https://github.com/symfony/polyfill"
                 }
             },
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "files": [
                     "bootstrap.php"
@@ -418,7 +418,7 @@
                     "url": "https://github.com/symfony/polyfill"
                 }
             },
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "files": [
                     "bootstrap.php"
@@ -498,7 +498,7 @@
                     "url": "https://github.com/symfony/polyfill"
                 }
             },
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "files": [
                     "bootstrap.php"
@@ -576,7 +576,7 @@
             },
             "time": "2023-08-07T10:36:04+00:00",
             "type": "library",
-            "installation-source": "dist",
+            "installation-source": "source",
             "autoload": {
                 "psr-4": {
                     "Symfony\\Component\\Process\\": ""

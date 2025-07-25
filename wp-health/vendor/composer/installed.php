@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'wp-umbrella/plugin.wp-umbrella',
-        'pretty_version' => 'dev-master',
-        'version' => 'dev-master',
-        'reference' => 'f2133ca24dc690fc699fc140865ea6955126609d',
+        'pretty_version' => 'dev-develop',
+        'version' => 'dev-develop',
+        'reference' => '657ac006df5b0d4cce3372b132f608f40a16092e',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -92,9 +92,9 @@
             'dev_requirement' => false,
         ),
         'wp-umbrella/plugin.wp-umbrella' => array(
-            'pretty_version' => 'dev-master',
-            'version' => 'dev-master',
-            'reference' => 'f2133ca24dc690fc699fc140865ea6955126609d',
+            'pretty_version' => 'dev-develop',
+            'version' => 'dev-develop',
+            'reference' => '657ac006df5b0d4cce3372b132f608f40a16092e',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

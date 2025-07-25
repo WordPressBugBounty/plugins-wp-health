@@ -93,11 +93,12 @@ if (!class_exists('UmbrellaSqlInstruction', false)):
 
             $time = date('c');
             $fetchAllQuery = self::createSelectQuery($tableName, $columns);
-            $haltCompiler = '--<?php die(); ?>';
+            $haltCompiler = '';
             $dumper = get_class($connection);
             $phpVersion = phpversion();
             $header = <<<SQL
     $haltCompiler
+    -- <?php die(); ?>
     -- Umbrella backup format
     -- Generated at: $time by $dumper; PHP v$phpVersion
     -- Selected via: $fetchAllQuery
