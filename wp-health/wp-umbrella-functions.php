@@ -48,9 +48,15 @@ function wp_umbrella_init_defined()
     define('WP_UMBRELLA_DIRURL', plugin_dir_url(__FILE__));
 
     $dist = WP_UMBRELLA_DIRURL . 'dist';
+
     $pos = substr_count($dist, 'wp-content/plugins');
     if ($pos >= 2) {
         $dist = sprintf('%s/%s', untrailingslashit(site_url()), 'wp-content/plugins/wp-health/dist');
+    }
+
+    $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local'];
+    if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $local, true)) {
+        $dist = 'http://' . $_SERVER['HTTP_HOST'] . '/wp-content/plugins/wp-health/dist'; // Because of symlink
     }
 
     define('WP_UMBRELLA_URL_DIST', $dist);

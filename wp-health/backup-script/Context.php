@@ -29,6 +29,7 @@ if (!class_exists('UmbrellaContext', false)):
         ];
 
         const DEFAULT_DIRECTORY_EXCLUDED = [
+            DIRECTORY_SEPARATOR . '.git',
             DIRECTORY_SEPARATOR . 'cgi-bin',
             DIRECTORY_SEPARATOR . '.quarantine',
             DIRECTORY_SEPARATOR . '.duplicacy',

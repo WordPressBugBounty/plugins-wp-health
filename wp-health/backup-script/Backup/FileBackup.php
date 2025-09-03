@@ -23,28 +23,9 @@ if (!class_exists('UmbrellaFileBackup', false)):
             $this->closeDictionaries();
         }
 
-        protected function hasWordPressInSubfolder($directory)
-        {
-            $indexFile = $directory . '/index.php';
-
-            if (!file_exists($indexFile)) {
-                return false;
-            }
-
-            $indexText = @file_get_contents($indexFile);
-
-            $searchFor = '/wp-blog-header.php';
-
-            if (stripos($indexText, $searchFor) === false) {
-                return false;
-            }
-
-            return true;
-        }
-
         protected function canProcessDirectory($directory)
         {
-            if(!file_exists($directory)) {
+            if (!file_exists($directory)) {
                 return false;
             }
 
@@ -67,12 +48,12 @@ if (!class_exists('UmbrellaFileBackup', false)):
          */
         protected function canProcessFile($filePath, $options = [])
         {
-            if(!file_exists($filePath)) {
+            if (!file_exists($filePath)) {
                 return false;
             }
 
             // filepath contain dictionary.php ; we sent this manually
-            if(strpos($filePath, 'dictionary.php') !== false) {
+            if (strpos($filePath, 'dictionary.php') !== false) {
                 return false;
             }
 
@@ -84,7 +65,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                 return false;
             }
 
-            if(in_array(basename($filePath), $this->filesExcluded)) {
+            if (in_array(basename($filePath), $this->filesExcluded)) {
                 return false;
             }
 
@@ -96,7 +77,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
             $incrementalDate = $this->context->getIncrementalDate();
 
             // If the file is older than the incremental date, we skip it
-            if($incrementalDate !== null && @filemtime($filePath) < $incrementalDate) {
+            if ($incrementalDate !== null && @filemtime($filePath) < $incrementalDate) {
                 return false;
             }
 
@@ -107,14 +88,14 @@ if (!class_exists('UmbrellaFileBackup', false)):
         {
             try {
                 return $fileInfo->isDir();
-            } catch(Exception $e) {
+            } catch (Exception $e) {
                 return false;
             }
         }
 
         public function backup()
         {
-            if($this->context === null || $this->socket === null) {
+            if ($this->context === null || $this->socket === null) {
                 return;
             }
 
@@ -160,7 +141,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                             continue;
                         }
 
-                        if($this->isDir($fileInfo)) {
+                        if ($this->isDir($fileInfo)) {
                             continue;
                         }
 
@@ -178,7 +159,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                             continue; // Skip because we can't process the file
                         }
 
-                        if(!$this->canProcessIncrementalFile($filePath)) {
+                        if (!$this->canProcessIncrementalFile($filePath)) {
                             continue;
                         }
 
