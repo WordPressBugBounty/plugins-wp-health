@@ -1,5 +1,4 @@
 <?php
-
 namespace WPUmbrella\Core\Backup\Processor;
 
 use WPUmbrella\Models\Backup\BackupProcessor;
@@ -31,75 +30,70 @@ class ZipPhpArchiveProcessor implements BackupProcessor
         $this->timeout = $timeout;
     }
 
-	public function getTimeout(){
-		return $this->timeout;
-	}
+    public function getTimeout()
+    {
+        return $this->timeout;
+    }
 
-	public function getExtension(){
-		return $this->extension;
-	}
+    public function getExtension()
+    {
+        return $this->extension;
+    }
 
-	public function canExecute(){
-		return class_exists('ZipArchive');
-	}
+    public function canExecute()
+    {
+        return class_exists('ZipArchive');
+    }
 
     /**
      * {@inheritdoc}
      */
     public function process($scratchDir, $dirDestinationZip = '')
     {
-		$filename = sprintf('%s/%s.%s', $scratchDir, $this->getName(), $this->getExtension());
+        $filename = sprintf('%s/%s.%s', $scratchDir, $this->getName(), $this->getExtension());
 
+        if (!$this->canExecute()) {
+            return $filename;
+        }
 
-		if(!$this->canExecute()){
-			return $filename;
-		}
+        $zip = new ZipArchive;
+        $zip->open($filename, ZipArchive::CREATE);
 
+        $source = sprintf('%s/%s', $scratchDir, $this->getName());
+        $source = str_replace('\\', '/', realpath($source));
 
-		$zip = new ZipArchive;
-		$zip->open($filename, ZipArchive::CREATE);
+        if (empty($source)) {
+            return $filename;
+        }
 
-		$source = sprintf('%s/%s', $scratchDir, $this->getName());
-		$source = str_replace('\\', '/', realpath($source));
+        if (is_dir($source) === true) {
+            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source), \RecursiveIteratorIterator::SELF_FIRST);
 
+            foreach ($files as $file) {
+                $file = str_replace('\\', '/', $file);
 
-		if(empty($source)){
-			return $filename;
-		}
+                if (function_exists('set_time_limit')) {
+                    set_time_limit($this->getTimeout());
+                }
 
-		if (is_dir($source) === true)
-		{
-			$files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source), \RecursiveIteratorIterator::SELF_FIRST);
+                // Ignore "." and ".." folders
+                if (in_array(substr($file, strrpos($file, '/') + 1), ['.', '..'])) {
+                    continue;
+                }
 
-			foreach ($files as $file)
-			{
-				$file = str_replace('\\', '/', $file);
+                $file = realpath($file);
 
-				@set_time_limit($this->getTimeout());
+                if (is_dir($file) === true) {
+                    $zip->addEmptyDir(str_replace($source . '/', '', $file . '/'));
+                } elseif (is_file($file) === true) {
+                    $zip->addFile($file, str_replace($source . '/', '', $file));
+                }
+            }
+        } elseif (is_file($source) === true) {
+            $zip->addFile($source, basename($source));
+        }
 
-				// Ignore "." and ".." folders
-				if( in_array(substr($file, strrpos($file, '/')+1), array('.', '..')) ){
-					continue;
-				}
-
-				$file = realpath($file);
-
-				if (is_dir($file) === true)
-				{
-					$zip->addEmptyDir(str_replace($source . '/', '', $file . '/'));
-				}
-				else if (is_file($file) === true)
-				{
-					$zip->addFile($file, str_replace($source . '/', '', $file));
-				}
-			}
-		}
-		else if (is_file($source) === true)
-		{
-			$zip->addFile($source, basename($source));
-		}
-
-		$zip->close();
+        $zip->close();
 
         return $filename;
     }
@@ -109,16 +103,17 @@ class ZipPhpArchiveProcessor implements BackupProcessor
      */
     public function cleanup($filename)
     {
-		wp_umbrella_remove_file($filename);
+        wp_umbrella_remove_file($filename);
     }
 
-	public function getFilename($dirDestinationZip = ''){
-		if(empty($dirDestinationZip)){
-			$dirDestinationZip = \sys_get_temp_dir();
-		}
+    public function getFilename($dirDestinationZip = '')
+    {
+        if (empty($dirDestinationZip)) {
+            $dirDestinationZip = \sys_get_temp_dir();
+        }
 
-		return sprintf('%s%s.%s', $dirDestinationZip, $this->getName(), $this->getExtension());
-	}
+        return sprintf('%s%s.%s', $dirDestinationZip, $this->getName(), $this->getExtension());
+    }
 
     /**
      * @return string

@@ -3,9 +3,9 @@
 Contributors: gmulti, truchot, wplio
 Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: v2.18.6
+Stable tag: v2.21.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,16 +83,38 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 == Changelog ==
 
+= 2.21.0 (02-05-2026) =
+- Improved: API connectivity
+- Improved: backup process for databases
+- Improved: compatibility with SiteGround
+- Improved: compatibility with WordPress.com
+- Improved: disable WordPress actions during update process to prevent conflicts
+
+= 2.20.1 (01-08-2026) =
+- Improved: backup performance settings
+
+= 2.20.0 (12-16-2025) =
+- Improved: traceability to guarantee the entire backup process
+
+= 2.19.1 (12-04-2025) =
+- Improved: backup process with integrity check
+- Improved: restore communication process
+
+= 2.19.0 (11-03-2025) =
+- New: add safe update for themes
+- Improved: backup process with infinite symlink detection
+- Bugfix: database optimization
+
 = 2.18.6 (09-03-2025) =
 - Improved: WordPress subfolder management
-- Fixed: Flywheel issue on backup script
+- Bugfix: Flywheel issue on backup script
 
 = 2.18.5 (07-25-2025) =
 - Bugfix: support Divi cache directory on a backup
 - Improved: change to SQL file comment to avoid error on restore
 
 = 2.18.4 (06-30-2025) =
-- Fix: PHP warning on WP Fastest Cache
+- Bugfix: PHP warning on WP Fastest Cache
 
 = 2.18.3 (06-27-2025) =
 - Improved: add LiteSpeed, WP Fatest Cache and WP Super Cache to the cache control
@@ -100,13 +122,13 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 = 2.18.2 (06-19-2025) =
 - Improved: remove query monitors headers during API request
-- Fix: PHP warning on directory functions
-- Fix: Prevent header already sent on backup script
+- Bugfix: PHP warning on directory functions
+- Bugfix: Prevent header already sent on backup script
 
 = 2.18.1 (06-16-2025) =
 - Improved: backup process with op cache
 - Improved: cache control on response
-- Fixed: PHP warning with nginx purger
+- Bugfix: PHP warning with nginx purger
 - New: retrieve changelog from premium plugins
 
 = 2.18.0 (05-31-2025) =

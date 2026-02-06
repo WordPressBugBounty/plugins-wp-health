@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.18.6');
+    define('WP_UMBRELLA_VERSION', '2.21.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -22,7 +22,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_DIR_DIST', WP_UMBRELLA_DIR . '/dist');
     define('WP_UMBRELLA_SITE_URL', 'https://wp-umbrella.com');
 
-    $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local'];
+    $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local', 'localhost'];
     if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $local, true)) {
         define('WP_UMBRELLA_NEW_API_URL', 'http://localhost:3001');
         define('WP_UMBRELLA_APP_URL', 'http://localhost:3000');
@@ -54,7 +54,7 @@ function wp_umbrella_init_defined()
         $dist = sprintf('%s/%s', untrailingslashit(site_url()), 'wp-content/plugins/wp-health/dist');
     }
 
-    $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local'];
+    $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local', 'localhost'];
     if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $local, true)) {
         $dist = 'http://' . $_SERVER['HTTP_HOST'] . '/wp-content/plugins/wp-health/dist'; // Because of symlink
     }
@@ -168,6 +168,16 @@ function wp_umbrella_generate_random_string($length = 64)
         $randomString .= $randomCharacters[rand(0, strlen($randomCharacters) - 1)];
     }
     return $randomString;
+}
+
+function wp_umbrella_is_new_hash()
+{
+    return get_option('_wp_umbrella_is_new_hash', false);
+}
+
+function wp_umbrella_init_new_hash()
+{
+    return update_option('_wp_umbrella_is_new_hash', true, false);
 }
 
 /**

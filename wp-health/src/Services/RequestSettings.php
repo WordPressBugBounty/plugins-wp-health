@@ -115,11 +115,27 @@ class RequestSettings
     {
         $this->preventOxygen();
         $this->simulateAdminEnvironment($data);
+        $this->disableWordPressActions();
 
         // Master should never get redirected by the worker, since it expects worker response.
         add_filter('wp_redirect', [$this, 'disableRedirect']);
 
         wp_umbrella_get_service('WordPressContext')->set('_wp_using_ext_object_cache', false);
+    }
+
+    public function disableWordPressActions()
+    {
+        add_filter('auto_update_core', '__return_false');
+        add_filter('auto_update_theme', '__return_false');
+        add_filter('themes_auto_update_enabled', '__return_false');
+
+        add_filter('auto_update_plugin', '__return_false');
+        add_filter('plugins_auto_update_enabled', '__return_false');
+
+        add_filter('auto_update_translation', '__return_false');
+        add_filter('automatic_updater_disabled', '__return_true');
+
+        remove_action('init', 'wp_cron');
     }
 
     protected function simulateAdminEnvironment($data)

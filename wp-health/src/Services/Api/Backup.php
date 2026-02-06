@@ -80,118 +80,21 @@ class Backup extends BaseClient
 
     public function postInitBackup($data)
     {
-        if (!$this->canRequestApi()) {
-            return null;
-        }
-
-        if (!function_exists('curl_init')) {
-            return null;
-        }
-
-        add_filter('https_ssl_verify', '__return_false');
-        $projectId = wp_umbrella_get_option('project_id');
-
-        try {
-            $json = json_encode($data);
-
-            // Prevent JSON encoding errors with UTF-8
-            if ($json === false && strpos(json_last_error_msg(), 'UTF-8') !== false) {
-                array_walk_recursive($data, function (&$item, $key) {
-                    if (is_string($item)) {
-                        $item = mb_convert_encoding($item, 'UTF-8', 'UTF-8');
-                    }
-                });
-
-                $json = json_encode($data);
-            }
-
-            $url = sprintf(WP_UMBRELLA_NEW_API_URL . '/v1/projects/%s/backups/init', $projectId);
-
-            $response = wp_remote_post($url, [
-                'headers' => $this->getHeadersV2(),
-                'body' => $json,
-                'timeout' => 55,
-            ]);
-
-            $body = json_decode(wp_remote_retrieve_body($response), true);
-
-            return $body;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return null;
     }
 
     public function putUpdateBackupData($data)
     {
-        if (!$this->canRequestApi()) {
-            return null;
-        }
-
-        $projectId = wp_umbrella_get_option('project_id');
-        add_filter('https_ssl_verify', '__return_false');
-
-        try {
-            $url = sprintf(WP_UMBRELLA_NEW_API_URL . '/v1/projects/%s/backups/%s', $projectId, $data['backupId']);
-
-            $response = wp_remote_request($url, [
-                'method' => 'PUT',
-                'headers' => $this->getHeadersV2(),
-                'body' => json_encode($data),
-                'timeout' => 55,
-            ]);
-
-            $body = json_decode(wp_remote_retrieve_body($response), true);
-
-            return $body;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return null;
     }
 
     public function postErrorBackup($data)
     {
-        if (!$this->canRequestApi()) {
-            return null;
-        }
-
-        $projectId = wp_umbrella_get_option('project_id');
-        add_filter('https_ssl_verify', '__return_false');
-
-        try {
-            $url = sprintf(WP_UMBRELLA_NEW_API_URL . '/v1/projects/%s/backups/%s/error', $projectId, $data['backupId']);
-
-            $response = wp_remote_post($url, [
-                'headers' => $this->getHeadersV2(),
-                'body' => json_encode($data),
-                'timeout' => 55,
-            ]);
-
-            return $response;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return null;
     }
 
     public function postFinishBackup($data)
     {
-        if (!$this->canRequestApi()) {
-            return null;
-        }
-
-        $projectId = wp_umbrella_get_option('project_id');
-        add_filter('https_ssl_verify', '__return_false');
-
-        try {
-            $url = sprintf(WP_UMBRELLA_NEW_API_URL . '/v1/projects/%s/backups/%s/finish', $projectId, $data['backupId']);
-            $response = wp_remote_post($url, [
-                'headers' => $this->getHeadersV2(),
-                'body' => json_encode($data),
-                'timeout' => 55,
-            ]);
-
-            return $response;
-        } catch (\Exception $e) {
-            return null;
-        }
+        return null;
     }
 }

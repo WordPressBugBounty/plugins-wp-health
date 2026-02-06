@@ -144,6 +144,8 @@ class ManagePlugin
      */
     public function bulkUpdate($plugins, $options = [])
     {
+        @ob_start();
+
         wp_umbrella_get_service('ManagePlugin')->clearUpdates();
 
         // It's necessary because we update only one plugin even if it's a bulk update
@@ -171,16 +173,12 @@ class ManagePlugin
             }
         }
 
-        @ob_start();
         $pluginUpdate = wp_umbrella_get_service('PluginUpdate');
 
         $pluginUpdate->ithemesCompatibility();
         $data = $pluginUpdate->bulkUpdate([$plugin], $options);
 
         $pluginUpdate->ithemesCompatibility();
-        @flush();
-        @ob_clean();
-        @ob_end_clean();
 
         $isActive = wp_umbrella_get_service('PluginActivate')->isActive($plugin);
 
@@ -189,6 +187,8 @@ class ManagePlugin
         } elseif ($isActive || $plugin === 'wp-health/wp-health.php') {
             wp_umbrella_get_service('PluginActivate')->activate($plugin);
         }
+
+        @ob_end_clean();
 
         return $data;
     }

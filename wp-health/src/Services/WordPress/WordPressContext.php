@@ -168,6 +168,20 @@ class WordPressContext
             include_once ABSPATH . '/wp-includes/pluggable.php';
         }
 
+        if (!wp_umbrella_is_new_hash()) {
+            return wp_hash($value);
+        }
+
+        $algosAvailable = function_exists('hash_algos') ? hash_algos() : [];
+
+        if (in_array('sha256', $algosAvailable, true) && function_exists('hash')) {
+            return hash('sha256', $value);
+        } elseif (in_array('md5', $algosAvailable, true) && function_exists('hash')) {
+            return hash('md5', $value);
+        } elseif (function_exists('md5')) {
+            return md5($value);
+        }
+
         return wp_hash($value);
     }
 }

@@ -24,4 +24,6 @@ class WordPressUpdate
     public $defined_data;
     public $base_directory;
     public $latest;
+    public $wp_content_directory;
+    public $wp_plugin_directory;
 }

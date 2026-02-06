@@ -3,9 +3,15 @@
 if (!class_exists('UmbrellaScanBackup', false)):
     class UmbrellaScanBackup
     {
+        use UmbrellaProcessCapacityTrait;
+
         protected $directoryDictionaryHandle;
 
         protected $filesDictionaryHandle;
+
+        protected $siteChecksumDirectoryGenerator;
+
+        protected $checksumDictionaryGenerator;
 
         protected $context;
 
@@ -16,147 +22,19 @@ if (!class_exists('UmbrellaScanBackup', false)):
             $this->context = $params['context'] ?? null;
             $this->socket = $params['socket'] ?? null;
 
-            $this->createDefaultDirectoryDictionary();
-            $this->createDefaultFilesDictionary();
-
-            $this->filesDictionaryHandle = fopen($this->context->getDictionaryPath(), $params['dictionary_mode'] ?? 'a');
-            $this->directoryDictionaryHandle = fopen($this->context->getDirectoryDictionaryPath(), $params['dictionary_mode'] ?? 'a');
+            $this->checksumDictionaryGenerator = new UmbrellaChecksumDictionaryGenerator($params);
+            $this->siteChecksumDirectoryGenerator = new UmbrellaSiteChecksumDirectoryGenerator($params);
         }
 
-        protected function createDefaultFilesDictionary()
+        protected function getContext()
         {
-            $dictionaryPath = $this->context->getDictionaryPath();
-            if ($this->context->getScanCursor() === 0) {
-                file_put_contents($dictionaryPath, '<?php if(!defined(\'UMBRELLA_BACKUP_KEY\')){  exit; } /*' . PHP_EOL . '["dictionary.json"');
-            }
-        }
-
-        protected function createDefaultDirectoryDictionary()
-        {
-            $directoryDictionaryPath = $this->context->getDirectoryDictionaryPath();
-            if (!file_exists($directoryDictionaryPath)) {
-                file_put_contents($directoryDictionaryPath, '<?php if(!defined(\'UMBRELLA_BACKUP_KEY\')){  exit; } /*' . PHP_EOL);
-            }
+            return $this->context;
         }
 
         public function __destruct()
         {
-            $this->closeDirectoryDictionary();
-            $this->closeFilesDictionary();
-        }
-
-        public function changeModeDirectoryDictionary($mode)
-        {
-            $this->closeDirectoryDictionary();
-            $this->directoryDictionaryHandle = fopen($this->context->getDirectoryDictionaryPath(), $mode);
-        }
-
-        /**
-         * Close the directory dictionary
-         */
-        public function closeDirectoryDictionary()
-        {
-            if ($this->directoryDictionaryHandle === null) {
-                return;
-            }
-
-            if (!is_resource($this->directoryDictionaryHandle)) {
-                return;
-            }
-
-            fclose($this->directoryDictionaryHandle);
-        }
-
-        /**
-         * Close the files directory
-         */
-        public function closeFilesDictionary()
-        {
-            if ($this->filesDictionaryHandle === null) {
-                return;
-            }
-
-            if (!is_resource($this->filesDictionaryHandle)) {
-                return;
-            }
-
-            fclose($this->filesDictionaryHandle);
-        }
-
-        /**
-         * Write a line to the directory dictionary
-         */
-        protected function writeToDirectoryDictionary($line)
-        {
-            fwrite($this->directoryDictionaryHandle, $line . PHP_EOL);
-        }
-
-        /**
-         * Write a line to the directory dictionary
-         */
-        public function closeWriteDirectoryDictionary()
-        {
-            fwrite($this->directoryDictionaryHandle, '*/');
-            $this->closeDirectoryDictionary();
-        }
-
-        /**
-         * Get the last line from the dictionary
-         */
-        public function getLastLineFromDictionary($dictionaryPath)
-        {
-            $fp = fopen($dictionaryPath, 'rb');
-
-            fseek($fp, -1, SEEK_END);
-
-            $lastLine = '';
-            $chunk = '';
-
-            while (ftell($fp) > 0) {
-                $seek = min(1024, ftell($fp));
-                fseek($fp, -$seek, SEEK_CUR);
-                $chunk = fread($fp, $seek) . $chunk;
-                fseek($fp, -$seek, SEEK_CUR);
-
-                $pos = strrpos($chunk, "\n");
-                if ($pos !== false) {
-                    $lastLine = substr($chunk, $pos + 1);
-                    break;
-                }
-            }
-
-            fclose($fp);
-
-            return rtrim($lastLine, " \t\n\r\0\x0B?>");
-        }
-
-        public function scanTables($tables)
-        {
-            foreach ($tables as $key => $table) {
-                $filePath = $this->context->getRootDatabaseBackupDirectory() . DIRECTORY_SEPARATOR . $table['name'] . '.sql';
-                $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
-
-                $this->writeToFilesDictionary($relativePath);
-            }
-        }
-
-        protected function hasWordPressInSubfolder($directory)
-        {
-            $indexFile = $directory . '/index.php';
-
-            if (!file_exists($indexFile)) {
-                return false;
-            }
-
-            $indexText = @file_get_contents($indexFile);
-
-            $searchFor = '/wp-blog-header.php';
-
-            if (stripos($indexText, $searchFor) === false) {
-                return false;
-            }
-
-            return true;
+            $this->checksumDictionaryGenerator->closeChecksumFile();
+            $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
         }
 
         protected function canProcessDirectory($directory)
@@ -312,8 +190,82 @@ if (!class_exists('UmbrellaScanBackup', false)):
             return false;
         }
 
-        public function scanOnlyDirectories($options = [])
+        public function writeDirectoriesForChecksumIntegrity($filePath, $options = [
+            'write_checksum_integrity' => false,
+            'flag_updated_files' => false
+        ])
         {
+            $this->checksumDictionaryGenerator->startDirectory();
+
+            $dirIteratorForChecksumIntegrity = new DirectoryIterator($filePath);
+            foreach ($dirIteratorForChecksumIntegrity as $fileChecksumDirectory) {
+                if ($fileChecksumDirectory->isDot()) {
+                    continue;
+                }
+
+                if ($this->isDir($fileChecksumDirectory)) {
+                    continue;
+                }
+
+                $filePathChecksumIntegrity = $fileChecksumDirectory->getPathname();
+
+                if (!$this->checkProcessFile($filePathChecksumIntegrity)) {
+                    continue;
+                }
+
+                if ($options['flag_updated_files'] && $this->canProcessIncrementalFile($filePathChecksumIntegrity)) {
+                    $lineDirectory = $filePath . ':FILE_CHANGED';
+
+                    $this->siteChecksumDirectoryGenerator->addDirectory($lineDirectory);
+                    return;
+                }
+
+                $this->checksumDictionaryGenerator->addFile($fileChecksumDirectory->getFilename());
+            }
+
+            $checksumValue = $this->checksumDictionaryGenerator->getChecksumValue();
+            if (empty($checksumValue)) {
+                return;
+            }
+
+            $this->siteChecksumDirectoryGenerator->addDirectory($filePath, $checksumValue);
+        }
+
+        public function writeDirectoriesForSize($filePath, $options = [
+            'full_directory_scan' => false // = true, we scan the full directory, without skipping any files
+        ])
+        {
+            $totalSize = 0;
+
+            $dirIteratorForChecksumIntegrity = new DirectoryIterator($filePath);
+            foreach ($dirIteratorForChecksumIntegrity as $fileChecksumDirectory) {
+                if ($fileChecksumDirectory->isDot()) {
+                    continue;
+                }
+
+                if ($this->isDir($fileChecksumDirectory)) {
+                    continue;
+                }
+
+                $filePathChecksumIntegrity = $fileChecksumDirectory->getPathname();
+
+                if (!$options['full_directory_scan'] && !$this->checkProcessFile($filePathChecksumIntegrity)) {
+                    continue;
+                }
+
+                $totalSize += @filesize($filePathChecksumIntegrity);
+            }
+
+            $this->siteChecksumDirectoryGenerator->addDirectorySize($filePath, $totalSize);
+        }
+
+        public function scanAllDirectories($options = ['write_checksum_integrity' => false, 'flag_updated_files' => false, 'write_size' => false, 'full_directory_scan' => false])
+        {
+            if ($this->context === null || $this->socket === null) {
+                $this->socket->sendLog('[scanAllDirectories] no context or no socket');
+                return;
+            }
+
             try {
                 $dirIterator = new RecursiveDirectoryIterator(
                     $this->context->getBaseDirectory(),
@@ -322,112 +274,44 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 $filterIterator = new ReadableRecursiveFilterIterator($dirIterator);
                 $iterator = new RecursiveIteratorIterator($filterIterator, RecursiveIteratorIterator::SELF_FIRST);
 
-                // Limit recursion depth to maximum 50 levels
-                $iterator->setMaxDepth(50);
+                // Limit recursion depth to maximum 40 levels
+                $iterator->setMaxDepth(40);
             } catch (Exception $e) {
                 throw new UmbrellaException('Could not open directory: ' . $this->context->getBaseDirectory(), 'directory_open_failed');
             }
 
-            $lastLine = $this->getLastLineFromDictionary($this->context->getDirectoryDictionaryPath());
-
-            $this->writeToDirectoryDictionary($this->context->getBaseDirectory());
-
-            $canScan = empty($lastLine); // If the last line is empty, we can scan directly
-
             global $startTimer, $totalFilesSent, $safeTimeLimit;
 
             $startProcessing = false;
 
             $lineNumber = 0;
-            $visitedPaths = []; // Track visited paths to prevent loops
+
+            if ($this->context->getScanDirectoryCursor() === 0) {
+                $this->siteChecksumDirectoryGenerator->startDirectory();
+
+                // Add the root directory itself (not included in the iterator)
+                if ($options['write_checksum_integrity']) {
+                    $this->writeDirectoriesForChecksumIntegrity($this->context->getBaseDirectory(), $options);
+                } elseif ($options['write_size']) {
+                    $this->writeDirectoriesForSize($this->context->getBaseDirectory(), $options);
+                } else {
+                    $this->siteChecksumDirectoryGenerator->addDirectory($this->context->getBaseDirectory());
+                }
+            }
 
             foreach ($iterator as $fileInfo) {
                 $currentTime = time();
                 if (($currentTime - $startTimer) >= $safeTimeLimit) {
-                    $this->closeFilesDictionary();
+                    $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
+                    // In that case, it's important to set the line number to the scan directory cursor
+                    if ($lineNumber < $this->context->getScanDirectoryCursor()) {
+                        $lineNumber = $this->context->getScanDirectoryCursor();
+                    }
                     throw new UmbrellaPreventMaxExecutionTime($lineNumber);
                     break; // Stop if we are close to the time limit
                 }
 
-                try {
-                    $filePath = $fileInfo->getPathname();
-
-                    // Infinite loop detection by checking already visited paths
-                    $realPath = realpath($filePath);
-                    if ($realPath && isset($visitedPaths[$realPath])) {
-                        continue; // Skip already visited paths (symlink loops)
-                    }
-                    if ($realPath) {
-                        $visitedPaths[$realPath] = true;
-                    }
-
-                    $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
-                    // Protection against repeating patterns in the path
-                    if ($this->hasPathLoop($relativePath)) {
-                        continue;
-                    }
-
-                    if (!$canScan && $filePath === $lastLine) {
-                        $canScan = true;
-                        continue;
-                    }
-
-                    if (!$canScan) {
-                        continue;
-                    }
-
-                    if (!$this->isDir($fileInfo)) {
-                        continue;
-                    }
-
-                    // Disabled because it's not needed
-                    // Some host have a subfolder with index.php but no wp-blog-header.php so we skip it
-                    // if ($this->hasWordPressInSubfolder($filePath)) {
-                    //     continue;
-                    // }
-
-                    if (!$this->canProcessDirectory($filePath)) {
-                        continue;
-                    }
-
-                    $lineNumber++;
-
-                    $this->writeToDirectoryDictionary($filePath);
-                } catch (Exception $e) {
-                    continue;
-                }
-            }
-
-            $this->closeWriteDirectoryDictionary();
-
-            return true;
-        }
-
-        public function scanAndCreateDictionary()
-        {
-            if ($this->context === null || $this->socket === null) {
-                return;
-            }
-
-            global $startTimer, $totalFilesSent, $safeTimeLimit;
-
-            $lineNumber = 0;
-            $startProcessing = false;
-
-            while (($line = fgets($this->directoryDictionaryHandle)) !== false) {
-                $currentTime = time();
-                if (($currentTime - $startTimer) >= $safeTimeLimit) {
-                    $this->closeDirectoryDictionary();
-                    throw new UmbrellaPreventMaxExecutionTime($lineNumber);
-                    break; // Stop if we are close to the time limit
-                }
-
-                // Start by */ to end the dictionary
-                if (strpos($line, '*/') !== false) {
-                    break;
-                }
-
-                if (!$startProcessing && $lineNumber >= $this->context->getScanCursor()) {
+                if (!$startProcessing && $lineNumber >= $this->context->getScanDirectoryCursor()) {
                     $startProcessing = true; // Find the cursor, start processing from the next file
                 }
 
@@ -436,63 +320,48 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 if (!$startProcessing) {
                     continue;
                 }
-                $directory = trim($line);
 
-                if (file_exists($directory)) {
-                    $dirIterator = new DirectoryIterator($directory);
+                try {
+                    $filePath = $fileInfo->getPathname();
 
-                    $this->socket->sendScanCursor($lineNumber);  // File cursor correspond to the line number in the directory dictionary during scan process
+                    $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
 
-                    foreach ($dirIterator as $fileInfo) {
-                        if ($fileInfo->isDot()) {
-                            continue;
-                        }
+                    $this->socket->sendScanDirectoryCursor($lineNumber);  // Directory cursor correspond to the line number in the directory dictionary during scan process
 
-                        if (!$this->isDir($fileInfo)) {
-                            continue;
-                        }
-
-                        $filePath = $fileInfo->getPathname();
-
-                        if (!$this->canProcessFile($filePath)) {
-                            continue; // Skip because we can't process the file
-                        }
-
-                        $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
-
-                        if (!UmbrellaUTF8::seemsUTF8($relativePath)) {
-                            $relativePath = UmbrellaUTF8::encodeNonUTF8($relativePath);
-                        }
-
-                        // It's important to write the file path to the dictionary before check if it's incremental
-                        $this->writeToFilesDictionary($relativePath);
+                    // Protection against repeating patterns in the path
+                    if ($this->hasPathLoop($relativePath)) {
+                        continue;
                     }
+
+                    if (!$this->isDir($fileInfo)) {
+                        continue;
+                    }
+
+                    if (!$this->canProcessDirectory($filePath)) {
+                        continue;
+                    }
+
+                    if ($options['write_checksum_integrity']) {
+                        $this->writeDirectoriesForChecksumIntegrity($filePath, $options);
+                    } elseif ($options['write_size']) {
+                        $this->writeDirectoriesForSize($filePath, $options);
+                    } else {
+                        $this->siteChecksumDirectoryGenerator->addDirectory($filePath);
+                    }
+                } catch (Exception $e) {
+                    continue;
                 }
             }
 
-            $this->closeAndWriteFilesDictionary();
+            $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
+
+            $this->socket->sendTelemetryCounter('backup.scan.directories-checksum-finished', [
+                'request_id' => $this->context->getRequestId(),
+                'type' => 'directory',
+                'count' => $lineNumber
+            ]);
 
             return true;
-        }
-
-        public function closeAndWriteFilesDictionary()
-        {
-            fwrite($this->filesDictionaryHandle, ']');
-            $this->closeFilesDictionary();
-
-            // Remove the first line from the dictionary
-            $dictionaryPath = $this->context->getDictionaryPath();
-            $dictionaryContent = file_get_contents($dictionaryPath);
-            $dictionaryContent = substr($dictionaryContent, strpos($dictionaryContent, '/*') + 2);
-            file_put_contents($dictionaryPath, $dictionaryContent);
-        }
-
-        /**
-        * Write a line to the File dictionary
-        */
-        protected function writeToFilesDictionary($line)
-        {
-            fwrite($this->filesDictionaryHandle, ',' . PHP_EOL . '"' . $line . '"');
         }
     }
 endif;

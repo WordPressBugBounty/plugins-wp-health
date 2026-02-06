@@ -134,6 +134,32 @@ if (!class_exists('UmbrellaMySQLConnection', false)):
             mysql_close($this->connection);
             $this->connection = null;
         }
+
+        public function ping()
+        {
+            if (empty($this->connection) || !is_resource($this->connection)) {
+                return false;
+            }
+
+            // Use SELECT 1 query instead of deprecated mysql_ping() (removed in PHP 7.0)
+            $result = @mysql_query('SELECT 1', $this->connection);
+            if ($result !== false) {
+                @mysql_free_result($result);
+                return true;
+            }
+            return false;
+        }
+
+        public function reconnect()
+        {
+            try {
+                $this->close();
+                $this->__construct($this->configuration);
+                return true;
+            } catch (Exception $e) {
+                return false;
+            }
+        }
     }
 
 endif;

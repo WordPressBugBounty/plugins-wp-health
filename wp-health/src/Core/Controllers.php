@@ -60,6 +60,18 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/cleanup-theme-safe-update' => [
+                'route' => '/cleanup-theme-safe-update',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\CleanupThemeSafeUpdate::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/set-backup-version' => [
                 'route' => '/set-backup-version',
                 'methods' => [
@@ -354,12 +366,38 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/theme-directory-exist' => [
+                'route' => '/theme-directory-exist',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Theme\ThemeDirectoryExist::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/restore-from-safe-backup' => [
                 'route' => '/restore-from-safe-backup',
                 'methods' => [
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Plugin\MoveOldPlugin::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/restore-theme-from-safe-backup' => [
+                'route' => '/restore-theme-from-safe-backup',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Theme\MoveOldTheme::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
@@ -612,50 +650,6 @@ abstract class Controllers
                     ],
                 ]
             ],
-            '/v1/backups' => [
-                'route' => '/backups',
-                'version' => 'v1',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Backup\Init::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ],
-                    [
-                        'method' => 'GET',
-                        'class' => \WPUmbrella\Controller\Backup\CurrentProcess::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ],
-                    [
-                        'method' => 'DELETE',
-                        'class' => \WPUmbrella\Controller\Backup\DeleteProcess::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/backups/run' => [
-                'route' => '/backups/run',
-                'version' => 'v1',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Backup\RunProcess::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ],
-                ]
-            ],
             '/v1/backups/prepare-batch-database' => [
                 'route' => '/backups/prepare-batch-database',
                 'methods' => [
@@ -738,51 +732,12 @@ abstract class Controllers
                     ],
                 ]
             ],
-            '/v1/restores/cleanup' => [
-                'route' => '/restores',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Restore\V2\RestoreCleanup::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/restores/check' => [
-                'route' => '/restores/check',
-                'methods' => [
-                    [
-                        'method' => 'GET',
-                        'class' => \WPUmbrella\Controller\Restore\V2\RestoreCheck::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ]
-                ]
-            ],
             '/v1/restores/data' => [
                 'route' => '/restores/data',
                 'methods' => [
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Restore\V2\GetData::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/restores/prepare-restore-files' => [
-                'route' => '/restores/prepare-restore-files',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Restore\V2\PrepareRestoreFiles::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
@@ -809,19 +764,6 @@ abstract class Controllers
                     [
                         'method' => 'POST',
                         'class' => \WPUmbrella\Controller\Restore\V2\RestoreUnzip::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/restores/database' => [
-                'route' => '/restores/database',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Restore\V2\RestoreDatabase::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
@@ -912,6 +854,19 @@ abstract class Controllers
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
                         ]
                     ]
+                ]
+            ],
+            '/v1/licenses' => [
+                'route' => '/licenses',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\License\GetProPluginLicenses::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
                 ]
             ],
         ];

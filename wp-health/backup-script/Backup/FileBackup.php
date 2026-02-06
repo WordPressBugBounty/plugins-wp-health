@@ -3,11 +3,17 @@
 if (!class_exists('UmbrellaFileBackup', false)):
     class UmbrellaFileBackup extends UmbrellaAbstractProcessBackup
     {
+        use UmbrellaProcessCapacityTrait;
+
         protected $extensionExcluded;
 
         protected $fileSizeLimit;
 
         protected $filesExcluded;
+
+        protected $checksumDictionaryGenerator;
+
+        protected $siteChecksumDirectoryGenerator;
 
         public function __construct($params)
         {
@@ -16,6 +22,15 @@ if (!class_exists('UmbrellaFileBackup', false)):
             $this->extensionExcluded = $this->context->getExtensionExcluded();
             $this->fileSizeLimit = $this->context->getFileSizeLimit();
             $this->filesExcluded = $this->context->getFilesExcluded();
+
+            $this->checksumDictionaryGenerator = new UmbrellaChecksumDictionaryGenerator($params);
+            $this->siteChecksumDirectoryGenerator = new UmbrellaSiteChecksumDirectoryGenerator($params);
+        }
+
+        public function closeDictionaries()
+        {
+            $this->checksumDictionaryGenerator->closeChecksumFile();
+            $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
         }
 
         public function __destruct()
@@ -23,79 +38,10 @@ if (!class_exists('UmbrellaFileBackup', false)):
             $this->closeDictionaries();
         }
 
-        protected function canProcessDirectory($directory)
-        {
-            if (!file_exists($directory)) {
-                return false;
-            }
-
-            $directoriesExcluded = $this->context->getDirectoriesExcluded();
-            $dirnameForFilepath = trim(str_replace($this->context->getBaseDirectory(), '', $directory));
-
-            // Check if the directory is in the excluded directories without in_array
-            foreach ($directoriesExcluded as $dir) {
-                if (strpos($dirnameForFilepath, $dir) !== false) {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        /**
-         * @param string $filePath
-         * @return bool
-         */
-        protected function canProcessFile($filePath, $options = [])
-        {
-            if (!file_exists($filePath)) {
-                return false;
-            }
-
-            // filepath contain dictionary.php ; we sent this manually
-            if (strpos($filePath, 'dictionary.php') !== false) {
-                return false;
-            }
-
-            if (in_array(pathinfo($filePath, PATHINFO_EXTENSION), $this->extensionExcluded)) {
-                return false;
-            }
-
-            if (@filesize($filePath) >= $this->fileSizeLimit) {
-                return false;
-            }
-
-            if (in_array(basename($filePath), $this->filesExcluded)) {
-                return false;
-            }
-
-            return true;
-        }
-
-        protected function canProcessIncrementalFile($filePath)
-        {
-            $incrementalDate = $this->context->getIncrementalDate();
-
-            // If the file is older than the incremental date, we skip it
-            if ($incrementalDate !== null && @filemtime($filePath) < $incrementalDate) {
-                return false;
-            }
-
-            return true;
-        }
-
-        protected function isDir($fileInfo)
-        {
-            try {
-                return $fileInfo->isDir();
-            } catch (Exception $e) {
-                return false;
-            }
-        }
-
         public function backup()
         {
             if ($this->context === null || $this->socket === null) {
+                $this->socket->sendLog('[FileBackup] no context or no socket');
                 return;
             }
 
@@ -103,21 +49,17 @@ if (!class_exists('UmbrellaFileBackup', false)):
 
             $lineNumber = 0;
             $startProcessing = false;
-            $pendingFiles = [];
-            $activeFibers = [];
 
-            while (($line = fgets($this->directoryDictionaryHandle)) !== false) {
+            $this->siteChecksumDirectoryGenerator->rewind();
+
+            while (($line = $this->siteChecksumDirectoryGenerator->getNextLine()) !== false) {
                 $currentTime = time();
+
                 if (($currentTime - $startTimer) >= $safeTimeLimit) {
                     $this->closeDictionaries();
                     $this->socket->sendLog('During while: throw UmbrellaPreventMaxExecutionTime');
                     throw new UmbrellaPreventMaxExecutionTime($lineNumber);
                     break; // Stop if we are close to the time limit
-                }
-
-                // Start by */ to end the dictionary
-                if (strpos($line, '*/') !== false) {
-                    break;
                 }
 
                 if (!$startProcessing && $lineNumber >= $this->context->getFileCursor()) {
@@ -129,12 +71,30 @@ if (!class_exists('UmbrellaFileBackup', false)):
                 if (!$startProcessing) {
                     continue;
                 }
-                $directory = trim($line);
 
-                if (file_exists($directory)) {
-                    $dirIterator = new DirectoryIterator($directory);
+                // $line = [path];[checksum]
+                $lineParts = explode(';', $line);
+                $path = $lineParts[0];
 
+                if (empty($path)) {
+                    continue;
+                }
+
+                $directory = trim($path);
+
+                $this->checksumDictionaryGenerator->startDirectory();
+
+                $directoryPath = $this->context->getBaseDirectory() . $directory;
+
+                if (file_exists($directoryPath)) {
+                    $dirIterator = new DirectoryIterator($directoryPath);
                     $this->socket->sendFileCursor($lineNumber); // File cursor correspond to the line number in the directory dictionary
+
+					$skipping = false;
+					if ($lineNumber === $this->context->getFileCursor() && !empty($lastProcessedFilename)) {
+						$skipping = true;
+						$this->socket->sendLog('Resuming from file: ' . $lastProcessedFilename);
+					}
 
                     foreach ($dirIterator as $fileInfo) {
                         if ($fileInfo->isDot()) {
@@ -146,6 +106,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                         }
 
                         $currentTime = time();
+
                         if (($currentTime - $startTimer) >= $safeTimeLimit) {
                             $this->closeDictionaries();
                             $this->socket->sendLog('During while directory fileinfo: throw UmbrellaPreventMaxExecutionTime');
@@ -155,21 +116,38 @@ if (!class_exists('UmbrellaFileBackup', false)):
 
                         $filePath = $fileInfo->getPathname();
 
-                        if (!$this->canProcessFile($filePath)) {
-                            continue; // Skip because we can't process the file
+                        if (!$this->checkProcessFile($filePath)) {
+                            continue;
                         }
+
+						if ($skipping) {
+							if ($fileInfo->getFilename() === basename($this->context->getFileName())) {
+								$skipping = false;
+								$this->socket->sendLog('Found last processed file, resuming...');
+							}
+							continue;
+						}
+
+                        $this->checksumDictionaryGenerator->addFile($fileInfo->getFilename());
 
                         if (!$this->canProcessIncrementalFile($filePath)) {
                             continue;
                         }
-
                         $this->socket->send($filePath);
                         $totalFilesSent++;
                     }
+
+                    // Don't send the full path, only the relative path
+                    $this->checksumDictionaryGenerator->endDirectory($directoryPath);
                 }
             }
 
             return true;
+        }
+
+        protected function getContext()
+        {
+            return $this->context;
         }
     }
 endif;

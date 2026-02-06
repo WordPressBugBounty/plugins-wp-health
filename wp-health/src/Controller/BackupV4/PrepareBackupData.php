@@ -35,6 +35,7 @@ class PrepareBackupData extends AbstractController
         // Clean up database directories
         $directories = [
             $source . 'umb_database',
+            $source . 'umb_checksum',
             $source . 'wp-content' . DIRECTORY_SEPARATOR . 'umb_database',
         ];
 

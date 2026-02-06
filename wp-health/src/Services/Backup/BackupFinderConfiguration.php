@@ -14,7 +14,6 @@ class BackupFinderConfiguration
     public function getDefaultExcludeFiles()
     {
         return [
-            WP_UMBRELLA_DIR_WPU_BACKUP_BOX,
             WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'cache', // like wp-rocket
             WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'updraft', // backup updraft
             WP_CONTENT_DIR . DIRECTORY_SEPARATOR . 'ai1wm-backups', // backup ai1wm-backups
@@ -47,6 +46,7 @@ class BackupFinderConfiguration
         switch ($host) {
             case Host::FLYWHEEL:
             case Host::PRESSABLE:
+            case Host::WORDPRESSCOM:
                 $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
                 break;
         }
@@ -72,6 +72,7 @@ class BackupFinderConfiguration
         switch ($host) {
             case Host::FLYWHEEL:
             case Host::PRESSABLE:
+            case Host::WORDPRESSCOM:
                 $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, WP_CONTENT_DIR), DIRECTORY_SEPARATOR)
                     . DIRECTORY_SEPARATOR
                     . '..'

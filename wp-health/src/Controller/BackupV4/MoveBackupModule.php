@@ -15,11 +15,15 @@ class MoveBackupModule extends AbstractController
             'UmbrellaException.php',
             'UmbrellaInternalRequestException.php',
             'UmbrellaSocketException.php',
+            'ProcessCapacityTrait.php',
             'UmbrellaPreventMaxExecutionTime.php',
             'UmbrellaDatabasePreventMaxExecutionTime.php',
             'ConnectionInterface.php',
             'DatabaseStatementInterface.php',
+            'ChecksumDictionaryGenerator.php',
+            'SiteChecksumDirectoryGenerator.php',
             'AbstractProcessBackup.php',
+            'Context.php',
         ];
 
         $iterator = new \RecursiveIteratorIterator(
@@ -114,20 +118,13 @@ class MoveBackupModule extends AbstractController
             $fileContent = str_replace("define('UMBRELLA_DB_SSL', '[[UMBRELLA_DB_SSL]]');", "define('UMBRELLA_DB_SSL', " . (defined('DB_SSL') ? 'true' : 'false') . ');', $fileContent);
 
             $password = DB_PASSWORD;
-            if (strpos($password, "'") !== false) {
-                // Note: the quotes are part of the string
-                $fileContent = str_replace(
-                    "define('UMBRELLA_DB_PASSWORD', '[[UMBRELLA_DB_PASSWORD]]');",
-                    'define("UMBRELLA_DB_PASSWORD", "' . $password . '");',
-                    $fileContent
-                );
-            } else {
-                $fileContent = str_replace(
-                    "define('UMBRELLA_DB_PASSWORD', '[[UMBRELLA_DB_PASSWORD]]');",
-                    "define('UMBRELLA_DB_PASSWORD', '" . $password . "');",
-                    $fileContent
-                );
-            }
+            // Escape backslashes first, then single quotes (for single-quoted PHP strings)
+            $escapedPassword = str_replace(['\\', "'"], ['\\\\', "\\'"], $password);
+            $fileContent = str_replace(
+                "define('UMBRELLA_DB_PASSWORD', '[[UMBRELLA_DB_PASSWORD]]');",
+                "define('UMBRELLA_DB_PASSWORD', '" . $escapedPassword . "');",
+                $fileContent
+            );
 
             if (defined('WPE_APIKEY')) {
                 $str = "define('WPE_APIKEY', '" . WPE_APIKEY . "');";

@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('UmbrellaMySQLiConnection', false)):
+if (!class_exists('UmbrellaMySQLiConnection', false)):
     class UmbrellaMySQLiConnection implements UmbrellaConnectionInterface
     {
         protected $connection;
@@ -22,6 +22,19 @@ if(!class_exists('UmbrellaMySQLiConnection', false)):
             }
 
             $this->configuration = $configuration;
+            $this->connect();
+        }
+
+        /**
+         * Establish the MySQL connection
+         *
+         * @param bool $throwOnError If true, throws exception on failure. If false, returns boolean.
+         * @return bool True if connection successful
+         * @throws UmbrellaException If connection fails and $throwOnError is true
+         */
+        protected function connect($throwOnError = true)
+        {
+            $configuration = $this->configuration;
 
             mysqli_report(MYSQLI_REPORT_OFF);
 
@@ -46,7 +59,7 @@ if(!class_exists('UmbrellaMySQLiConnection', false)):
 
             if ($success) {
                 $this->connection->set_charset(UmbrellaDatabaseFunction::getDatabaseCharset($this));
-                return;
+                return true;
             }
 
             if ($this->connection->connect_errno === 2002 && strtolower($configuration->getHostname()) === 'localhost') {
@@ -79,11 +92,15 @@ if(!class_exists('UmbrellaMySQLiConnection', false)):
                 // }
             }
 
-            if(!$success) {
-                throw new UmbrellaException($this->connection->connect_error, 'db_connect_error_mysqli', $this->connection->connect_errno);
+            if (!$success) {
+                if ($throwOnError) {
+                    throw new UmbrellaException($this->connection->connect_error, 'db_connect_error_mysqli', $this->connection->connect_errno);
+                }
+                return false;
             }
 
             $this->connection->set_charset(UmbrellaDatabaseFunction::getDatabaseCharset($this));
+            return true;
         }
 
         public function query($query, array $parameters = [], $unbuffered = false)
@@ -119,6 +136,35 @@ if(!class_exists('UmbrellaMySQLiConnection', false)):
             }
             $this->connection->close();
             $this->connection = null;
+        }
+
+        public function ping()
+        {
+            if (empty($this->connection)) {
+                return false;
+            }
+
+            try {
+                // Use SELECT 1 query instead of deprecated mysqli::ping() (deprecated since PHP 8.4)
+                $result = @$this->connection->query('SELECT 1');
+                if ($result instanceof mysqli_result) {
+                    $result->free();
+                    return true;
+                }
+                return false;
+            } catch (Exception $e) {
+                return false;
+            }
+        }
+
+        public function reconnect()
+        {
+            try {
+                $this->close();
+                return $this->connect(false);
+            } catch (Exception $e) {
+                return false;
+            }
         }
     }
 

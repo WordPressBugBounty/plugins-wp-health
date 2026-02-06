@@ -112,6 +112,11 @@ class ValidationApiKey implements ExecuteHooksBackend
 
             // Generate a new secret token
             $secretToken = wp_umbrella_generate_random_string(128);
+
+            if (!wp_umbrella_is_new_hash()) {
+                wp_umbrella_init_new_hash();
+            }
+
             $newOptions['secret_token'] = wp_umbrella_get_service('WordPressContext')->getHash($secretToken);
             $newOptions['allowed'] = true;
             $newOptions['api_key'] = $apiKey;

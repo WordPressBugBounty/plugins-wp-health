@@ -20,6 +20,11 @@ class Register
         $hosting = wp_umbrella_get_service('HostResolver')->getCurrentHost();
 
         $secretToken = wp_umbrella_generate_random_string(128);
+
+        if (!wp_umbrella_is_new_hash()) {
+            wp_umbrella_init_new_hash();
+        }
+
         $hashSecretToken = wp_umbrella_get_service('WordPressContext')->getHash($secretToken);
 
         $options = wp_umbrella_get_options([

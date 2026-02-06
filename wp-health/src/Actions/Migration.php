@@ -10,6 +10,30 @@ class Migration implements ExecuteHooks
         add_action('admin_init', [$this, 'upgrader']);
     }
 
+    protected function updateMuPlugin()
+    {
+        if (!is_writable(dirname(WPMU_PLUGIN_DIR))) {
+            return false;
+        }
+
+        if (!file_exists(WPMU_PLUGIN_DIR)) {
+            wp_mkdir_p(WPMU_PLUGIN_DIR);
+        }
+
+        try {
+            if (!@copy(
+                WP_UMBRELLA_DIR . '/src/Core/MuPlugins/InitUmbrella.php',
+                WPMU_PLUGIN_DIR . '/InitUmbrella.php'
+            )) {
+                return false;
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function upgrader()
     {
         $currentVersion = get_option('wphealth_version');
@@ -74,6 +98,10 @@ class Migration implements ExecuteHooks
             add_rewrite_endpoint('umbrella-restore', EP_ROOT);
 
             flush_rewrite_rules();
+        }
+
+        if ($currentVersion && version_compare($currentVersion, '2.21.0', '<')) {
+            $this->updateMuPlugin();
         }
     }
 }

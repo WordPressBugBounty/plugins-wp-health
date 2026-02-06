@@ -110,33 +110,6 @@ class BackupBuilder implements BackupBuilderModel
      */
     public function buildSqlSource($options = [])
     {
-        $type = isset($options['type']) ? $options['type'] : self::DEFAULT_TYPE_SQL;
-
-        $database = isset($options['database']) ? $options['database'] : DB_NAME;
-        $databaseUser = isset($options['user']) ? $options['user'] : DB_USER;
-        $databasePassword = isset($options['password']) ? $options['password'] : DB_PASSWORD;
-        $databaseHost = isset($options['host']) ? $options['host'] : DB_HOST;
-        $databaseSocket = isset($options['sock']) ? $options['sock'] : null;
-
-        $source = null;
-        switch ($type) {
-            case 'mysqlmanual-by-table':
-                $source = new MySqlManualByTableSource($this->namer, $database, [
-                    'user' => $databaseUser,
-                    'password' => $databasePassword,
-                    'host' => $databaseHost,
-                    'sock' => $databaseSocket,
-                ]);
-
-                $source->setVersion($options['version'] ?? 'v1');
-                break;
-        }
-
-        if ($source === null) {
-            return $this;
-        }
-
-        $this->sqlSource = $source;
         return $this;
     }
 

@@ -5,6 +5,8 @@ if (!class_exists('UmbrellaContext', false)):
     {
         const SUFFIX = 'umb_database';
 
+        const CHECKSUM_SUFFIX = 'umb_checksum';
+
         const DEFAULT_EXTENSION_EXCLUDED = [
             'gz',
             'zip',
@@ -19,13 +21,12 @@ if (!class_exists('UmbrellaContext', false)):
             'tbz',
             'wpress',
             'raw',
-            'mp4',
             'bak',
             'tmp',
             'log',
             'mmdb',
             'mdb',
-            'mov'
+            'daf',
         ];
 
         const DEFAULT_DIRECTORY_EXCLUDED = [
@@ -37,6 +38,7 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . '.wp-cli',
             DIRECTORY_SEPARATOR . 'php_errorlog',
             DIRECTORY_SEPARATOR . 'cache',
+            DIRECTORY_SEPARATOR . '_cache',
             DIRECTORY_SEPARATOR . 'lscache',
             DIRECTORY_SEPARATOR . 'rb-plugins',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'cache',
@@ -51,6 +53,7 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'et-cache',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'nginx_cache',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'wpdm-cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'nitropack-logs',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'ShortpixelBackups',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'et_temp',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'instawpbackups',
@@ -62,6 +65,7 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wflogs',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'webtoffee_iew_log',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'umbrella-upgrade-temp-backup',
+            DIRECTORY_SEPARATOR . 'umb_checksum',
         ];
 
         const DEFAULT_EXCLUDE_FILES = [
@@ -71,10 +75,10 @@ if (!class_exists('UmbrellaContext', false)):
             'cloner.php',
             'cloner_error_log',
             'restore_error_log',
-            'error_log'
+            'error_log',
         ];
 
-        const DEFAULT_FILE_SIZE_LIMIT = 50 * 1024 * 1024; // 50 Mo
+        const DEFAULT_FILE_SIZE_LIMIT = 500 * 1024 * 1024; // 500 Mo
 
         protected $baseDirectory;
 
@@ -90,11 +94,15 @@ if (!class_exists('UmbrellaContext', false)):
 
         protected $fileCursor;
 
+        protected $checkupDirectoriesCursor;
+
         protected $databaseDumpCursor;
 
         protected $databaseCursor;
 
         protected $scanCursor;
+
+        protected $scanDirectoryCursor;
 
         protected $internalRequest;
 
@@ -102,10 +110,27 @@ if (!class_exists('UmbrellaContext', false)):
 
         protected $rootDirectory;
 
+        protected $checksumDirectory;
+
+        protected $checkupDirectories;
+
         protected $signedUrl;
+
+        protected $fileSizeLimits;
+
+        protected $ack;
+
+        protected $action;
+
+        protected $lastProcessedFilename;
+
+        protected $intervalBetweenBatch;
+
+        protected $maximumLinesByTableByBatch;
 
         public function __construct($params)
         {
+            $this->action = $params['action'] ?? '';
             $this->baseDirectory = rtrim($params['baseDirectory'], DIRECTORY_SEPARATOR);
             $this->tables = $params['tables'] ?? [];
             $this->databasePrefix = $params['database_prefix'] ?? '';
@@ -114,19 +139,46 @@ if (!class_exists('UmbrellaContext', false)):
                 'file_size_limit' => $params['options']['file_size_limit'] ?? self::DEFAULT_FILE_SIZE_LIMIT,
                 'excluded_extension' => $params['options']['excluded_extension'] ? array_merge(self::DEFAULT_EXTENSION_EXCLUDED, $params['excluded_extension']) : self::DEFAULT_EXTENSION_EXCLUDED,
                 'excluded_directories' => [],
-                'excluded_files' => []
+                'excluded_files' => [],
+                'max_mo_per_file' => $params['options']['max_mo_per_file'] ?? 50,
+                'is_sql_partitioned' => $params['options']['is_sql_partitioned'] ?? false,
             ];
             $this->requestId = $params['requestId'];
             $this->fileCursor = $params['fileCursor'];
+            $this->checkupDirectoriesCursor = $params['checkupDirectoriesCursor'];
             $this->databaseDumpCursor = $params['databaseDumpCursor'];
             $this->databaseCursor = $params['databaseCursor'];
             $this->scanCursor = $params['scanCursor'];
-            $this->internalRequest = $params['internalRequest'] ?? false;
+            $this->scanDirectoryCursor = $params['scanDirectoryCursor'];
+            $this->internalRequest = false; //legacy
             $this->retryFromWebsocketServer = $params['retryFromWebsocketServer'] ?? false;
+            $this->checkupDirectories = $params['checkupDirectories'] ?? [];
+            $this->fileSizeLimits = $params['fileSizeLimits'] ?? ['*' => self::DEFAULT_FILE_SIZE_LIMIT];
+            $this->ack = $params['ack'] ?? '';
+            $this->lastProcessedFilename = isset($params['last_processed_filename']) ? $params['last_processed_filename'] : '';
+            $this->intervalBetweenBatch = $params['interval_between_batch'] ?? 0;
+            $this->maximumLinesByTableByBatch = $params['maximum_lines_by_table_by_batch'] ?? [];
 
             $this->setExcludedFiles($params);
             $this->setExcludedDirectories($params);
             $this->setupRootDirectory();
+            $this->setupChecksumDirectory();
+        }
+
+        public function getAction()
+        {
+            return $this->action;
+        }
+
+        public function getLastProcessedFilename()
+        {
+            return $this->lastProcessedFilename;
+        }
+
+        public function setLastProcessedFilename($filename)
+        {
+            $this->lastProcessedFilename = $filename;
+            return $this;
         }
 
         public function setExcludedFiles($params)
@@ -159,6 +211,17 @@ if (!class_exists('UmbrellaContext', false)):
             return $this;
         }
 
+        public function addExcludedDirectory($directory)
+        {
+            $this->options['excluded_directories'][] = $directory;
+            return $this;
+        }
+
+        public function getFileSizeLimits()
+        {
+            return $this->fileSizeLimits;
+        }
+
         public function getInternalRequest()
         {
             return $this->internalRequest;
@@ -169,9 +232,30 @@ if (!class_exists('UmbrellaContext', false)):
             return $this->fileCursor;
         }
 
+        public function getCheckupDirectoriesCursor()
+        {
+            return $this->checkupDirectoriesCursor;
+        }
+
+        public function getCheckupDirectories()
+        {
+            return $this->checkupDirectories;
+        }
+
+        /**
+         * Used for files
+         */
         public function getScanCursor()
         {
             return $this->scanCursor;
+        }
+
+        /**
+         * Used for directories
+         */
+        public function getScanDirectoryCursor()
+        {
+            return $this->scanDirectoryCursor;
         }
 
         public function hasFileBatchNotStarted()
@@ -243,6 +327,16 @@ if (!class_exists('UmbrellaContext', false)):
             return $this->options['file_size_limit'];
         }
 
+        public function getMaxMoPerFile()
+        {
+            return $this->options['max_mo_per_file'];
+        }
+
+        public function getIsSqlPartitioned()
+        {
+            return $this->options['is_sql_partitioned'];
+        }
+
         public function getDatabasePrefix()
         {
             return $this->databasePrefix;
@@ -251,6 +345,11 @@ if (!class_exists('UmbrellaContext', false)):
         public function getRootDatabaseBackupDirectory()
         {
             return $this->rootDirectory;
+        }
+
+        public function getChecksumDirectory()
+        {
+            return $this->checksumDirectory;
         }
 
         protected function testDirectoryCreation($directory, $filename)
@@ -281,6 +380,11 @@ if (!class_exists('UmbrellaContext', false)):
             ];
         }
 
+        public function setupChecksumDirectory()
+        {
+            $this->checksumDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . self::CHECKSUM_SUFFIX;
+        }
+
         public function setupRootDirectory()
         {
             // /umb_database
@@ -305,18 +409,28 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function createBackupDirectoryIfNotExists()
         {
-            if (!file_exists($this->getRootDatabaseBackupDirectory())) {
-                mkdir($this->getRootDatabaseBackupDirectory());
+            $this->createDirectoryIfNotExists($this->getRootDatabaseBackupDirectory());
+        }
+
+        public function createChecksumDirectoryIfNotExists()
+        {
+            $this->createDirectoryIfNotExists($this->getChecksumDirectory());
+        }
+
+        protected function createDirectoryIfNotExists($directory)
+        {
+            if (!file_exists($directory)) {
+                mkdir($directory);
             }
 
             // Write .htaccess with deny all
-            $htaccess = $this->getRootDatabaseBackupDirectory() . DIRECTORY_SEPARATOR . '.htaccess';
+            $htaccess = $directory . DIRECTORY_SEPARATOR . '.htaccess';
             if (!file_exists($htaccess)) {
                 file_put_contents($htaccess, 'deny from all');
             }
 
             // Write index.php
-            $index = $this->getRootDatabaseBackupDirectory() . DIRECTORY_SEPARATOR . 'index.php';
+            $index = $directory . DIRECTORY_SEPARATOR . 'index.php';
             if (!file_exists($index)) {
                 file_put_contents($index, '<?php // Silence is golden');
             }
@@ -329,12 +443,27 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function getDirectoryDictionaryPath()
         {
-            return  sprintf('%s' . DIRECTORY_SEPARATOR . '%s-directory-dictionary.php', $this->getBaseDirectory(), $this->getRequestId());
+            return  sprintf('%s' . DIRECTORY_SEPARATOR . '%s-directories-checksum-dictionary.php', $this->getChecksumDirectory(), $this->getRequestId());
         }
 
         public function getIncrementalDate()
         {
             return $this->incrementalDate;
+        }
+
+        public function getAck()
+        {
+            return $this->ack;
+        }
+
+        public function getIntervalBetweenBatch()
+        {
+            return $this->intervalBetweenBatch;
+        }
+
+        public function getMaximumLinesByTableByBatch()
+        {
+            return $this->maximumLinesByTableByBatch;
         }
     }
 endif;

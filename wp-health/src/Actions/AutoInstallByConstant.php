@@ -85,6 +85,10 @@ class AutoInstallByConstant implements ExecuteHooks, ActivationHook
 
         $secretToken = wp_umbrella_generate_random_string(128);
 
+        if (!wp_umbrella_is_new_hash()) {
+            wp_umbrella_init_new_hash();
+        }
+
         $options = [
             'allowed' => false,
             'api_key' => $apiKey,

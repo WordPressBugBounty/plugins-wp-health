@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('UmbrellaPDOConnection', false)):
+if (!class_exists('UmbrellaPDOConnection', false)):
     class UmbrellaPDOConnection implements UmbrellaConnectionInterface
     {
         protected $connection;
@@ -25,6 +25,19 @@ if(!class_exists('UmbrellaPDOConnection', false)):
         public function __construct(UmbrellaDatabaseConfiguration $configuration)
         {
             $this->configuration = $configuration;
+            $this->connect();
+        }
+
+        /**
+         * Establish the PDO connection
+         *
+         * @param bool $throwOnError If true, throws exception on failure. If false, returns boolean.
+         * @return bool True if connection successful
+         * @throws UmbrellaException If connection fails and $throwOnError is true
+         */
+        protected function connect($throwOnError = true)
+        {
+            $configuration = $this->configuration;
 
             $options = [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -41,20 +54,29 @@ if(!class_exists('UmbrellaPDOConnection', false)):
             } catch (PDOException $e) {
                 if ((int)$e->getCode() === 2002 && strtolower($configuration->getHostname()) === 'localhost') {
                     try {
-                        $configuration = clone $configuration;
-                        $configuration->host = '127.0.0.1';
-                        $this->connection = new PDO(self::getDsn($configuration), $configuration->user, $configuration->password, $options);
+                        $fallbackConfig = clone $configuration;
+                        $fallbackConfig->host = '127.0.0.1';
+                        $this->connection = new PDO(self::getDsn($fallbackConfig), $fallbackConfig->user, $fallbackConfig->password, $options);
                     } catch (PDOException $e2) {
-                        throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e2->getCode());
+                        if ($throwOnError) {
+                            throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e2->getCode());
+                        }
+                        return false;
                     }
                 } else {
-                    throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e->getCode());
+                    if ($throwOnError) {
+                        throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e->getCode());
+                    }
+                    return false;
                 }
             }
 
             // ATTR_EMULATE_PREPARES is not necessary for newer mysql versions
             $this->connection->setAttribute(PDO::ATTR_EMULATE_PREPARES, version_compare($this->connection->getAttribute(PDO::ATTR_SERVER_VERSION), '5.1.17', '<'));
             $this->connection->exec(sprintf('SET NAMES %s', UmbrellaDatabaseFunction::getDatabaseCharset($this)));
+            $this->unbuffered = false;
+
+            return true;
         }
 
         public function query($query, array $parameters = [], $unbuffered = false)
@@ -92,6 +114,30 @@ if(!class_exists('UmbrellaPDOConnection', false)):
         public function close()
         {
             $this->connection = null;
+        }
+
+        public function ping()
+        {
+            if ($this->connection === null) {
+                return false;
+            }
+
+            try {
+                $this->connection->query('SELECT 1');
+                return true;
+            } catch (PDOException $e) {
+                return false;
+            }
+        }
+
+        public function reconnect()
+        {
+            try {
+                $this->close();
+                return $this->connect(false);
+            } catch (Exception $e) {
+                return false;
+            }
         }
 
         public static function getDsn(UmbrellaDatabaseConfiguration $configuration)

@@ -11,6 +11,9 @@ if (!class_exists('UmbrellaWebSocket', false)):
         protected $transport;
         protected $timeout;
         protected $origin;
+        /**
+         * @var UmbrellaContext
+         */
         protected $context;
 
         const READ_CHUNK_SIZE = 1024 * 10;
@@ -19,13 +22,51 @@ if (!class_exists('UmbrellaWebSocket', false)):
         {
             $this->host = $params['host'];
             $this->port = $params['port'];
-            $this->key = $params['key'] ?? base64_encode(openssl_random_pseudo_bytes(16));
+            $this->key = $params['key'] ?? base64_encode($this->secureRandomBytes(16));
 
             $this->wsVersion = $params['wsVersion'] ?? 13;
             $this->transport = $params['transport'] ?? 'tcp';
             $this->timeout = $params['timeout'] ?? 25;
             $this->origin = $params['origin'] ?? $_SERVER['HTTP_HOST'];
             $this->context = $params['context'] ?? null;
+        }
+
+        protected function secureRandomBytes($length)
+        {
+            // If OpenSSL is available
+            if (function_exists('openssl_random_pseudo_bytes')) {
+                $bytes = openssl_random_pseudo_bytes($length, $strong);
+                if ($bytes !== false && $strong === true) {
+                    return $bytes;
+                }
+            }
+
+            // If random_bytes() (PHP 7+) is available
+            if (function_exists('random_bytes')) {
+                try {
+                    return random_bytes($length);
+                } catch (Exception $e) {
+                    // nore and continue to fallback
+                }
+            }
+
+            // If /dev/urandom is available (on Linux/Unix)
+            $urandom = @fopen('/dev/urandom', 'rb');
+            if ($urandom !== false) {
+                $bytes = fread($urandom, $length);
+                fclose($urandom);
+                if ($bytes !== false) {
+                    return $bytes;
+                }
+            }
+
+            // Final fallback (not crypto-safe)
+            $bytes = '';
+            for ($i = 0; $i < $length; $i++) {
+                $bytes .= chr(mt_rand(0, 255));
+            }
+
+            return $bytes;
         }
 
         protected function buildHeaders()
@@ -43,7 +84,11 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 'X-Database-Dump-Cursor: ' . $this->context->getDatabaseDumpCursor(), // Use for database dump
                 'X-Retry-From-Websocket-Server: ' . $this->context->getRetryFromWebsocketServer(),
                 'X-Scan-Cursor: ' . $this->context->getScanCursor(), // Use for scan all files and get the dictionary
+                'X-Scan-Directory-Cursor: ' . $this->context->getScanDirectoryCursor(), // Use to know which directory we need to backup
+                'X-Checkup-Directory-Cursor: ' . $this->context->getCheckupDirectoriesCursor(),
                 'X-Internal-Request: ' . $this->context->getInternalRequest(),
+                'X-Ack-Code: ' . $this->context->getAck(),
+                'X-Action: ' . $this->context->getAction(),
                 'Sec-WebSocket-Key: ' . $this->key,
                 'Sec-WebSocket-Version: ' . $this->wsVersion,
             ];
@@ -165,17 +210,32 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame('FILE_CURSOR:' . $data);
         }
 
-        public function sendDatabaseCursor($cursor)
+        public function sendStartCheckupDirectory($directory)
         {
-            if ($this->connection === null) {
-                return;
-            }
-
-            $data = json_encode([
-                'cursor' => $cursor,
+            $this->sendMessage('__CHECKUP_DIRECTORY_START__', [
+                'directory' => $directory,
             ]);
+        }
 
-            $this->writeFrame('DATABASE_CURSOR:' . $data);
+        public function sendFileCheckupDirectory($filePath)
+        {
+            $this->sendMessage('__CHECKUP_DIRECTORY_FILE__', [
+                'filePath' => $filePath,
+            ]);
+        }
+
+        public function sendEndCheckupDirectory($directory)
+        {
+            $this->sendMessage('__CHECKUP_DIRECTORY_END__', [
+                'directory' => $directory,
+            ]);
+        }
+
+        public function sendFinishScanIntegrity($filePath)
+        {
+            $this->send($filePath);
+
+            $this->sendMessage('__FINISH_SCAN_INTEGRITY__');
         }
 
         public function sendScanCursor($cursor)
@@ -191,6 +251,19 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame('SCAN_CURSOR:' . $data);
         }
 
+        public function sendScanDirectoryCursor($cursor)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $data = json_encode([
+                'cursor' => $cursor,
+            ]);
+
+            $this->writeFrame('SCAN_DIRECTORY_CURSOR:' . $data);
+        }
+
         public function sendDatabaseDumpCursor($cursor)
         {
             if ($this->connection === null) {
@@ -204,6 +277,24 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame('DATABASE_DUMP_CURSOR:' . $data);
         }
 
+        public function sendDatabaseTable($tableName)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $data = json_encode([
+                'tableName' => $tableName,
+            ]);
+
+            $this->writeFrame('__DATABASE_TABLE__:' . $data);
+        }
+
+        public function sendBackupFilesFinished()
+        {
+            $this->sendMessage('__BACKUP_FILES_FINISHED__');
+        }
+
         public function sendFinish()
         {
             if ($this->connection === null) {
@@ -211,6 +302,34 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
 
             $this->writeFrame('FINISH');
+        }
+
+        public function sendChecksum($directory, $checksum)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $data = json_encode([
+                'directory' => $directory,
+                'checksum' => $checksum,
+            ]);
+            $this->writeFrame('CHECKSUM:' . $data);
+
+            // return $this->waitForAckChecksum($directory);
+        }
+
+        public function sendStructuredLog($code, $context = [])
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $data = json_encode([
+                'code' => $code,
+                'context' => $context,
+            ]);
+            $this->writeFrame('STRUCTURED_LOG:' . $data);
         }
 
         public function sendLog($message, $internal = false)
@@ -224,6 +343,29 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 'internal' => $internal,
             ]);
             $this->writeFrame('LOG:' . $data);
+        }
+
+        /**
+         * Send the telemetry informations.
+         *
+         * @param string $name Counter name.
+         * @param array $attributes Counter attributes.
+         *
+         * @return void
+         * @throws UmbrellaPreventMaxExecutionTime
+         * @throws UmbrellaSocketException
+         */
+        public function sendTelemetryCounter($name, $attributes)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $data = json_encode([
+                'name' => $name,
+                'attributes' => $attributes,
+            ]);
+            $this->writeFrame('TELEMETRY:' . $data);
         }
 
         public function sendPreventMaxExecutionTime($cursor = 0)
@@ -252,17 +394,28 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame('PREVENT_DATABASE_MAX_EXECUTION_TIME:' . $data);
         }
 
-        public function isPoolAvailable()
+        /**
+         * @param string $message
+         * @param array $data
+         *
+         * @return void
+         * @throws UmbrellaPreventMaxExecutionTime
+         * @throws UmbrellaSocketException
+         */
+        protected function sendMessage($message, $data = [])
         {
-            $this->writeFrame('CHECK_POOL');
-
-            $data = $this->readFrameJson();
-
-            if ($data && $data['type'] === 'POOL_AVAILABLE') {
-                return true;
+            if ($this->connection === null) {
+                return;
             }
 
-            return false;
+            if (count($data) == 0) {
+                $this->writeFrame($message);
+                return;
+            }
+
+            $data = json_encode($data);
+
+            $this->writeFrame("$message:" . $data);
         }
 
         public function waitForAck($filename)
@@ -274,6 +427,22 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 $data = $this->readFrameJson();
 
                 if ($data && $data['type'] === 'ACK' && $data['filename'] === $filename) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public function waitForAckChecksum($directory)
+        {
+            $startTime = time();
+            $timeout = 30;
+
+            while (time() - $startTime < $timeout) {
+                $data = $this->readFrameJson();
+
+                if ($data && $data['type'] === 'ACK_CHECKSUM' && $data['directory'] === $directory) {
                     return true;
                 }
             }
@@ -318,11 +487,36 @@ if (!class_exists('UmbrellaWebSocket', false)):
                         $this->writeFrame($message, false);
                     }
 
+                    $size = filesize($filePath);
+
                     $endOfFileMessage = json_encode([
                         'type' => 'END_FILE',
                         'filename' => $relativePath,
-                        'size' => filesize($filePath),
+                        'size' => $size,
                     ]);
+
+                    $limits = $this->context->getFileSizeLimits();
+
+                    $extension = pathinfo($filePath, PATHINFO_EXTENSION);
+
+                    $limit = UmbrellaContext::DEFAULT_FILE_SIZE_LIMIT;
+
+                    if (key_exists('*', $limits)) {
+                        $limit = $limits['*'];
+                    }
+
+                    if (key_exists($extension, $limits)) {
+                        $limit = $limits[$extension];
+                    }
+
+                    if ($size > $limit) {
+                        $this->sendTelemetryCounter('backup.file', [
+                            'requestId' => $this->context->getRequestId(),
+                            'origin' => 'plugin',
+                            'filename' => $relativePath,
+                            'size' => $size,
+                        ]);
+                    }
 
                     $this->writeFrame($endOfFileMessage, false);
 
@@ -337,6 +531,9 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
         }
 
+        /**
+         * @deprecated Use sendFinishDictionaryWithIntegrity instead
+         */
         public function sendFinishDictionary()
         {
             if ($this->connection === null) {
@@ -344,6 +541,28 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
 
             $this->writeFrame('FINISH_DICTIONARY');
+        }
+
+        public function sendFinishDictionaryWithIntegrity($filePath)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $this->send($filePath);
+
+            $this->writeFrame('__FINISH_DICTIONARY_WITH_INTEGRITY__');
+        }
+
+        public function sendFinishScanSize($filePath)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $this->send($filePath);
+
+            $this->writeFrame('__FINISH_SCAN_SIZE__');
         }
 
         public function readFrame()

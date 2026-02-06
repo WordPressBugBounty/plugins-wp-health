@@ -39,7 +39,8 @@ class UpgraderTempBackup
             ];
         }
 
-        $destDirectory = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $args['slug'];
+        $baseDirectory = $args['dir'] === 'plugins' ? WP_PLUGIN_DIR : get_theme_root($args['slug']);
+        $destDirectory = $baseDirectory . DIRECTORY_SEPARATOR . $args['slug'];
 
         // Create the temporary backup directory if it does not exist.
         if (!$wp_filesystem->is_dir($destDirectory)) {

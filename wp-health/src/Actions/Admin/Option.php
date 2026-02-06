@@ -117,6 +117,11 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         }
 
         $secretToken = wp_umbrella_generate_random_string(128);
+
+        if (!wp_umbrella_is_new_hash()) {
+            wp_umbrella_init_new_hash();
+        }
+
         $options = wp_umbrella_get_options([
             'secure' => false
         ]);

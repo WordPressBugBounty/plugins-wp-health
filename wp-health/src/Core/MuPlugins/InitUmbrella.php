@@ -32,9 +32,9 @@ if (file_exists(untrailingslashit(WP_PLUGIN_DIR) . '/wp-health/wp-umbrella-funct
 
             require_once $basename . '/vendor/autoload.php';
 
-			if(!class_exists("\WPUmbrella\Core\Kernel")){
-				return;
-			}
+            if (!class_exists("\WPUmbrella\Core\Kernel")) {
+                return;
+            }
 
             Kernel::execute([
                 'file' => $basename . '/wp-health.php',
@@ -45,4 +45,38 @@ if (file_exists(untrailingslashit(WP_PLUGIN_DIR) . '/wp-health/wp-umbrella-funct
         } catch (\Exception $e) {
         }
     }
+}
+
+if (isset($_GET['umbrella-backup']) && $_GET['umbrella-backup'] === 'active') {
+    // Do not allow the file to be called directly.
+    if (!defined('ABSPATH')) {
+        exit;
+    }
+
+    $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
+
+    $file = $source . 'cloner.php';
+
+    if (!file_exists($file)) {
+        exit;
+    }
+
+    require_once $file;
+}
+
+if (isset($_GET['umbrella-restore']) && $_GET['umbrella-restore'] === 'active') {
+    // Do not allow the file to be called directly.
+    if (!defined('ABSPATH')) {
+        exit;
+    }
+
+    $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
+
+    $file = $source . 'restore.php';
+
+    if (!file_exists($file)) {
+        exit;
+    }
+
+    require_once $file;
 }

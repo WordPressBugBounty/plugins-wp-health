@@ -15,6 +15,11 @@ if (!class_exists('UmbrellaCleanup', false)):
             $this->removeDirectory($this->context->getRootDatabaseBackupDirectory());
         }
 
+		public function handleChecksum()
+		{
+			$this->removeDirectory($this->context->getChecksumDirectory());
+		}
+
         public function handleRestore()
         {
             $this->removeDirectory($this->context->getRootRestoreDirectory());
@@ -30,13 +35,13 @@ if (!class_exists('UmbrellaCleanup', false)):
                 @unlink($filePath);
             }
 
-            if(file_exists($this->context->getDictionaryPath())) {
-                @unlink($this->context->getDictionaryPath());
-            }
+			if(file_exists($this->context->getDictionaryPath())) {
+				@unlink($this->context->getDictionaryPath());
+			}
 
-            if(file_exists($this->context->getDirectoryDictionaryPath())) {
-                @unlink($this->context->getDirectoryDictionaryPath());
-            }
+			if(file_exists($this->context->getDirectoryDictionaryPath())) {
+				@unlink($this->context->getDirectoryDictionaryPath());
+			}
         }
 
         protected function removeDirectory($path)

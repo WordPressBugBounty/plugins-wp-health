@@ -21,6 +21,9 @@ class Update extends BaseManageUpdate
             require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
             require_once ABSPATH . 'wp-admin/includes/file.php';
 
+            // Store old version for verification
+            $oldVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+
             $pluginInfoData = wp_umbrella_get_service('PluginsProvider')->getPlugin($plugin);
 
             $skin = new WP_Ajax_Upgrader_Skin();
@@ -85,9 +88,39 @@ class Update extends BaseManageUpdate
                 ];
             }
 
+            // Verify plugin integrity after update
+            $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin);
+
+            if (!$integrityCheck['success']) {
+                return [
+                    'status' => 'error',
+                    'code' => 'plugin_integrity_check_failed',
+                    'message' => 'Plugin update reported success but plugin directory is invalid: ' . ($integrityCheck['code'] ?? 'unknown'),
+                    'data' => ''
+                ];
+            }
+
+            // Verify version actually changed
+            $newVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+            if ($oldVersion !== false && $newVersion !== false && $oldVersion === $newVersion) {
+                return [
+                    'status' => 'error',
+                    'code' => 'plugin_version_unchanged',
+                    'message' => sprintf('Plugin update reported success but version unchanged (%s)', $oldVersion),
+                    'data' => ''
+                ];
+            }
+
             if ($plugin === 'woocommerce/woocommerce.php') {
                 wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
             }
+
+            if ($plugin === 'elementor/elementor.php' || $plugin === 'elementor-pro/elementor-pro.php') {
+                wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
+            }
+
+            // Disable maintenance mode
+            wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
 
             $data = [
                 'status' => 'success',
@@ -98,8 +131,6 @@ class Update extends BaseManageUpdate
 
             return $data;
         } catch (\Exception $e) {
-            $data['message'] = $e->getMessage();
-
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',
@@ -146,6 +177,17 @@ class Update extends BaseManageUpdate
      */
     public function bulkUpdate($plugins, $options = [])
     {
+        // Trace: log caller information
+        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+        $callerInfo = [];
+        foreach ($backtrace as $index => $trace) {
+            $file = isset($trace['file']) ? basename($trace['file']) : 'N/A';
+            $line = isset($trace['line']) ? $trace['line'] : 'N/A';
+            $class = isset($trace['class']) ? $trace['class'] : '';
+            $function = isset($trace['function']) ? $trace['function'] : '';
+            $callerInfo[] = sprintf('#%d %s%s%s() in %s:%s', $index, $class, $class ? '::' : '', $function, $file, $line);
+        }
+
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
 
@@ -186,6 +228,15 @@ class Update extends BaseManageUpdate
 
                     if (!$plugin_info || is_wp_error($plugin_info)) {
                         $return[$plugin_slug] = $this->getError($plugin_info);
+                        continue;
+                    }
+
+                    // Verify plugin integrity after update
+                    $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin_slug);
+
+                    if (!$integrityCheck['success']) {
+                        $return[$plugin_slug] = 'plugin_integrity_check_failed';
+                        continue;
                     }
 
                     // We'll need to get the new version of the plugin
@@ -204,12 +255,24 @@ class Update extends BaseManageUpdate
                             $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
                         }
                     }
+
+                    // Final check: if version still unchanged after all attempts, mark as error
+                    if ($oldVersions[$plugin_slug] !== false && $newVersions[$plugin_slug] !== false && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) {
+                        $return[$plugin_slug] = 'plugin_version_unchanged';
+                        $return[$plugin_slug . '_old_version'] = $oldVersions[$plugin_slug];
+                        $return[$plugin_slug . '_new_version'] = $newVersions[$plugin_slug];
+                    }
                 }
             } else {
                 // No verification with old version because we only use ajax here
                 foreach ($plugins as $plugin) {
                     $result = $this->tryUpdateByAdminAjax($plugin);
                     $return[$plugin] = $result['code'];
+
+                    $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin);
+                    if (!$integrityCheck['success']) {
+                        $return[$plugin] = 'plugin_integrity_check_failed';
+                    }
                 }
             }
 
@@ -223,14 +286,14 @@ class Update extends BaseManageUpdate
 
             wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
 
-            return [
+            $finalResponse = [
                 'status' => 'success',
                 'code' => 'success',
                 'data' => $return
             ];
-        } catch (\Exception $e) {
-            $data['message'] = $e->getMessage();
 
+            return $finalResponse;
+        } catch (\Exception $e) {
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',

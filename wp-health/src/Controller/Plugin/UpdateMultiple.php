@@ -31,7 +31,8 @@ class UpdateMultiple extends AbstractController
             ]);
 
             if (isset($data['status']) && $data['status'] === 'error') {
-                return $this->returnResponse($data, 403);
+                $this->returnResponse($data, 403);
+                return;
             }
 
             return $this->returnResponse($data);

@@ -1,6 +1,6 @@
 <?php
 
-if(!class_exists('UmbrellaDumpScanner', false)):
+if (!class_exists('UmbrellaDumpScanner', false)):
     class UmbrellaDumpScanner
     {
         const INSERT_REPLACEMENT_PATTERN = '#^INSERT\\s+INTO\\s+(`?)[^\\s`]+\\1\\s+(?:\([^)]+\)\\s+)?VALUES\\s*#';
@@ -17,13 +17,13 @@ if(!class_exists('UmbrellaDumpScanner', false)):
         /**
          * @param string $path
          *
-         * @throws UmbrelaException
+         * @throws UmbrellaException
          */
         public function __construct($path)
         {
             $this->handle = @fopen($path, 'rb');
             if (!is_resource($this->handle)) {
-                throw new UmbrelaException('Could not open database dump file', 'db_dump_open');
+                throw new UmbrellaException('Could not open database dump file', 'db_dump_open');
             }
         }
 
@@ -33,7 +33,7 @@ if(!class_exists('UmbrellaDumpScanner', false)):
          *
          * @return string Up to $maxCount statements or until half of $maxSize (in bytes) is reached.
          *
-         * @throws UmbrelaException
+         * @throws UmbrellaException
          */
         public function scan($maxCount, $maxSize)
         {
@@ -53,7 +53,7 @@ if(!class_exists('UmbrellaDumpScanner', false)):
                             // So, this is needed...
                             break;
                         }
-                        throw new UmbrelaException('Could not read database dump line', 'db_dump_read_line');
+                        throw new UmbrellaException('Could not read database dump line', 'db_dump_read_line');
                     }
                     $this->cursor += strlen($line);
                 }
@@ -154,7 +154,7 @@ if(!class_exists('UmbrellaDumpScanner', false)):
                         $newLine = preg_replace(self::INSERT_REPLACEMENT_PATTERN, ', ', $line, 1, $c);
                         $newLine = substr($newLine, 0, -(1 + $this->rn));
                         if ($c !== 1) {
-                            throw new UmbrelaException(sprintf('Could not parse INSERT line: %s', $line), 'parse_insert_line');
+                            throw new UmbrellaException(sprintf('Could not parse INSERT line: %s', $line), 'parse_insert_line');
                         }
                         $buffer .= $newLine;
                     }

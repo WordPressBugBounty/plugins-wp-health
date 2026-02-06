@@ -37,5 +37,19 @@ if (!interface_exists('UmbrellaConnectionInterface', false)):
          * Closes the connection.
          */
         public function close();
+
+        /**
+         * Check if the connection is still alive.
+         * 
+         * @return bool
+         */
+        public function ping();
+
+        /**
+         * Reconnect to the database if the connection was lost.
+         * 
+         * @return bool True if reconnection was successful
+         */
+        public function reconnect();
     }
 endif;
