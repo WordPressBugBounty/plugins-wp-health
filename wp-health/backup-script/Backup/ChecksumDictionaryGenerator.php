@@ -24,6 +24,7 @@ if (!class_exists('UmbrellaChecksumDictionaryGenerator', false)):
 
         protected $tempFile = null;
         protected $useFileMode = false;
+        protected $tempFilePath = null;
 
         public function __construct($params)
         {
@@ -65,7 +66,7 @@ if (!class_exists('UmbrellaChecksumDictionaryGenerator', false)):
 
         protected function switchToFileMode()
         {
-            $this->tempFile = tmpfile();
+            $this->tempFile = $this->createTempFile();
             $this->useFileMode = true;
 
             // Write existing files to temp file
@@ -77,11 +78,47 @@ if (!class_exists('UmbrellaChecksumDictionaryGenerator', false)):
             $this->files = [];
         }
 
+        /**
+         * Create a temporary file, with fallback for hosts where tmpfile() is disabled.
+         *
+         * @return resource
+         * @throws \RuntimeException
+         */
+        protected function createTempFile()
+        {
+            // Try native tmpfile() first
+            if (function_exists('tmpfile')) {
+                $tmp = @tmpfile();
+                if ($tmp !== false) {
+                    return $tmp;
+                }
+            }
+
+            // Fallback: create a temp file manually in the umb_checksum directory
+            $dir = $this->context->getChecksumDirectory();
+
+            $path = $dir . DIRECTORY_SEPARATOR . 'umb_tmp_' . bin2hex(random_bytes(8));
+            $handle = @fopen($path, 'w+b');
+
+            if ($handle === false) {
+                throw new \RuntimeException('Unable to create temporary file in ' . $dir);
+            }
+
+            $this->tempFilePath = $path;
+
+            return $handle;
+        }
+
         protected function cleanupTempFile()
         {
             if ($this->tempFile !== null) {
                 fclose($this->tempFile);
                 $this->tempFile = null;
+            }
+
+            if ($this->tempFilePath !== null) {
+                @unlink($this->tempFilePath);
+                $this->tempFilePath = null;
             }
         }
 

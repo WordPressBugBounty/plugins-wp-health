@@ -51,6 +51,7 @@ abstract class Kernel
     public static function handleHooksPlugin()
     {
         require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendErrors.php';
+        require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendLinks.php';
 
         switch (current_filter()) {
             case 'plugins_loaded':

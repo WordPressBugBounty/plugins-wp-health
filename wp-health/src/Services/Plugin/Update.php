@@ -16,6 +16,8 @@ class Update extends BaseManageUpdate
     public function update($plugin)
     {
         try {
+            wp_umbrella_debug_log("Plugin single update started for '{$plugin}'");
+
             include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
             require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
@@ -23,6 +25,7 @@ class Update extends BaseManageUpdate
 
             // Store old version for verification
             $oldVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+            wp_umbrella_debug_log("Plugin '{$plugin}' current version: " . ($oldVersion ?: 'unknown'));
 
             $pluginInfoData = wp_umbrella_get_service('PluginsProvider')->getPlugin($plugin);
 
@@ -31,10 +34,15 @@ class Update extends BaseManageUpdate
                 'Name' => $pluginInfoData->name,
             ];
             $upgrader = new Plugin_Upgrader($skin);
+
+            wp_umbrella_debug_log("Plugin '{$plugin}' running upgrader...");
             $response = $upgrader->upgrade($plugin);
 
             if (is_wp_error($skin->result)) {
-                if (in_array($skin->result->get_error_code(), ['remove_old_failed', 'mkdir_failed_ziparchive'], true)) {
+                $errorCode = $skin->result->get_error_code();
+                wp_umbrella_debug_log("Plugin '{$plugin}' skin result error: {$errorCode} - " . $skin->result->get_error_message());
+
+                if (in_array($errorCode, ['remove_old_failed', 'mkdir_failed_ziparchive'], true)) {
                     return [
                         'status' => 'error',
                         'code' => 'remove_old_failed_or_mkdir_failed_ziparchive_error',
@@ -57,6 +65,7 @@ class Update extends BaseManageUpdate
                     'data' => $response
                 ];
             } elseif (in_array($skin->get_errors()->get_error_code(), ['remove_old_failed', 'mkdir_failed_ziparchive'], true)) {
+                wp_umbrella_debug_log("Plugin '{$plugin}' skin error: remove_old_failed or mkdir_failed_ziparchive");
                 return [
                     'status' => 'error',
                     'code' => 'remove_old_failed_or_mkdir_failed_ziparchive_error',
@@ -64,6 +73,7 @@ class Update extends BaseManageUpdate
                     'data' => $response
                 ];
             } elseif ($skin->get_errors()->get_error_code()) {
+                wp_umbrella_debug_log("Plugin '{$plugin}' skin error: " . $skin->get_errors()->get_error_code() . ' - ' . $skin->get_error_messages());
                 return [
                     'status' => 'error',
                     'code' => 'plugin_upgrader_skin_error',
@@ -80,6 +90,7 @@ class Update extends BaseManageUpdate
                     $message = esc_html($wp_filesystem->errors->get_error_message());
                 }
 
+                wp_umbrella_debug_log("Plugin '{$plugin}' filesystem error: " . ($message ?: 'unable to connect'));
                 return [
                     'status' => 'error',
                     'code' => 'unable_connect_filesystem',
@@ -92,6 +103,7 @@ class Update extends BaseManageUpdate
             $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin);
 
             if (!$integrityCheck['success']) {
+                wp_umbrella_debug_log("Plugin '{$plugin}' integrity check failed: " . ($integrityCheck['code'] ?? 'unknown'));
                 return [
                     'status' => 'error',
                     'code' => 'plugin_integrity_check_failed',
@@ -103,6 +115,7 @@ class Update extends BaseManageUpdate
             // Verify version actually changed
             $newVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
             if ($oldVersion !== false && $newVersion !== false && $oldVersion === $newVersion) {
+                wp_umbrella_debug_log("Plugin '{$plugin}' version unchanged after update: {$oldVersion}");
                 return [
                     'status' => 'error',
                     'code' => 'plugin_version_unchanged',
@@ -112,15 +125,19 @@ class Update extends BaseManageUpdate
             }
 
             if ($plugin === 'woocommerce/woocommerce.php') {
+                wp_umbrella_debug_log("Plugin '{$plugin}' running WooCommerce database update");
                 wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
             }
 
             if ($plugin === 'elementor/elementor.php' || $plugin === 'elementor-pro/elementor-pro.php') {
+                wp_umbrella_debug_log("Plugin '{$plugin}' running Elementor database update");
                 wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
             }
 
             // Disable maintenance mode
             wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
+
+            wp_umbrella_debug_log("Plugin '{$plugin}' successfully updated from {$oldVersion} to {$newVersion}");
 
             $data = [
                 'status' => 'success',
@@ -131,6 +148,7 @@ class Update extends BaseManageUpdate
 
             return $data;
         } catch (\Exception $e) {
+            wp_umbrella_debug_log("Plugin '{$plugin}' update exception: " . $e->getMessage());
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',
@@ -177,17 +195,6 @@ class Update extends BaseManageUpdate
      */
     public function bulkUpdate($plugins, $options = [])
     {
-        // Trace: log caller information
-        $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
-        $callerInfo = [];
-        foreach ($backtrace as $index => $trace) {
-            $file = isset($trace['file']) ? basename($trace['file']) : 'N/A';
-            $line = isset($trace['line']) ? $trace['line'] : 'N/A';
-            $class = isset($trace['class']) ? $trace['class'] : '';
-            $function = isset($trace['function']) ? $trace['function'] : '';
-            $callerInfo[] = sprintf('#%d %s%s%s() in %s:%s', $index, $class, $class ? '::' : '', $function, $file, $line);
-        }
-
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
 
@@ -196,6 +203,8 @@ class Update extends BaseManageUpdate
         }
 
         try {
+            wp_umbrella_debug_log("Plugin bulk update started for: " . implode(', ', (array)$plugins) . " (onlyAjax: " . ($onlyAjax ? 'true' : 'false') . ", tryAjax: " . ($tryAjax ? 'true' : 'false') . ")");
+
             include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
             require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
@@ -208,14 +217,17 @@ class Update extends BaseManageUpdate
             $oldVersions = [];
             foreach ($plugins as $plugin) {
                 $oldVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                wp_umbrella_debug_log("Plugin '{$plugin}' current version: " . ($oldVersions[$plugin] ?: 'unknown'));
             }
 
             if (!$onlyAjax) { // If not only ajax, we try to update by bulk_upgrade
+                wp_umbrella_debug_log("Plugin bulk update: running bulk_upgrade...");
                 $skin = new WP_Ajax_Upgrader_Skin();
                 $upgrader = new Plugin_Upgrader($skin);
                 $response = $upgrader->bulk_upgrade($plugins);
 
                 if (empty($response)) {
+                    wp_umbrella_debug_log("Plugin bulk update: bulk_upgrade returned empty response");
                     return [
                         'status' => 'error',
                         'code' => 'unknown_error',
@@ -228,6 +240,7 @@ class Update extends BaseManageUpdate
 
                     if (!$plugin_info || is_wp_error($plugin_info)) {
                         $return[$plugin_slug] = $this->getError($plugin_info);
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($return[$plugin_slug]));
                         continue;
                     }
 
@@ -236,6 +249,7 @@ class Update extends BaseManageUpdate
 
                     if (!$integrityCheck['success']) {
                         $return[$plugin_slug] = 'plugin_integrity_check_failed';
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' integrity check failed: " . ($integrityCheck['code'] ?? 'unknown'));
                         continue;
                     }
 
@@ -247,6 +261,7 @@ class Update extends BaseManageUpdate
 
                     // Only try ajax if the version is the same (not updated)
                     if ($tryAjax && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) { // Need to try ajax and the version is the same
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' version unchanged after bulk_upgrade ({$oldVersions[$plugin_slug]}), trying admin-ajax fallback...");
                         $result = $this->tryUpdateByAdminAjax($plugin_slug);
                         $return[$plugin_slug] = $result['code'];
 
@@ -256,31 +271,47 @@ class Update extends BaseManageUpdate
                         }
                     }
 
+                    // Always include version metadata so the worker can verify the update
+                    $return[$plugin_slug . '_old_version'] = $oldVersions[$plugin_slug];
+                    $return[$plugin_slug . '_new_version'] = $newVersions[$plugin_slug];
+
                     // Final check: if version still unchanged after all attempts, mark as error
                     if ($oldVersions[$plugin_slug] !== false && $newVersions[$plugin_slug] !== false && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) {
                         $return[$plugin_slug] = 'plugin_version_unchanged';
-                        $return[$plugin_slug . '_old_version'] = $oldVersions[$plugin_slug];
-                        $return[$plugin_slug . '_new_version'] = $newVersions[$plugin_slug];
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' version still unchanged after all attempts: {$oldVersions[$plugin_slug]}");
+                    } else {
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' successfully updated from " . ($oldVersions[$plugin_slug] ?: 'unknown') . " to " . ($newVersions[$plugin_slug] ?: 'unknown'));
                     }
                 }
             } else {
                 // No verification with old version because we only use ajax here
                 foreach ($plugins as $plugin) {
+                    wp_umbrella_debug_log("Plugin '{$plugin}' updating via admin-ajax only...");
                     $result = $this->tryUpdateByAdminAjax($plugin);
                     $return[$plugin] = $result['code'];
 
                     $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin);
                     if (!$integrityCheck['success']) {
                         $return[$plugin] = 'plugin_integrity_check_failed';
+                        wp_umbrella_debug_log("Plugin '{$plugin}' integrity check failed after admin-ajax update: " . ($integrityCheck['code'] ?? 'unknown'));
+                    } else {
+                        wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
                     }
+
+                    // Include version metadata so the worker can verify the update
+                    $newVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                    $return[$plugin . '_old_version'] = $oldVersions[$plugin] ?? null;
+                    $return[$plugin . '_new_version'] = $newVersion;
                 }
             }
 
             if (in_array('woocommerce/woocommerce.php', $plugins)) {
+                wp_umbrella_debug_log("Running WooCommerce database update");
                 wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
             }
 
             if (in_array('elementor/elementor.php', $plugins) || in_array('elementor-pro/elementor-pro.php', $plugins)) {
+                wp_umbrella_debug_log("Running Elementor database update");
                 wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
             }
 
@@ -292,8 +323,11 @@ class Update extends BaseManageUpdate
                 'data' => $return
             ];
 
+            wp_umbrella_debug_log("Plugin bulk update completed: " . wp_json_encode($return));
+
             return $finalResponse;
         } catch (\Exception $e) {
+            wp_umbrella_debug_log("Plugin bulk update exception: " . $e->getMessage());
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',
@@ -308,6 +342,8 @@ class Update extends BaseManageUpdate
      */
     public function tryUpdateByAdminAjax($plugin)
     {
+        wp_umbrella_debug_log("Plugin '{$plugin}' trying update via admin-ajax...");
+
         // Make post request.
         $response = $this->sendAdminRequest(
             $plugin
@@ -315,10 +351,12 @@ class Update extends BaseManageUpdate
 
         // If request not failed.
         if (!empty($response)) {
-            // Get response body.
-            return json_decode($response, true);
+            $decoded = json_decode($response, true);
+            wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax response: " . ($decoded['code'] ?? 'unknown'));
+            return $decoded;
         }
 
+        wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax request failed (empty response)");
         return [
             'status' => 'error',
             'code' => 'update_plugin_error',
@@ -361,6 +399,12 @@ class Update extends BaseManageUpdate
         if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
             // Get response body.
             return wp_remote_retrieve_body($response);
+        }
+
+        if (is_wp_error($response)) {
+            wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax HTTP error: " . $response->get_error_message());
+        } else {
+            wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax HTTP status: " . wp_remote_retrieve_response_code($response));
         }
 
         return false;

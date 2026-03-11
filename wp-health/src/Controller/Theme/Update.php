@@ -29,7 +29,9 @@ class Update extends AbstractController
                 ]);
             }
 
-            $data = $manageTheme->update($theme);
+            $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : false;
+
+            $data = $manageTheme->update($theme, ['require_backup' => $requireBackup]);
 
             if (isset($data['status']) && $data['status'] === 'error') {
                 return $this->returnResponse($data, 403);

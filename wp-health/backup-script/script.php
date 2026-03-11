@@ -25,7 +25,7 @@ try {
             }
         }
     }
-} catch (\Exception $e) {
+} catch (\Throwable $e) {
 }
 
 define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');
@@ -107,7 +107,7 @@ try {
             throw new Exception('Invalid JSON');
         }
     }
-} catch (\Exception $e) {
+} catch (\Throwable $e) {
     removeScript();
     die;
 }
@@ -582,7 +582,7 @@ try {
     ]);
     // $cleanup->handleDatabase();
     // $cleanup->handleEndProcess();
-} catch (\Exception $e) {
+} catch (\Throwable $e) {
     if (isset($socket)) {
         $socket->sendLog('[error] Unknown Exception Error: ' . $e->getMessage(), true);
         $socket->sendError(new UmbrellaException($e->getMessage(), 'unknown_error', true));

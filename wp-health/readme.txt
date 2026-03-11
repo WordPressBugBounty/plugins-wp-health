@@ -3,9 +3,9 @@
 Contributors: gmulti, truchot, wplio
 Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.21.0
+Stable tag: v2.22.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,13 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.22.0 (03-11-2026) =
+- New: Broken link checker on demand
+- Improved: remove old backup process
+- Improved: prevent plugin and theme update process on failure
+- Improved: add debug log on update process
+- Fixed: PHP warning on update process
 
 = 2.21.0 (02-05-2026) =
 - Improved: API connectivity

@@ -29,6 +29,7 @@ class Rollback
         $nonce = 'upgrade-plugin_' . $args['slug'];
         $url = 'update.php?action=upgrade-plugin&plugin=' . urlencode($args['plugin_file']);
         $plugin = $args['slug'];
+        $pluginFile = $args['plugin_file'];
         $version = $args['version'];
 
         if (!class_exists('Plugin_Upgrader')) {
@@ -41,7 +42,7 @@ class Rollback
         }
 
         @ob_start();
-        $upgrader = new PluginUpgrader(new RollbackSkin(compact('title', 'nonce', 'url', 'plugin', 'version')));
+        $upgrader = new PluginUpgrader(new RollbackSkin(compact('title', 'nonce', 'url', 'plugin', 'pluginFile', 'version')));
         $data = $upgrader->rollback($args['plugin_file']);
         @ob_end_clean();
 

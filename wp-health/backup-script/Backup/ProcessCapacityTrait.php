@@ -15,9 +15,30 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 			return true;
 		}
 
+		protected function isStagingDirectory($directoryName)
+		{
+			$patterns = [
+				'/^[a-z0-9]+-staging\.wpdns\.site$/i',       // Kinsta
+				'/^[a-z0-9]+-staging\.onrocket\.site$/i',    // Starter/OnRocket
+				'/^[a-z0-9]+-staging\.kinsta\.cloud$/i',     // Kinsta Cloud
+				'/^[a-z0-9]+-staging\.temp-dns\.com$/i',     // Starter alt
+			];
+
+			foreach ($patterns as $pattern) {
+				if (preg_match($pattern, $directoryName)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
 		protected function canProcessDirectory($directory)
 		{
 			if (!file_exists($directory)) {
+				return false;
+			}
+
+			if ($this->isStagingDirectory(basename($directory))) {
 				return false;
 			}
 

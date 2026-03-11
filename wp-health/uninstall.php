@@ -20,6 +20,12 @@ try {
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_log");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_task");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_backup");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_task_backup");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_collected_links");
+
+    // Broken Link Checker options
+    delete_option('wp_umbrella_broken_link_checker_enabled');
+    delete_option('wp_umbrella_blc_scan_interval');
 
     wp_clear_scheduled_hook('wp_umbrella_snapshot_data_run_queue');
 

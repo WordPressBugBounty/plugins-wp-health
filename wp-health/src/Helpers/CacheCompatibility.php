@@ -20,6 +20,7 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\LiteSpeed",
             "\WPUmbrella\Thirds\Cache\WPFastestCache",
             "\WPUmbrella\Thirds\Cache\WPSuperCache",
+            "\WPUmbrella\Thirds\Cache\StackCache",
         ]);
     }
 }

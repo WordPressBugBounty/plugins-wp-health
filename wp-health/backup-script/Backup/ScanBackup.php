@@ -43,6 +43,10 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
+            if ($this->isStagingDirectory(basename($directory))) {
+                return false;
+            }
+
             $directoriesExcluded = $this->context->getDirectoriesExcluded();
             $dirnameForFilepath = trim(str_replace($this->context->getBaseDirectory(), '', $directory));
 
@@ -271,7 +275,12 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     $this->context->getBaseDirectory(),
                     RecursiveDirectoryIterator::SKIP_DOTS | RecursiveDirectoryIterator::FOLLOW_SYMLINKS
                 );
-                $filterIterator = new ReadableRecursiveFilterIterator($dirIterator);
+                $filterIterator = new ReadableRecursiveFilterIterator(
+                    $dirIterator,
+                    [],
+                    $this->context->getBaseDirectory(),
+                    $this->context->getDirectoriesExcluded()
+                );
                 $iterator = new RecursiveIteratorIterator($filterIterator, RecursiveIteratorIterator::SELF_FIRST);
 
                 // Limit recursion depth to maximum 40 levels

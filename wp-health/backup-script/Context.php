@@ -31,6 +31,8 @@ if (!class_exists('UmbrellaContext', false)):
 
         const DEFAULT_DIRECTORY_EXCLUDED = [
             DIRECTORY_SEPARATOR . '.git',
+            DIRECTORY_SEPARATOR . '.opcache',
+            DIRECTORY_SEPARATOR . 'logs',
             DIRECTORY_SEPARATOR . 'cgi-bin',
             DIRECTORY_SEPARATOR . '.quarantine',
             DIRECTORY_SEPARATOR . '.duplicacy',
@@ -65,6 +67,8 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wflogs',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'webtoffee_iew_log',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'umbrella-upgrade-temp-backup',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'boost-cache' . DIRECTORY_SEPARATOR . 'cache',
+            DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'supercache',
             DIRECTORY_SEPARATOR . 'umb_checksum',
         ];
 

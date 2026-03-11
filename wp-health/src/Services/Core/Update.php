@@ -22,6 +22,8 @@ class Update extends BaseManageUpdate
 
     public function upgradeByCoreUpgrader()
     {
+        wp_umbrella_debug_log("Core update (Core_Upgrader) started");
+
         @ob_start();
 
         if (file_exists(ABSPATH . '/wp-admin/includes/update.php')) {
@@ -37,6 +39,7 @@ class Update extends BaseManageUpdate
             $updates = $core->updates[0];
             $updated = $core->updates[0];
             if (!isset($updated->response) || $updated->response == 'latest') {
+                wp_umbrella_debug_log("Core update: already at latest version");
                 return [
                     'status' => 'success',
                     'code' => 'success',
@@ -44,6 +47,7 @@ class Update extends BaseManageUpdate
             }
 
             if ($updated->response == 'development') {
+                wp_umbrella_debug_log("Core update: development version, needs manual upgrade");
                 return [
                     'status' => 'error',
                     'code' => 'need_upgrade_manually',
@@ -52,6 +56,7 @@ class Update extends BaseManageUpdate
 
             $current_update = $updated;
         } else {
+            wp_umbrella_debug_log("Core update: no update transient found");
             return [
                 'status' => 'error',
                 'code' => 'refresh_transient_failed',
@@ -65,6 +70,8 @@ class Update extends BaseManageUpdate
                 include_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
             }
 
+            wp_umbrella_debug_log("Core update: upgrading from {$wp_version} to {$current_update->current}");
+
             @ob_start();
             $core = new Core_Upgrader(new UpdaterSkin());
             $result = $core->upgrade($current_update);
@@ -74,6 +81,7 @@ class Update extends BaseManageUpdate
             wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
 
             if (is_wp_error($result)) {
+                wp_umbrella_debug_log("Core update error: " . $result->get_error_code() . ' - ' . $result->get_error_message());
                 return [
                     'error' => $this->getError($result),
                 ];
@@ -84,12 +92,14 @@ class Update extends BaseManageUpdate
                 ];
             }
 
+            wp_umbrella_debug_log("Core update (Core_Upgrader) completed successfully");
             return [
                 'status' => 'success',
                 'code' => 'success',
             ];
         }
 
+        wp_umbrella_debug_log("Core update: no current update available");
         return [
             'status' => 'error',
             'code' => 'unknown',
@@ -100,6 +110,8 @@ class Update extends BaseManageUpdate
     {
         try {
             global $wp_version, $wpdb;
+
+            wp_umbrella_debug_log("Core update (WP_Automatic_Updater) started from version {$wp_version}");
 
             include_once ABSPATH . 'wp-admin/includes/upgrade.php';
             include_once ABSPATH . 'wp-admin/includes/admin.php';
@@ -121,6 +133,7 @@ class Update extends BaseManageUpdate
             $skin = new Automatic_Upgrader_Skin();
 
             if (!$skin->request_filesystem_credentials(false, ABSPATH, false)) {
+                wp_umbrella_debug_log("Core update: filesystem credentials unavailable");
                 return [
                     'status' => 'error',
                     'code' => 'fs_unavailable',
@@ -129,6 +142,7 @@ class Update extends BaseManageUpdate
             }
 
             if (apply_filters('wp_umbrella_check_is_vcs_checkout', true) && $upgrader->is_vcs_checkout(ABSPATH)) {
+                wp_umbrella_debug_log("Core update: VCS checkout detected, aborting");
                 return [
                     'status' => 'error',
                     'code' => 'is_vcs_checkout',
@@ -159,12 +173,15 @@ class Update extends BaseManageUpdate
             }
 
             if (!$updateData) {
+                wp_umbrella_debug_log("Core update: no upgrade-type update available");
                 return [
                     'status' => 'error',
                     'code' => 'update_unavailable',
                     'message' => 'No WordPress core updates appear available.',
                 ];
             }
+
+            wp_umbrella_debug_log("Core update: target version {$updateData->current} (PHP >= {$updateData->php_version}, MySQL >= {$updateData->mysql_version})");
 
             // compatiblity PHP
             $php_compat = version_compare(phpversion(), $updateData->php_version, '>=');
@@ -175,6 +192,7 @@ class Update extends BaseManageUpdate
             }
 
             if (!$php_compat) {
+                wp_umbrella_debug_log("Core update: PHP version " . phpversion() . " incompatible with required {$updateData->php_version}");
                 return [
                     'status' => 'error',
                     'code' => 'php_incompatible',
@@ -183,6 +201,7 @@ class Update extends BaseManageUpdate
             }
 
             if (!$mysql_compat) {
+                wp_umbrella_debug_log("Core update: MySQL version incompatible with required {$updateData->mysql_version}");
                 return[
                     'status' => 'error',
                     'code' => 'mysql_incompatible',
@@ -210,6 +229,7 @@ class Update extends BaseManageUpdate
                 }
 
                 if ($skip) {
+                    wp_umbrella_debug_log("Core update: skipped due to previous failure (critical: " . (!empty($failure_data['critical']) ? 'true' : 'false') . ")");
                     return[
                         'status' => 'error',
                         'code' => 'previous_failure',
@@ -218,10 +238,12 @@ class Update extends BaseManageUpdate
                 }
             }
 
+            wp_umbrella_debug_log("Core update: running WP_Automatic_Updater...");
             $upgrader->run();
 
             // check populated var from hook
             if (empty($this->updateResults['core'])) {
+                wp_umbrella_debug_log("Core update: no results captured from automatic_updates_complete hook");
                 return [
                     'status' => 'error',
                     'code' => 'unknown_update',
@@ -243,6 +265,7 @@ class Update extends BaseManageUpdate
                     $error_msg .= ' Rollback: ' . $rollback_result->get_error_message();
                 }
 
+                wp_umbrella_debug_log("Core update error: {$error_code} - {$error_msg}");
                 return [
                     'status' => 'error',
                     'code' => $error_code,
@@ -253,12 +276,15 @@ class Update extends BaseManageUpdate
             wp_upgrade();
             wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
 
+            wp_umbrella_debug_log("Core update (WP_Automatic_Updater) completed successfully to version {$result}");
+
             return [
                 'status' => 'success',
                 'code' => 'success',
                 'data' => $result
             ];
         } catch (\Exception $e) {
+            wp_umbrella_debug_log("Core update exception: " . $e->getMessage());
             $data['message'] = $e->getMessage();
 
             return [

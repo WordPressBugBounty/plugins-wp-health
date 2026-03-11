@@ -7,7 +7,7 @@ abstract class Controllers
 {
     public static function getControllers()
     {
-        return [
+        $controllers = [
             '/v1/patchstack/license-activation' => [
                 'route' => '/patchstack/license-activation',
                 'methods' => [
@@ -290,6 +290,19 @@ abstract class Controllers
                     [
                         'method' => 'POST',
                         'class' => \WPUmbrella\Controller\Options\IssuesMonitoring::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/broken-link-checker' => [
+                'route' => '/broken-link-checker',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\BrokenLinkChecker::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
@@ -650,32 +663,6 @@ abstract class Controllers
                     ],
                 ]
             ],
-            '/v1/backups/prepare-batch-database' => [
-                'route' => '/backups/prepare-batch-database',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Backup\PrepareBatchDatabase::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ],
-                ]
-            ],
-            '/v1/backups/check-batch-database' => [
-                'route' => '/backups/check-batch-database',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Backup\CheckBatchDatabase::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN
-                        ]
-                    ],
-                ]
-            ],
             '/v1/backups/scan' => [
                 'route' => '/backups/scan',
                 'methods' => [
@@ -862,6 +849,47 @@ abstract class Controllers
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\License\GetProPluginLicenses::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+        ];
+
+        if (defined('WP_UMBRELLA_DEBUG') && WP_UMBRELLA_DEBUG) {
+            $controllers = array_merge($controllers, self::getDevControllers());
+        }
+
+        return $controllers;
+    }
+
+    private static function getDevControllers()
+    {
+        require_once WP_UMBRELLA_DIR . '/tests/Dev/TestThemeRollback.php';
+        require_once WP_UMBRELLA_DIR . '/tests/Dev/TestPluginRollback.php';
+
+        return [
+            '/v1/test-theme-rollback' => [
+                'route' => '/test-theme-rollback',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Tests\Dev\TestThemeRollback::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/test-plugin-rollback' => [
+                'route' => '/test-plugin-rollback',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Tests\Dev\TestPluginRollback::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
