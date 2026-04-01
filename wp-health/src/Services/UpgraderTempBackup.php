@@ -145,13 +145,36 @@ class UpgraderTempBackup
             $wp_filesystem->delete($dest, true);
         }
 
-        // copy to the temporary backup directory.
+        // Capture copy() failures during backup (file not copied = incomplete backup)
+        $copyFailures = [];
+        set_error_handler(function ($errno, $errstr) use (&$copyFailures) {
+            if (strpos($errstr, 'copy(') === 0) {
+                $copyFailures[] = $errstr;
+            }
+            return true;
+        }, E_WARNING);
+
         $result = copy_dir($src, $dest);
+
+        restore_error_handler();
 
         if (is_wp_error($result)) {
             return [
                 'code' => 'fs_temp_backup_move',
-                'success' => false
+                'success' => false,
+                'errors' => $copyFailures,
+            ];
+        }
+
+        if (!empty($copyFailures)) {
+            return [
+                'code' => 'fs_temp_backup_incomplete',
+                'success' => false,
+                'message' => sprintf(
+                    'Backup incomplete: %d file(s) could not be copied.',
+                    count($copyFailures)
+                ),
+                'errors' => array_slice($copyFailures, 0, 10),
             ];
         }
 
@@ -208,4 +231,5 @@ class UpgraderTempBackup
             'success' => true
         ];
     }
+
 }

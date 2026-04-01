@@ -45,11 +45,8 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 			$directoriesExcluded = $this->getContext()->getDirectoriesExcluded();
 			$dirnameForFilepath = trim(str_replace($this->getContext()->getBaseDirectory(), '', $directory));
 
-			// Check if the directory is in the excluded directories without in_array
-			foreach ($directoriesExcluded as $dir) {
-				if (strpos($dirnameForFilepath, $dir) !== false) {
-					return false;
-				}
+			if (UmbrellaDirectoryExclusion::isExcluded($dirnameForFilepath, $directoriesExcluded)) {
+				return false;
 			}
 
 			return true;

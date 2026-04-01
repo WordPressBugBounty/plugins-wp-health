@@ -1,6 +1,9 @@
 <?php
 namespace WPUmbrella\Services;
 
+use WPUmbrella\Services\Provider\Compatibility\DiviUpdater;
+use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
+
 class RequestSettings
 {
     protected $updateCallResponse;
@@ -116,6 +119,7 @@ class RequestSettings
         $this->preventOxygen();
         $this->simulateAdminEnvironment($data);
         $this->disableWordPressActions();
+        (new PremiumUpdateDetector())->restoreTransients();
 
         // Master should never get redirected by the worker, since it expects worker response.
         add_filter('wp_redirect', [$this, 'disableRedirect']);
@@ -153,8 +157,15 @@ class RequestSettings
         $context->setConstant('WP_ADMIN', true);
     }
 
+    protected $adminLoadedDone = false;
+
     public function adminLoaded()
     {
+        if ($this->adminLoadedDone) {
+            return;
+        }
+        $this->adminLoadedDone = true;
+
         try {
             $GLOBALS['hook_suffix'] = '';
             if (class_exists('WP_Screen')) {
@@ -170,7 +181,6 @@ class RequestSettings
         add_filter('pre_http_request', [$this, 'interceptCacheUpdateCall'], WP_UMBRELLA_MAX_PRIORITY_HOOK, 3);
         require_once wp_umbrella_get_service('WordPressContext')->getConstant('ABSPATH') . 'wp-admin/includes/admin.php';
 
-        // do_action('admin_init');
         global $wp_current_filter;
         $wp_current_filter[] = 'load-update-core.php';
 
@@ -187,6 +197,8 @@ class RequestSettings
         }
 
         array_pop($wp_current_filter);
+
+        (new PremiumUpdateDetector())->cacheTransients();
 
         set_current_screen();
         do_action('load-update-core.php');

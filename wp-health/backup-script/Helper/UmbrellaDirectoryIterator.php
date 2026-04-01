@@ -50,16 +50,7 @@ if (!class_exists('ReadableRecursiveFilterIterator', false)) {
 				return false;
 			}
 
-			foreach ($this->excludedDirectories as $dir) {
-				$cleanDir = DIRECTORY_SEPARATOR . ltrim($dir, DIRECTORY_SEPARATOR);
-				$cleanRelativePath = DIRECTORY_SEPARATOR . ltrim($relativePath, DIRECTORY_SEPARATOR);
-
-				if (strpos($cleanRelativePath, $cleanDir) === 0) {
-					return true;
-				}
-			}
-
-			return false;
+			return UmbrellaDirectoryExclusion::isExcluded($relativePath, $this->excludedDirectories);
 		}
 
 		public function hasChildren(): bool

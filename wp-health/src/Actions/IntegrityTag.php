@@ -20,6 +20,6 @@ class IntegrityTag implements ExecuteHooksFrontend
 
         $hash = md5((string) $projectId);
 
-        echo '<!-- wpu:' . esc_html($hash) . ' -->' . "\n";
+        echo '<div hidden data-wpu-integrity="' . esc_html($hash) . '"></div>' . "\n";
     }
 }

@@ -22,20 +22,15 @@ class UpdateMultiple extends AbstractController
         $managePlugin = wp_umbrella_get_service('ManagePlugin');
 
         $onlyAjax = isset($params['only_ajax']) ? $params['only_ajax'] : false;
-        $safeUpdate = isset($params['safe_update']) ? $params['safe_update'] : false;
         $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : false;
+        $backupDone = isset($params['backup_done']) ? (bool) $params['backup_done'] : false;
 
         try {
             $data = $managePlugin->bulkUpdate($plugins, [
                 'only_ajax' => $onlyAjax,
-                'safe_update' => $safeUpdate,
                 'require_backup' => $requireBackup,
+                'backup_done' => $backupDone,
             ]);
-
-            if (isset($data['status']) && $data['status'] === 'error') {
-                $this->returnResponse($data, 403);
-                return;
-            }
 
             return $this->returnResponse($data);
         } catch (\Exception $e) {

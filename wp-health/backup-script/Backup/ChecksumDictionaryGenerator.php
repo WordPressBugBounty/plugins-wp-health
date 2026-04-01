@@ -101,7 +101,10 @@ if (!class_exists('UmbrellaChecksumDictionaryGenerator', false)):
             $handle = @fopen($path, 'w+b');
 
             if ($handle === false) {
-                throw new \RuntimeException('Unable to create temporary file in ' . $dir);
+                throw new \UmbrellaException(
+                    sprintf('Unable to create temporary file in %s (dir_exists: %s)', $dir, is_dir($dir) ? 'yes' : 'no'),
+                    'cannot_create_temp_file'
+                );
             }
 
             $this->tempFilePath = $path;

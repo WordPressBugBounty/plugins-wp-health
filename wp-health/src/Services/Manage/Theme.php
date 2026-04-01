@@ -125,20 +125,27 @@ class Theme
             wp_umbrella_debug_log("Theme '{$theme}' enabling maintenance mode");
             $maintenanceMode->toggleMaintenanceMode(true);
 
-            wp_umbrella_debug_log("Theme '{$theme}' creating temp backup");
-            $backupResult = $this->generateSafeUpdateBackupTheme($theme);
+            // Skip backup if already done by /prepare-update endpoint (separate HTTP request)
+            $backupDone = isset($options['backup_done']) && $options['backup_done'];
 
-            $requireBackup = isset($options['require_backup']) && $options['require_backup'];
-            if ($requireBackup && !$backupResult['success']) {
-                wp_umbrella_debug_log("Theme '{$theme}' backup failed: " . ($backupResult['code'] ?? 'unknown'));
-                $maintenanceMode->toggleMaintenanceMode(false);
+            if ($backupDone) {
+                wp_umbrella_debug_log("Theme '{$theme}' backup already done by /prepare-update");
+            } else {
+                wp_umbrella_debug_log("Theme '{$theme}' creating temp backup");
+                $backupResult = $this->generateSafeUpdateBackupTheme($theme);
 
-                return [
-                    'status' => 'error',
-                    'code' => 'temp_backup_required_failed',
-                    'message' => sprintf('Temporary backup failed for theme %s: %s. Update aborted to ensure rollback safety.', $theme, $backupResult['code'] ?? 'unknown'),
-                    'data' => ''
-                ];
+                $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
+                if ($requireBackup && !$backupResult['success']) {
+                    wp_umbrella_debug_log("Theme '{$theme}' backup failed: " . ($backupResult['code'] ?? 'unknown'));
+                    $maintenanceMode->toggleMaintenanceMode(false);
+
+                    return [
+                        'status' => 'error',
+                        'code' => 'temp_backup_required_failed',
+                        'message' => sprintf('Temporary backup failed for theme %s: %s. Update aborted to ensure rollback safety.', $theme, $backupResult['code'] ?? 'unknown'),
+                        'data' => ''
+                    ];
+                }
             }
 
             // Register shutdown handler to restore theme if PHP crashes mid-update
@@ -146,7 +153,7 @@ class Theme
             $themeSlug = $theme;
             $themeRoot = get_theme_root($theme);
 
-            register_shutdown_function(function () use ($themeSlug, $themeRoot) {
+            register_shutdown_function(function () use ($themeSlug, $themeRoot, $oldVersion, $maintenanceMode) {
                 $error = error_get_last();
                 if ($error === null) {
                     return;
@@ -155,6 +162,9 @@ class Theme
                 if (!in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE], true)) {
                     return;
                 }
+
+                // Request a fresh time budget for the rollback operation
+                @set_time_limit(60);
 
                 $themeDir = $themeRoot . DIRECTORY_SEPARATOR . $themeSlug;
                 if (file_exists($themeDir) && is_dir($themeDir)) {
@@ -168,16 +178,13 @@ class Theme
                         'slug' => $themeSlug,
                     ]);
                     $success = isset($rollbackResult['success']) && $rollbackResult['success'];
-                    wp_umbrella_debug_log('Shutdown handler: rollback ' . ($success ? 'succeeded' : 'failed') . " for theme '{$themeSlug}'");
+                    wp_umbrella_debug_log('Shutdown handler: rollback ' . ($success ? 'succeeded' : 'failed') . " for theme '{$themeSlug}'" . ($success ? " (restored version: {$oldVersion})" : ''));
                 } catch (\Throwable $e) {
-                    // Best effort - the worker-side CheckThemeDirectoryExist remains the final safety net
+                    wp_umbrella_debug_log("Shutdown handler: exception during rollback for theme '{$themeSlug}': " . $e->getMessage());
                 }
 
                 // Cleanup maintenance mode to prevent site staying locked after crash
-                $maintenanceFile = ABSPATH . '.maintenance';
-                if (file_exists($maintenanceFile)) {
-                    @unlink($maintenanceFile);
-                }
+                $maintenanceMode->toggleMaintenanceMode(false);
             });
 
             @ob_start();
@@ -195,10 +202,30 @@ class Theme
             $result = $this->processUpgradeResult($theme, $response, $skin, $oldVersion);
 
             if ($result['status'] === 'error') {
-                wp_umbrella_debug_log("Theme '{$theme}' update failed: " . ($result['code'] ?? 'unknown') . " - " . ($result['message'] ?? ''));
-                $this->attemptRollbackIfMissing($theme);
+                wp_umbrella_debug_log("Theme '{$theme}' update failed: " . ($result['code'] ?? 'unknown') . ' - ' . ($result['message'] ?? ''));
+
+                // Update failed — always rollback to restore a safe state
+                $rollbackStatus = $this->performThemeRollback($theme, 'update failed with code: ' . ($result['code'] ?? 'unknown'));
+                $result['code'] = $rollbackStatus;
+                $result['rollback_performed'] = $rollbackStatus === 'rollback_performed';
+                $result['restored_version'] = $oldVersion;
             } else {
-                wp_umbrella_debug_log("Theme '{$theme}' successfully updated");
+                // Update succeeded — verify integrity (directory + style.css)
+                $rollbackStatus = $this->rollbackIfCorrupted($theme);
+
+                if ($rollbackStatus !== 'not_needed') {
+                    wp_umbrella_debug_log("Theme '{$theme}' update succeeded but integrity check failed");
+                    $result = [
+                        'status' => 'error',
+                        'code' => $rollbackStatus,
+                        'message' => 'Theme update succeeded but integrity check failed',
+                        'rollback_performed' => $rollbackStatus === 'rollback_performed',
+                        'restored_version' => $oldVersion,
+                        'data' => ''
+                    ];
+                } else {
+                    wp_umbrella_debug_log("Theme '{$theme}' successfully updated");
+                }
             }
 
             // Disable maintenance mode in all cases (success or error)
@@ -207,13 +234,15 @@ class Theme
             return $result;
         } catch (\Throwable $e) {
             wp_umbrella_debug_log("Theme '{$theme}' update exception: " . $e->getMessage());
-            $this->attemptRollbackIfMissing($theme);
+            $rollbackStatus = $this->performThemeRollback($theme, 'exception: ' . $e->getMessage());
             $maintenanceMode->toggleMaintenanceMode(false);
 
             return [
                 'status' => 'error',
-                'code' => 'unknown_error',
+                'code' => $rollbackStatus !== 'not_needed' ? $rollbackStatus : 'unknown_error',
                 'message' => $e->getMessage(),
+                'rollback_performed' => $rollbackStatus === 'rollback_performed',
+                'restored_version' => isset($oldVersion) ? $oldVersion : null,
                 'data' => ''
             ];
         }
@@ -329,7 +358,7 @@ class Theme
             ];
         }
 
-        wp_umbrella_debug_log("Theme '{$theme}' successfully updated from " . ($oldVersion ?: 'unknown') . " to " . ($newVersion ?: 'unknown'));
+        wp_umbrella_debug_log("Theme '{$theme}' successfully updated from " . ($oldVersion ?: 'unknown') . ' to ' . ($newVersion ?: 'unknown'));
         return [
             'status' => 'success',
             'code' => 'success',
@@ -338,23 +367,43 @@ class Theme
         ];
     }
 
-    private function attemptRollbackIfMissing($theme)
+    /**
+     * Check theme integrity and rollback from temp backup if corrupted.
+     *
+     * @param string $theme Theme slug
+     * @return string 'not_needed' | 'rollback_performed' | 'rollback_failed'
+     */
+    protected function rollbackIfCorrupted($theme)
     {
         $themeDir = get_theme_root($theme) . DIRECTORY_SEPARATOR . $theme;
-        if (file_exists($themeDir) && is_dir($themeDir)) {
-            return;
+
+        // Directory missing entirely
+        if (!file_exists($themeDir) || !is_dir($themeDir)) {
+            return $this->performThemeRollback($theme, 'directory missing');
         }
 
+        // style.css missing — required for every WordPress theme
+        if (!file_exists($themeDir . DIRECTORY_SEPARATOR . 'style.css')) {
+            return $this->performThemeRollback($theme, 'style.css missing');
+        }
+
+        return 'not_needed';
+    }
+
+    protected function performThemeRollback($theme, $reason)
+    {
         try {
-            wp_umbrella_debug_log("attemptRollbackIfMissing: theme '{$theme}' directory missing. Attempting rollback from backup.");
+            wp_umbrella_debug_log("rollbackIfCorrupted: theme '{$theme}' {$reason}. Attempting rollback.");
             $rollbackResult = wp_umbrella_get_service('UpgraderTempBackup')->rollbackBackupDir([
                 'dir' => 'themes',
                 'slug' => $theme,
             ]);
             $success = isset($rollbackResult['success']) && $rollbackResult['success'];
-            wp_umbrella_debug_log('attemptRollbackIfMissing: rollback ' . ($success ? 'succeeded' : 'failed') . " for theme '{$theme}'");
+            wp_umbrella_debug_log('rollbackIfCorrupted: rollback ' . ($success ? 'succeeded' : 'failed') . " for theme '{$theme}'");
+            return $success ? 'rollback_performed' : 'rollback_failed';
         } catch (\Throwable $e) {
-            // Best effort - the worker-side CheckThemeDirectoryExist remains the final safety net
+            wp_umbrella_debug_log("rollbackIfCorrupted: exception during rollback for theme '{$theme}': " . $e->getMessage());
+            return 'rollback_failed';
         }
     }
 

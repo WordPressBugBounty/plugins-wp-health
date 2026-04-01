@@ -50,24 +50,8 @@ if (!class_exists('UmbrellaScanBackup', false)):
             $directoriesExcluded = $this->context->getDirectoriesExcluded();
             $dirnameForFilepath = trim(str_replace($this->context->getBaseDirectory(), '', $directory));
 
-            // Check if the directory is in the excluded directories without in_array
-            foreach ($directoriesExcluded as $dir) {
-                // Check if the directory name matches exactly with the excluded directory
-                $cleanDir = DIRECTORY_SEPARATOR . ltrim($dir, DIRECTORY_SEPARATOR);
-                $cleanDirname = DIRECTORY_SEPARATOR . ltrim($dirnameForFilepath, DIRECTORY_SEPARATOR);
-
-                // Check with separator at start
-                if (strpos($cleanDirname, $cleanDir) === 0) {
-                    return false;
-                }
-
-                // Check without separator at start
-                $cleanDirNoSep = rtrim(ltrim($dir, DIRECTORY_SEPARATOR), DIRECTORY_SEPARATOR);
-                $cleanDirnameNoSep = rtrim(ltrim($dirnameForFilepath, DIRECTORY_SEPARATOR), DIRECTORY_SEPARATOR);
-
-                if (strpos($cleanDirnameNoSep, $cleanDirNoSep) === 0) {
-                    return false;
-                }
+            if (UmbrellaDirectoryExclusion::isExcluded($dirnameForFilepath, $directoriesExcluded)) {
+                return false;
             }
 
             return true;
@@ -270,6 +254,18 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return;
             }
 
+            if ($this->context->getScanDirectoryCursor() > 0) {
+                return $this->resumeScanDirectories($options);
+            }
+
+            return $this->firstRunScanDirectories($options);
+        }
+
+        /**
+         * First run: use RecursiveIteratorIterator for the initial full scan.
+         */
+        protected function firstRunScanDirectories($options)
+        {
             try {
                 $dirIterator = new RecursiveDirectoryIterator(
                     $this->context->getBaseDirectory(),
@@ -282,8 +278,6 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     $this->context->getDirectoriesExcluded()
                 );
                 $iterator = new RecursiveIteratorIterator($filterIterator, RecursiveIteratorIterator::SELF_FIRST);
-
-                // Limit recursion depth to maximum 40 levels
                 $iterator->setMaxDepth(40);
             } catch (Exception $e) {
                 throw new UmbrellaException('Could not open directory: ' . $this->context->getBaseDirectory(), 'directory_open_failed');
@@ -291,58 +285,42 @@ if (!class_exists('UmbrellaScanBackup', false)):
 
             global $startTimer, $totalFilesSent, $safeTimeLimit;
 
-            $startProcessing = false;
-
             $lineNumber = 0;
 
-            if ($this->context->getScanDirectoryCursor() === 0) {
-                $this->siteChecksumDirectoryGenerator->startDirectory();
+            $this->siteChecksumDirectoryGenerator->startDirectory();
 
-                // Add the root directory itself (not included in the iterator)
-                if ($options['write_checksum_integrity']) {
-                    $this->writeDirectoriesForChecksumIntegrity($this->context->getBaseDirectory(), $options);
-                } elseif ($options['write_size']) {
-                    $this->writeDirectoriesForSize($this->context->getBaseDirectory(), $options);
-                } else {
-                    $this->siteChecksumDirectoryGenerator->addDirectory($this->context->getBaseDirectory());
-                }
+            if ($options['write_checksum_integrity']) {
+                $this->writeDirectoriesForChecksumIntegrity($this->context->getBaseDirectory(), $options);
+            } elseif ($options['write_size']) {
+                $this->writeDirectoriesForSize($this->context->getBaseDirectory(), $options);
+            } else {
+                $this->siteChecksumDirectoryGenerator->addDirectory($this->context->getBaseDirectory());
             }
 
             foreach ($iterator as $fileInfo) {
                 $currentTime = time();
                 if (($currentTime - $startTimer) >= $safeTimeLimit) {
                     $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
-                    // In that case, it's important to set the line number to the scan directory cursor
-                    if ($lineNumber < $this->context->getScanDirectoryCursor()) {
-                        $lineNumber = $this->context->getScanDirectoryCursor();
-                    }
                     throw new UmbrellaPreventMaxExecutionTime($lineNumber);
-                    break; // Stop if we are close to the time limit
-                }
-
-                if (!$startProcessing && $lineNumber >= $this->context->getScanDirectoryCursor()) {
-                    $startProcessing = true; // Find the cursor, start processing from the next file
-                }
-
-                $lineNumber++;
-
-                if (!$startProcessing) {
-                    continue;
+                    break;
                 }
 
                 try {
-                    $filePath = $fileInfo->getPathname();
-
-                    $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
-
-                    $this->socket->sendScanDirectoryCursor($lineNumber);  // Directory cursor correspond to the line number in the directory dictionary during scan process
-
-                    // Protection against repeating patterns in the path
-                    if ($this->hasPathLoop($relativePath)) {
+                    if (!$this->isDir($fileInfo)) {
                         continue;
                     }
 
-                    if (!$this->isDir($fileInfo)) {
+                    $filePath = $fileInfo->getPathname();
+                    $relativePath = str_replace($this->context->getBaseDirectory(), '', $filePath);
+
+                    $lineNumber++;
+
+                    if ($lineNumber % 500 === 0 && function_exists('gc_collect_cycles')) {
+                        gc_collect_cycles();
+                    }
+                    $this->socket->sendScanDirectoryCursor($lineNumber);
+
+                    if ($this->hasPathLoop($relativePath)) {
                         continue;
                     }
 
@@ -359,6 +337,266 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     }
                 } catch (Exception $e) {
                     continue;
+                }
+            }
+
+            $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
+
+            $this->socket->sendTelemetryCounter('backup.scan.directories-checksum-finished', [
+                'request_id' => $this->context->getRequestId(),
+                'type' => 'directory',
+                'count' => $lineNumber
+            ]);
+
+            return true;
+        }
+
+        /**
+         * Resume scan using a manual directory stack.
+         *
+         * Instead of replaying the RecursiveIteratorIterator from entry 0
+         * (O(total_entries) on every resume — impossible for 1M+ entries),
+         * we reconstruct the scan frontier from the dictionary file:
+         *
+         * 1. Read the last written path from the dictionary
+         * 2. Walk its ancestor chain up to root
+         * 3. For each ancestor, find filesystem children NOT in the dictionary
+         * 4. Process only those unscanned subtrees via manual DFS
+         *
+         * Memory: O(depth × max_siblings_per_level) — typically < 1000 paths.
+         * Never re-iterates already-scanned subtrees.
+         */
+        /**
+         * Check if a directory should be entered during manual stack traversal.
+         * Replicates the guards from ReadableRecursiveFilterIterator:
+         * - Readable check
+         * - Broken symlink rejection
+         * - Circular symlink detection (self-referencing or already-visited realpath)
+         * - Excluded directory filtering
+         *
+         * @param string $fullPath Absolute path to the directory
+         * @param array &$visitedRealPaths Tracks visited symlink targets to prevent loops
+         * @return bool True if the directory should be entered
+         */
+        protected function shouldEnterDirectory($fullPath, &$visitedRealPaths)
+        {
+            if (!@is_readable($fullPath)) {
+                return false;
+            }
+
+            if (@is_link($fullPath)) {
+                // Reject broken symlinks
+                if (!file_exists($fullPath)) {
+                    return false;
+                }
+
+                $linkTarget = @readlink($fullPath);
+                // Reject self-referencing symlinks (. or ..)
+                if ($linkTarget === '.' || $linkTarget === '..') {
+                    return false;
+                }
+
+                // Reject circular symlinks (realpath already visited)
+                $realPath = @realpath($fullPath);
+                if ($realPath && in_array($realPath, $visitedRealPaths)) {
+                    return false;
+                }
+
+                if ($realPath) {
+                    $visitedRealPaths[] = $realPath;
+                }
+            }
+
+            // Reject excluded directories
+            $relativePath = str_replace($this->context->getBaseDirectory(), '', $fullPath);
+            $excludedDirectories = $this->context->getDirectoriesExcluded();
+            if (UmbrellaDirectoryExclusion::isExcluded($relativePath, $excludedDirectories)) {
+                return false;
+            }
+
+            return true;
+        }
+
+        protected function resumeScanDirectories($options)
+        {
+            global $startTimer, $safeTimeLimit;
+
+            $dictPath = $this->context->getDirectoryDictionaryPath();
+            $baseDir = rtrim($this->context->getBaseDirectory(), DIRECTORY_SEPARATOR);
+            $lineNumber = $this->context->getScanDirectoryCursor();
+
+            // Flush and close the dictionary writer before reading to avoid partial last line
+            $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
+
+            // Single-pass dictionary read: find last path + collect all parent→child relationships
+            // This halves the I/O vs reading the file twice (Steps 1+3 merged).
+            // Memory trade-off: stores all parent→child mappings (~2.5MB for 50K dirs).
+            $lastRelPath = '';
+            $allChildrenPerParent = [];
+            $handle = @fopen($dictPath, 'r');
+            if (!$handle) {
+                $this->socket->sendLog('[resumeScanDirectories] Cannot open dictionary, falling back to first run');
+                return $this->firstRunScanDirectories($options);
+            }
+
+            while (($line = fgets($handle)) !== false) {
+                $line = trim($line);
+                if (empty($line) || strpos($line, '<?php') !== false || strpos($line, '?>') !== false) {
+                    continue;
+                }
+                $semicolonPos = strpos($line, ';');
+                if ($semicolonPos !== false) {
+                    $line = substr($line, 0, $semicolonPos);
+                }
+                $lastRelPath = $line;
+                $parentRel = dirname($line);
+                $allChildrenPerParent[$parentRel][basename($line)] = true;
+            }
+            fclose($handle);
+
+            if (empty($lastRelPath)) {
+                $this->socket->sendLog('[resumeScanDirectories] Empty dictionary, falling back to first run');
+                return $this->firstRunScanDirectories($options);
+            }
+
+            // Build ancestor chain (deepest → root)
+            $ancestors = [];
+            $current = $lastRelPath;
+            while ($current !== '/' && $current !== '' && $current !== '.') {
+                $ancestors[] = $current;
+                $parent = dirname($current);
+                if ($parent === $current) {
+                    break;
+                }
+                $current = $parent;
+            }
+            if (empty($ancestors) || end($ancestors) !== '/') {
+                $ancestors[] = '/';
+            }
+            $ancestorSet = array_flip($ancestors);
+
+            // Filter to only ancestor parents (drop the rest to free memory)
+            $scannedChildrenPerAncestor = array_intersect_key($allChildrenPerParent, $ancestorSet);
+            unset($allChildrenPerParent);
+
+            $this->socket->sendLog('[resumeScanDirectories] Last path: ' . $lastRelPath . ', ancestor depth: ' . count($ancestors));
+
+            // Step 4: Build work stack — from root to deepest ancestor
+            // For each ancestor, find filesystem children NOT in the dictionary.
+            // Push root's children first (stack = LIFO → deepest processed first).
+            $workStack = [];
+            $visitedRealPaths = [];
+            $reversedAncestors = array_reverse($ancestors);
+
+            foreach ($reversedAncestors as $ancestorRelPath) {
+                $ancestorFullPath = $baseDir . ($ancestorRelPath === '/' ? '' : $ancestorRelPath);
+
+                if (!@is_dir($ancestorFullPath) || !@is_readable($ancestorFullPath)) {
+                    continue;
+                }
+
+                $scannedChildren = $scannedChildrenPerAncestor[$ancestorRelPath] ?? [];
+
+                $dirHandle = @opendir($ancestorFullPath);
+                if (!$dirHandle) {
+                    continue;
+                }
+
+                $unscannedChildren = [];
+                while (($entry = readdir($dirHandle)) !== false) {
+                    if ($entry === '.' || $entry === '..') {
+                        continue;
+                    }
+                    $childFullPath = $ancestorFullPath . DIRECTORY_SEPARATOR . $entry;
+                    if (!@is_dir($childFullPath) || isset($scannedChildren[$entry])) {
+                        continue;
+                    }
+                    if (!$this->shouldEnterDirectory($childFullPath, $visitedRealPaths)) {
+                        continue;
+                    }
+                    $unscannedChildren[] = $childFullPath;
+                }
+                closedir($dirHandle);
+
+                // Push in reverse sorted order for deterministic DFS
+                sort($unscannedChildren);
+                foreach (array_reverse($unscannedChildren) as $child) {
+                    $workStack[] = $child;
+                }
+            }
+
+            $this->socket->sendLog('[resumeScanDirectories] ' . count($workStack) . ' unscanned directories to explore');
+
+            // Reopen dictionary writer for appending new entries
+            $this->siteChecksumDirectoryGenerator->openSiteChecksumDirectoryHandler();
+
+            // Step 5: Process work stack depth-first
+            while (!empty($workStack)) {
+                $currentTime = time();
+                if (($currentTime - $startTimer) >= $safeTimeLimit) {
+                    $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
+                    throw new UmbrellaPreventMaxExecutionTime($lineNumber);
+                }
+
+                $currentDir = array_pop($workStack);
+                $relativePath = str_replace($baseDir, '', $currentDir);
+
+                // Depth limit (max 40 levels)
+                $depth = substr_count(trim($relativePath, DIRECTORY_SEPARATOR), DIRECTORY_SEPARATOR) + 1;
+                if ($depth > 40) {
+                    continue;
+                }
+
+                if ($this->hasPathLoop($relativePath)) {
+                    continue;
+                }
+
+                // shouldEnterDirectory already checked: readable, symlinks, excluded dirs.
+                // Only staging check remains (pure regex, no I/O).
+                if ($this->isStagingDirectory(basename($currentDir))) {
+                    continue;
+                }
+
+                $lineNumber++;
+                $this->socket->sendScanDirectoryCursor($lineNumber);
+
+                if ($lineNumber % 500 === 0 && function_exists('gc_collect_cycles')) {
+                    gc_collect_cycles();
+                }
+
+                if ($options['write_checksum_integrity']) {
+                    $this->writeDirectoriesForChecksumIntegrity($currentDir, $options);
+                } elseif ($options['write_size']) {
+                    $this->writeDirectoriesForSize($currentDir, $options);
+                } else {
+                    $this->siteChecksumDirectoryGenerator->addDirectory($currentDir);
+                }
+
+                // Explore children — add subdirectories to stack for DFS
+                $dirHandle = @opendir($currentDir);
+                if (!$dirHandle) {
+                    continue;
+                }
+
+                $children = [];
+                while (($entry = readdir($dirHandle)) !== false) {
+                    if ($entry === '.' || $entry === '..') {
+                        continue;
+                    }
+                    $childPath = $currentDir . DIRECTORY_SEPARATOR . $entry;
+                    if (!@is_dir($childPath)) {
+                        continue;
+                    }
+                    if (!$this->shouldEnterDirectory($childPath, $visitedRealPaths)) {
+                        continue;
+                    }
+                    $children[] = $childPath;
+                }
+                closedir($dirHandle);
+
+                sort($children);
+                foreach (array_reverse($children) as $child) {
+                    $workStack[] = $child;
                 }
             }
 

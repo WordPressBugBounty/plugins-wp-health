@@ -424,19 +424,25 @@ if (!class_exists('UmbrellaContext', false)):
         protected function createDirectoryIfNotExists($directory)
         {
             if (!file_exists($directory)) {
-                mkdir($directory);
+                if (!@mkdir($directory, 0755, true)) {
+                    $error = error_get_last();
+                    throw new \UmbrellaException(
+                        sprintf('Cannot create directory: %s (php error: %s)', $directory, $error['message'] ?? 'none'),
+                        'cannot_create_directory'
+                    );
+                }
             }
 
             // Write .htaccess with deny all
             $htaccess = $directory . DIRECTORY_SEPARATOR . '.htaccess';
             if (!file_exists($htaccess)) {
-                file_put_contents($htaccess, 'deny from all');
+                @file_put_contents($htaccess, 'deny from all');
             }
 
             // Write index.php
             $index = $directory . DIRECTORY_SEPARATOR . 'index.php';
             if (!file_exists($index)) {
-                file_put_contents($index, '<?php // Silence is golden');
+                @file_put_contents($index, '<?php // Silence is golden');
             }
         }
 

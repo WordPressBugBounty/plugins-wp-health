@@ -2,6 +2,7 @@
 namespace WPUmbrella\Services\Provider;
 
 use WPUmbrella\Core\Schemas\PluginSchema;
+use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
 use Morphism\Morphism;
 
 class Plugins
@@ -71,6 +72,9 @@ class Plugins
         ]);
 
         $current = wp_umbrella_get_service('WordPressContext')->getTransient('update_plugins');
+
+        // Enrich with premium plugin updates (Divi, Elementor Pro, YITH, etc.)
+        $current = (new PremiumUpdateDetector())->enrich($current, 'plugins');
 
         if (!empty($current->response)) {
             $pluginsByKey = array_column($data, 'key');

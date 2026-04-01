@@ -12,6 +12,7 @@ class Data extends AbstractController
     public function executeGet($params)
     {
         try {
+            wp_umbrella_get_service('RequestSettings')->adminLoaded();
             $plugins = wp_umbrella_get_service('PluginsProvider')->getPlugins();
 
             return $this->returnResponse($plugins);

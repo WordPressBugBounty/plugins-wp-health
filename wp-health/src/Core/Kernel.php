@@ -13,6 +13,7 @@ use WPUmbrella\Core\UmbrellaRequest;
 use WPUmbrella\Services\HostResolver;
 use WPUmbrella\Helpers\Host;
 use WPUmbrella\Helpers\Controller as ControllerHelper;
+use WPUmbrella\Services\Provider\Compatibility\DiviUpdater;
 
 abstract class Kernel
 {
@@ -51,7 +52,6 @@ abstract class Kernel
     public static function handleHooksPlugin()
     {
         require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendErrors.php';
-        require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendLinks.php';
 
         switch (current_filter()) {
             case 'plugins_loaded':
@@ -403,6 +403,12 @@ abstract class Kernel
             }
         }
 
+        if (self::$universalProcess['load'] || self::$apiLoad) {
+            add_action('after_setup_theme', function () {
+                (new DiviUpdater())->register();
+            }, PHP_INT_MAX);
+        }
+
         // Universal load by PHP
         if (self::$universalProcess['load']) {
             self::hookThirdParties();
@@ -430,6 +436,9 @@ abstract class Kernel
 
         if (self::$apiLoad) {
             self::hookThirdParties();
+
+            wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
+
             self::pluginLoadedWithSetupAdmin();
         }
 
@@ -492,7 +501,7 @@ abstract class Kernel
         // Make sure required values are set.
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         $plugin = isset($_POST['plugin']) ? $_POST['plugin'] : '';
-        $safeUpdate = isset($_POST['safe_update']) ? $_POST['safe_update'] : false;
+        $requireBackup = isset($_POST['require_backup']) ? (bool) $_POST['require_backup'] : false;
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdmin();
@@ -532,7 +541,7 @@ abstract class Kernel
             $result = wp_umbrella_get_service('ManagePlugin')->bulkUpdate($plugins, [
                 'try_ajax' => false,
                 'only_ajax' => false,
-                'safe_update' => $safeUpdate
+                'require_backup' => $requireBackup
             ]);
 
             wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();

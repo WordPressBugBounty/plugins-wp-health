@@ -29,13 +29,13 @@ class Update extends AbstractController
                 ]);
             }
 
-            $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : false;
+            $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : true;
+            $backupDone = isset($params['backup_done']) ? (bool) $params['backup_done'] : false;
 
-            $data = $manageTheme->update($theme, ['require_backup' => $requireBackup]);
-
-            if (isset($data['status']) && $data['status'] === 'error') {
-                return $this->returnResponse($data, 403);
-            }
+            $data = $manageTheme->update($theme, [
+                'require_backup' => $requireBackup,
+                'backup_done' => $backupDone,
+            ]);
 
             return $this->returnResponse($data);
         } catch (\Exception $e) {

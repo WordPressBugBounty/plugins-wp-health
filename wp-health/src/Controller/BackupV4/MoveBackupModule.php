@@ -127,7 +127,7 @@ class MoveBackupModule extends AbstractController
             );
 
             if (defined('WPE_APIKEY')) {
-                $str = "define('WPE_APIKEY', '" . WPE_APIKEY . "');";
+                $str = "if(!defined('WPE_APIKEY')){define('WPE_APIKEY', '" . WPE_APIKEY . "');}";
                 $fileContent = str_replace('//[[REPLACE]]//', $str, $fileContent);
             }
 

@@ -203,7 +203,7 @@ class Update extends BaseManageUpdate
         }
 
         try {
-            wp_umbrella_debug_log("Plugin bulk update started for: " . implode(', ', (array)$plugins) . " (onlyAjax: " . ($onlyAjax ? 'true' : 'false') . ", tryAjax: " . ($tryAjax ? 'true' : 'false') . ")");
+            wp_umbrella_debug_log('Plugin bulk update started for: ' . implode(', ', (array)$plugins) . ' (onlyAjax: ' . ($onlyAjax ? 'true' : 'false') . ', tryAjax: ' . ($tryAjax ? 'true' : 'false') . ')');
 
             include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -221,13 +221,13 @@ class Update extends BaseManageUpdate
             }
 
             if (!$onlyAjax) { // If not only ajax, we try to update by bulk_upgrade
-                wp_umbrella_debug_log("Plugin bulk update: running bulk_upgrade...");
+                wp_umbrella_debug_log('Plugin bulk update: running bulk_upgrade...');
                 $skin = new WP_Ajax_Upgrader_Skin();
                 $upgrader = new Plugin_Upgrader($skin);
                 $response = $upgrader->bulk_upgrade($plugins);
 
                 if (empty($response)) {
-                    wp_umbrella_debug_log("Plugin bulk update: bulk_upgrade returned empty response");
+                    wp_umbrella_debug_log('Plugin bulk update: bulk_upgrade returned empty response');
                     return [
                         'status' => 'error',
                         'code' => 'unknown_error',
@@ -239,17 +239,22 @@ class Update extends BaseManageUpdate
                     $return[$plugin_slug] = 'success';
 
                     if (!$plugin_info || is_wp_error($plugin_info)) {
-                        $return[$plugin_slug] = $this->getError($plugin_info);
-                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($return[$plugin_slug]));
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($this->getError($plugin_info)));
+
+                        // Update failed — always rollback to restore a safe state
+                        $slug = dirname($plugin_slug);
+                        $rollbackStatus = $this->performRollback($slug, 'update failed');
+                        $return[$plugin_slug] = $rollbackStatus;
                         continue;
                     }
 
-                    // Verify plugin integrity after update
-                    $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin_slug);
+                    // Verify plugin integrity after update (directory, main file, readme.txt)
+                    $slug = dirname($plugin_slug);
+                    $mainFile = basename($plugin_slug);
+                    $rollbackStatus = $this->rollbackIfCorrupted($slug, $mainFile);
 
-                    if (!$integrityCheck['success']) {
-                        $return[$plugin_slug] = 'plugin_integrity_check_failed';
-                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' integrity check failed: " . ($integrityCheck['code'] ?? 'unknown'));
+                    if ($rollbackStatus !== 'not_needed') {
+                        $return[$plugin_slug] = $rollbackStatus;
                         continue;
                     }
 
@@ -280,7 +285,7 @@ class Update extends BaseManageUpdate
                         $return[$plugin_slug] = 'plugin_version_unchanged';
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' version still unchanged after all attempts: {$oldVersions[$plugin_slug]}");
                     } else {
-                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' successfully updated from " . ($oldVersions[$plugin_slug] ?: 'unknown') . " to " . ($newVersions[$plugin_slug] ?: 'unknown'));
+                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' successfully updated from " . ($oldVersions[$plugin_slug] ?: 'unknown') . ' to ' . ($newVersions[$plugin_slug] ?: 'unknown'));
                     }
                 }
             } else {
@@ -290,12 +295,22 @@ class Update extends BaseManageUpdate
                     $result = $this->tryUpdateByAdminAjax($plugin);
                     $return[$plugin] = $result['code'];
 
-                    $integrityCheck = wp_umbrella_get_service('ManagePlugin')->directoryPluginExist($plugin);
-                    if (!$integrityCheck['success']) {
-                        $return[$plugin] = 'plugin_integrity_check_failed';
-                        wp_umbrella_debug_log("Plugin '{$plugin}' integrity check failed after admin-ajax update: " . ($integrityCheck['code'] ?? 'unknown'));
+                    if ($return[$plugin] !== 'success') {
+                        // Update failed — always rollback
+                        $slug = dirname($plugin);
+                        $rollbackStatus = $this->performRollback($slug, 'admin-ajax update failed');
+                        $return[$plugin] = $rollbackStatus;
                     } else {
-                        wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
+                        // Update succeeded — verify integrity
+                        $slug = dirname($plugin);
+                        $mainFile = basename($plugin);
+                        $rollbackStatus = $this->rollbackIfCorrupted($slug, $mainFile);
+
+                        if ($rollbackStatus !== 'not_needed') {
+                            $return[$plugin] = $rollbackStatus;
+                        } else {
+                            wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
+                        }
                     }
 
                     // Include version metadata so the worker can verify the update
@@ -305,35 +320,98 @@ class Update extends BaseManageUpdate
                 }
             }
 
-            if (in_array('woocommerce/woocommerce.php', $plugins)) {
-                wp_umbrella_debug_log("Running WooCommerce database update");
-                wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
+            // Determine overall status from individual plugin results
+            $hasError = false;
+            foreach ($return as $key => $value) {
+                // Skip version metadata keys (plugin_old_version, plugin_new_version)
+                if (strpos($key, '_old_version') !== false || strpos($key, '_new_version') !== false) {
+                    continue;
+                }
+                if ($value !== 'success') {
+                    $hasError = true;
+                    break;
+                }
             }
 
-            if (in_array('elementor/elementor.php', $plugins) || in_array('elementor-pro/elementor-pro.php', $plugins)) {
-                wp_umbrella_debug_log("Running Elementor database update");
-                wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
+            // Only run third-party database upgrades if the update succeeded
+            if (!$hasError) {
+                if (in_array('woocommerce/woocommerce.php', $plugins)) {
+                    wp_umbrella_debug_log('Running WooCommerce database update');
+                    wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
+                }
+
+                if (in_array('elementor/elementor.php', $plugins) || in_array('elementor-pro/elementor-pro.php', $plugins)) {
+                    wp_umbrella_debug_log('Running Elementor database update');
+                    wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
+                }
             }
 
             wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
 
             $finalResponse = [
-                'status' => 'success',
-                'code' => 'success',
+                'status' => $hasError ? 'error' : 'success',
+                'code' => $hasError ? 'plugin_update_failed' : 'success',
                 'data' => $return
             ];
 
-            wp_umbrella_debug_log("Plugin bulk update completed: " . wp_json_encode($return));
+            wp_umbrella_debug_log('Plugin bulk update completed: ' . wp_json_encode($return));
 
             return $finalResponse;
         } catch (\Exception $e) {
-            wp_umbrella_debug_log("Plugin bulk update exception: " . $e->getMessage());
+            wp_umbrella_debug_log('Plugin bulk update exception: ' . $e->getMessage());
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',
                 'message' => $e->getMessage(),
                 'data' => ''
             ];
+        }
+    }
+
+    /**
+     * Rollback a plugin from temp backup if its directory is missing, main file is absent,
+     * or file count dropped significantly compared to the backup.
+     *
+     * @param string $pluginSlug Plugin directory name (e.g. "elementor")
+     * @param string|null $mainFile Main plugin file basename (e.g. "elementor.php")
+     * @return string 'not_needed' | 'rollback_performed' | 'rollback_failed'
+     */
+    public function rollbackIfCorrupted($pluginSlug, $mainFile = null)
+    {
+        $pluginDir = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $pluginSlug;
+
+        // Directory missing entirely
+        if (!file_exists($pluginDir) || !is_dir($pluginDir)) {
+            return $this->performRollback($pluginSlug, 'directory missing');
+        }
+
+        // Main plugin file missing
+        if ($mainFile !== null && !file_exists($pluginDir . DIRECTORY_SEPARATOR . $mainFile)) {
+            return $this->performRollback($pluginSlug, "main plugin file missing ({$mainFile})");
+        }
+
+        // readme.txt missing — every WordPress.org plugin must have one
+        if (!file_exists($pluginDir . DIRECTORY_SEPARATOR . 'readme.txt')) {
+            return $this->performRollback($pluginSlug, 'readme.txt missing');
+        }
+
+        return 'not_needed';
+    }
+
+    protected function performRollback($pluginSlug, $reason)
+    {
+        try {
+            wp_umbrella_debug_log("rollbackIfCorrupted: plugin '{$pluginSlug}' {$reason}. Attempting rollback.");
+            $result = wp_umbrella_get_service('UpgraderTempBackup')->rollbackBackupDir([
+                'dir' => 'plugins',
+                'slug' => $pluginSlug,
+            ]);
+            $success = isset($result['success']) && $result['success'];
+            wp_umbrella_debug_log('rollbackIfCorrupted: rollback ' . ($success ? 'succeeded' : 'failed') . " for '{$pluginSlug}'");
+            return $success ? 'rollback_performed' : 'rollback_failed';
+        } catch (\Throwable $e) {
+            wp_umbrella_debug_log("rollbackIfCorrupted: exception during rollback for '{$pluginSlug}': " . $e->getMessage());
+            return 'rollback_failed';
         }
     }
 

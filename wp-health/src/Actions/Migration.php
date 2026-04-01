@@ -105,12 +105,6 @@ class Migration implements ExecuteHooks
         }
 
         if ($currentVersion && version_compare($currentVersion, '2.22.0', '<')) {
-            \WPUmbrella\Services\BrokenLinkChecker\LinkTableManager::createTable();
-
-            if (get_option('wp_umbrella_broken_link_checker_enabled') === false) {
-                update_option('wp_umbrella_broken_link_checker_enabled', false);
-            }
-
             wp_clear_scheduled_hook('wp_umbrella_task_backup_run_queue');
             wp_clear_scheduled_hook('wp_umbrella_clean_table_run_queue');
             wp_clear_scheduled_hook('wp_umbrella_error_check_run_queue');
@@ -123,6 +117,15 @@ class Migration implements ExecuteHooks
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_task");
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_backup");
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_task_backup");
+        }
+
+        if ($currentVersion && version_compare($currentVersion, '2.22.1', '<')) {
+            \WPUmbrella\Services\BrokenLinkChecker\RedirectTableManager::createTable();
+
+            global $wpdb;
+            $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_collected_links");
+            delete_option('wp_umbrella_broken_link_checker_enabled');
+            delete_option('wp_umbrella_blc_scan_interval');
         }
     }
 }

@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Services\Provider;
 
+use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
 use Morphism\Morphism;
 
 class Themes
@@ -231,6 +232,9 @@ class Themes
         } else {
             $current = get_option('update_themes');
         }
+
+        // Enrich with premium theme updates (Divi, etc.)
+        $current = (new PremiumUpdateDetector())->enrich($current, 'themes');
 
         $siteTransient = get_site_transient('update_themes');
 

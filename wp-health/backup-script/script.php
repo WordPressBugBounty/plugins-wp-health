@@ -246,7 +246,7 @@ $cleanup = new UmbrellaCleanup([
 if (!function_exists('clearStatCacheUmbrella')) {
     function clearStatCacheUmbrella($path = null)
     {
-        if (PHP_VERSION_ID < 50300 || $path === null) {
+        if ($path === null) {
             clearstatcache();
             return;
         }
@@ -572,28 +572,26 @@ try {
     if (isset($socket)) {
         $socket->sendLog('[error] : ' . $e->getMessage(), true);
         $socket->sendError($e);
+        $socket->sendTelemetryCounter('backup.error', [
+            'request_id' => $context->getRequestId(),
+            'name' => 'error',
+            'message' => $e->getMessage(),
+            'origin' => 'plugin'
+        ]);
     }
-
-    $this->sendTelemetryCounter('backup.error', [
-        'request_id' => $context->getRequestId(),
-        'name' => 'error',
-        'message' => $e->getMessage(),
-        'origin' => 'plugin'
-    ]);
     // $cleanup->handleDatabase();
     // $cleanup->handleEndProcess();
 } catch (\Throwable $e) {
     if (isset($socket)) {
         $socket->sendLog('[error] Unknown Exception Error: ' . $e->getMessage(), true);
         $socket->sendError(new UmbrellaException($e->getMessage(), 'unknown_error', true));
+        $socket->sendTelemetryCounter('backup.error', [
+            'request_id' => $context->getRequestId(),
+            'name' => 'unknown_error',
+            'message' => $e->getMessage(),
+            'origin' => 'plugin'
+        ]);
     }
-
-    $this->sendTelemetryCounter('backup.error', [
-        'request_id' => $context->getRequestId(),
-        'name' => 'unknown_error',
-        'message' => $e->getMessage(),
-        'origin' => 'plugin'
-    ]);
     // $cleanup->handleDatabase();
     // $cleanup->handleEndProcess();
 } finally {

@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.22.0
+Stable tag: v2.22.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 

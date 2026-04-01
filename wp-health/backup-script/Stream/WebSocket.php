@@ -98,36 +98,28 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function connect()
         {
+            $context = stream_context_create([
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,
+                ],
+                'socket' => [
+                    'bindto' => '0.0.0.0:0', // force IPv4
+                ],
+            ]);
+
             if (function_exists('stream_socket_client')) {
-                $this->connection = @stream_socket_client($this->transport . '://' . $this->host . ':' . $this->port, $errno, $errstr, $this->timeout, STREAM_CLIENT_CONNECT);
+                $this->connection = @stream_socket_client(
+                    $this->transport . '://' . $this->host . ':' . $this->port,
+                    $errno,
+                    $errstr,
+                    $this->timeout,
+                    STREAM_CLIENT_CONNECT,
+                    $context
+                );
             } else {
                 $this->connection = @fsockopen($this->host, $this->port, $errno, $errstr, $this->timeout);
-            }
-
-            if (!$this->connection) {
-                $context = stream_context_create([
-                    'ssl' => [
-                        'verify_peer' => false,
-                        'verify_peer_name' => false,
-                        'allow_self_signed' => true,
-                    ],
-                    'socket' => [
-                        'bindto' => '0.0.0.0:0', // force IPv4
-                    ],
-                ]);
-
-                if (function_exists('stream_socket_client')) {
-                    $this->connection = @stream_socket_client(
-                        $this->transport . '://' . $this->host . ':' . $this->port,
-                        $errno,
-                        $errstr,
-                        $this->timeout,
-                        STREAM_CLIENT_CONNECT,
-                        $context
-                    );
-                } else {
-                    $this->connection = @fsockopen($this->host, $this->port, $errno, $errstr, $this->timeout);
-                }
             }
 
             if (!$this->connection) {

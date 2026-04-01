@@ -297,14 +297,94 @@ abstract class Controllers
                     ],
                 ]
             ],
-            '/v1/broken-link-checker' => [
-                'route' => '/broken-link-checker',
+            '/v1/sitemap-url' => [
+                'route' => '/sitemap-url',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\GetSitemapUrl::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/recent-posts' => [
+                'route' => '/recent-posts',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\GetRecentPosts::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/resolve-urls' => [
+                'route' => '/resolve-urls',
                 'methods' => [
                     [
                         'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Options\BrokenLinkChecker::class,
+                        'class' => \WPUmbrella\Controller\Options\ResolveUrls::class,
                         'options' => [
-                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/redirects' => [
+                'route' => '/redirects',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\GetRedirects::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\GetRedirects::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/redirects/sync' => [
+                'route' => '/redirects/sync',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\SyncRedirects::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\SyncRedirects::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/redirects/clean' => [
+                'route' => '/redirects/clean',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\CleanRedirects::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\CleanRedirects::class,
+                        'options' => [
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
                         ]
                     ],
@@ -329,6 +409,27 @@ abstract class Controllers
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Plugin\DataSingle::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/prepare-update' => [
+                'route' => '/prepare-update',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\PrepareUpdate::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\PrepareUpdate::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
