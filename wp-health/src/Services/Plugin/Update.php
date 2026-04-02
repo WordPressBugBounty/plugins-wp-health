@@ -197,6 +197,7 @@ class Update extends BaseManageUpdate
     {
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
+        $requireBackup = isset($options['require_backup']) && $options['require_backup']; // Only safe updates should auto-rollback
 
         if ($onlyAjax) { // If only ajax, we don't try to update by admin-ajax.php
             $tryAjax = false;
@@ -241,21 +242,31 @@ class Update extends BaseManageUpdate
                     if (!$plugin_info || is_wp_error($plugin_info)) {
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($this->getError($plugin_info)));
 
-                        // Update failed — always rollback to restore a safe state
-                        $slug = dirname($plugin_slug);
-                        $rollbackStatus = $this->performRollback($slug, 'update failed');
-                        $return[$plugin_slug] = $rollbackStatus;
+                        if ($requireBackup) {
+                            // Safe update — rollback to restore a safe state
+                            $slug = dirname($plugin_slug);
+                            $rollback = $this->performRollback($slug, 'update failed');
+                            $return[$plugin_slug] = $rollback['status'];
+                            $return[$plugin_slug . '_rollback_reason'] = $rollback['reason'];
+                        } else {
+                            // Quick update — no auto-rollback
+                            $return[$plugin_slug] = 'update_failed';
+                            wp_umbrella_debug_log("Plugin '{$plugin_slug}' quick update failed, skipping rollback");
+                        }
                         continue;
                     }
 
-                    // Verify plugin integrity after update (directory, main file, readme.txt)
-                    $slug = dirname($plugin_slug);
-                    $mainFile = basename($plugin_slug);
-                    $rollbackStatus = $this->rollbackIfCorrupted($slug, $mainFile);
+                    if ($requireBackup) {
+                        // Safe update — verify plugin integrity after update (directory, main file, readme.txt)
+                        $slug = dirname($plugin_slug);
+                        $mainFile = basename($plugin_slug);
+                        $rollback = $this->rollbackIfCorrupted($slug, $mainFile);
 
-                    if ($rollbackStatus !== 'not_needed') {
-                        $return[$plugin_slug] = $rollbackStatus;
-                        continue;
+                        if ($rollback['status'] !== 'not_needed') {
+                            $return[$plugin_slug] = $rollback['status'];
+                            $return[$plugin_slug . '_rollback_reason'] = $rollback['reason'];
+                            continue;
+                        }
                     }
 
                     // We'll need to get the new version of the plugin
@@ -296,21 +307,30 @@ class Update extends BaseManageUpdate
                     $return[$plugin] = $result['code'];
 
                     if ($return[$plugin] !== 'success') {
-                        // Update failed — always rollback
-                        $slug = dirname($plugin);
-                        $rollbackStatus = $this->performRollback($slug, 'admin-ajax update failed');
-                        $return[$plugin] = $rollbackStatus;
-                    } else {
-                        // Update succeeded — verify integrity
+                        if ($requireBackup) {
+                            // Safe update — rollback
+                            $slug = dirname($plugin);
+                            $rollback = $this->performRollback($slug, 'admin-ajax update failed');
+                            $return[$plugin] = $rollback['status'];
+                            $return[$plugin . '_rollback_reason'] = $rollback['reason'];
+                        } else {
+                            // Quick update — no auto-rollback
+                            wp_umbrella_debug_log("Plugin '{$plugin}' quick update (admin-ajax) failed, skipping rollback");
+                        }
+                    } else if ($requireBackup) {
+                        // Safe update — verify integrity
                         $slug = dirname($plugin);
                         $mainFile = basename($plugin);
-                        $rollbackStatus = $this->rollbackIfCorrupted($slug, $mainFile);
+                        $rollback = $this->rollbackIfCorrupted($slug, $mainFile);
 
-                        if ($rollbackStatus !== 'not_needed') {
-                            $return[$plugin] = $rollbackStatus;
+                        if ($rollback['status'] !== 'not_needed') {
+                            $return[$plugin] = $rollback['status'];
+                            $return[$plugin . '_rollback_reason'] = $rollback['reason'];
                         } else {
                             wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
                         }
+                    } else {
+                        wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
                     }
 
                     // Include version metadata so the worker can verify the update
@@ -374,7 +394,7 @@ class Update extends BaseManageUpdate
      *
      * @param string $pluginSlug Plugin directory name (e.g. "elementor")
      * @param string|null $mainFile Main plugin file basename (e.g. "elementor.php")
-     * @return string 'not_needed' | 'rollback_performed' | 'rollback_failed'
+     * @return array ['status' => 'not_needed'|'rollback_performed'|'rollback_failed', 'reason' => string]
      */
     public function rollbackIfCorrupted($pluginSlug, $mainFile = null)
     {
@@ -390,12 +410,7 @@ class Update extends BaseManageUpdate
             return $this->performRollback($pluginSlug, "main plugin file missing ({$mainFile})");
         }
 
-        // readme.txt missing — every WordPress.org plugin must have one
-        if (!file_exists($pluginDir . DIRECTORY_SEPARATOR . 'readme.txt')) {
-            return $this->performRollback($pluginSlug, 'readme.txt missing');
-        }
-
-        return 'not_needed';
+        return ['status' => 'not_needed', 'reason' => null];
     }
 
     protected function performRollback($pluginSlug, $reason)
@@ -408,10 +423,16 @@ class Update extends BaseManageUpdate
             ]);
             $success = isset($result['success']) && $result['success'];
             wp_umbrella_debug_log('rollbackIfCorrupted: rollback ' . ($success ? 'succeeded' : 'failed') . " for '{$pluginSlug}'");
-            return $success ? 'rollback_performed' : 'rollback_failed';
+            return [
+                'status' => $success ? 'rollback_performed' : 'rollback_failed',
+                'reason' => $reason,
+            ];
         } catch (\Throwable $e) {
             wp_umbrella_debug_log("rollbackIfCorrupted: exception during rollback for '{$pluginSlug}': " . $e->getMessage());
-            return 'rollback_failed';
+            return [
+                'status' => 'rollback_failed',
+                'reason' => $reason,
+            ];
         }
     }
 

@@ -96,12 +96,18 @@ class RedirectRouter implements ExecuteHooks
         global $wpdb;
         $tableName = RedirectTableManager::getTableName();
 
-        // Suppress errors if the table doesn't exist yet
-        $wpdb->suppress_errors(true);
+        $tableExists = $wpdb->get_var(
+            $wpdb->prepare("SHOW TABLES LIKE %s", $tableName)
+        );
+
+        if ($tableExists !== $tableName) {
+            $this->redirectsCache = [];
+            return $this->redirectsCache;
+        }
+
         $results = $wpdb->get_results(
             "SELECT source_pattern, destination_url, redirect_type, match_type FROM {$tableName}"
         );
-        $wpdb->suppress_errors(false);
 
         $this->redirectsCache = $results ?: [];
 

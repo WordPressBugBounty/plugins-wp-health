@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.22.1
+Stable tag: v2.22.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,19 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.22.2 (04-02-2026) =
+- Fixed: auto rollback on failed update
+- Fixed: PHP error with W3 Total Cache
+
+= 2.22.1 (03-31-2026) =
+- Improved: broken link checker crawling for better reliability
+- Improved: backup scan performance for large sites
+- Improved: redirect router performance
+- Improved: support page redesign with data counts
+- Fixed: plugin rollback on partial corruption after failed upgrade
+- Fixed: PHP 8.2+ compatibility in checksum generator
+- Fixed: WP Engine API key redefinition warning
 
 = 2.22.0 (03-11-2026) =
 - New: Broken link checker on demand

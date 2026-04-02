@@ -284,29 +284,40 @@ class ManagePlugin
         } catch (\Throwable $e) {
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate exception for '{$plugin}': " . $e->getMessage());
 
-            // Attempt rollback via PluginUpdate (single source of truth for rollback logic)
-            $rollbackStatus = wp_umbrella_get_service('PluginUpdate')->rollbackIfCorrupted($pluginSlug);
+            $requireBackup = isset($options['require_backup']) && $options['require_backup'];
+
+            if ($requireBackup) {
+                // Safe update — attempt rollback via PluginUpdate
+                $rollback = wp_umbrella_get_service('PluginUpdate')->rollbackIfCorrupted($pluginSlug);
+            } else {
+                // Quick update — no auto-rollback
+                $rollback = ['status' => 'not_needed', 'reason' => null];
+                wp_umbrella_debug_log("ManagePlugin::bulkUpdate quick update exception, skipping rollback for '{$pluginSlug}'");
+            }
+
             $maintenanceMode->toggleMaintenanceMode(false);
 
             @ob_end_clean();
 
-            if ($rollbackStatus === 'rollback_performed') {
+            if ($rollback['status'] === 'rollback_performed') {
                 return [
                     'status' => 'error',
                     'code' => 'rollback_performed',
                     'message' => $e->getMessage(),
                     'rollback_performed' => true,
+                    'rollback_reason' => $rollback['reason'],
                     'restored_version' => isset($oldVersion) ? $oldVersion : null,
                     'data' => ''
                 ];
             }
 
-            if ($rollbackStatus === 'rollback_failed') {
+            if ($rollback['status'] === 'rollback_failed') {
                 return [
                     'status' => 'error',
                     'code' => 'rollback_failed',
                     'message' => $e->getMessage(),
                     'rollback_performed' => false,
+                    'rollback_reason' => $rollback['reason'],
                     'data' => ''
                 ];
             }

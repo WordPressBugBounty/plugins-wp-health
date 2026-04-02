@@ -201,31 +201,42 @@ class Theme
 
             $result = $this->processUpgradeResult($theme, $response, $skin, $oldVersion);
 
+            $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
+
             if ($result['status'] === 'error') {
                 wp_umbrella_debug_log("Theme '{$theme}' update failed: " . ($result['code'] ?? 'unknown') . ' - ' . ($result['message'] ?? ''));
 
-                // Update failed — always rollback to restore a safe state
-                $rollbackStatus = $this->performThemeRollback($theme, 'update failed with code: ' . ($result['code'] ?? 'unknown'));
-                $result['code'] = $rollbackStatus;
-                $result['rollback_performed'] = $rollbackStatus === 'rollback_performed';
-                $result['restored_version'] = $oldVersion;
-            } else {
-                // Update succeeded — verify integrity (directory + style.css)
-                $rollbackStatus = $this->rollbackIfCorrupted($theme);
+                if ($requireBackup) {
+                    // Safe update — rollback to restore a safe state
+                    $rollback = $this->performThemeRollback($theme, 'update failed with code: ' . ($result['code'] ?? 'unknown'));
+                    $result['code'] = $rollback['status'];
+                    $result['rollback_performed'] = $rollback['status'] === 'rollback_performed';
+                    $result['rollback_reason'] = $rollback['reason'];
+                    $result['restored_version'] = $oldVersion;
+                } else {
+                    // Quick update — no auto-rollback
+                    wp_umbrella_debug_log("Theme '{$theme}' quick update failed, skipping rollback");
+                }
+            } else if ($requireBackup) {
+                // Safe update — verify integrity (directory + style.css)
+                $rollback = $this->rollbackIfCorrupted($theme);
 
-                if ($rollbackStatus !== 'not_needed') {
+                if ($rollback['status'] !== 'not_needed') {
                     wp_umbrella_debug_log("Theme '{$theme}' update succeeded but integrity check failed");
                     $result = [
                         'status' => 'error',
-                        'code' => $rollbackStatus,
+                        'code' => $rollback['status'],
                         'message' => 'Theme update succeeded but integrity check failed',
-                        'rollback_performed' => $rollbackStatus === 'rollback_performed',
+                        'rollback_performed' => $rollback['status'] === 'rollback_performed',
+                        'rollback_reason' => $rollback['reason'],
                         'restored_version' => $oldVersion,
                         'data' => ''
                     ];
                 } else {
                     wp_umbrella_debug_log("Theme '{$theme}' successfully updated");
                 }
+            } else {
+                wp_umbrella_debug_log("Theme '{$theme}' successfully updated");
             }
 
             // Disable maintenance mode in all cases (success or error)
@@ -234,14 +245,24 @@ class Theme
             return $result;
         } catch (\Throwable $e) {
             wp_umbrella_debug_log("Theme '{$theme}' update exception: " . $e->getMessage());
-            $rollbackStatus = $this->performThemeRollback($theme, 'exception: ' . $e->getMessage());
+
+            $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
+
+            if ($requireBackup) {
+                $rollback = $this->performThemeRollback($theme, 'exception: ' . $e->getMessage());
+            } else {
+                $rollback = ['status' => 'not_needed', 'reason' => null];
+                wp_umbrella_debug_log("Theme '{$theme}' quick update exception, skipping rollback");
+            }
+
             $maintenanceMode->toggleMaintenanceMode(false);
 
             return [
                 'status' => 'error',
-                'code' => $rollbackStatus !== 'not_needed' ? $rollbackStatus : 'unknown_error',
+                'code' => $rollback['status'] !== 'not_needed' ? $rollback['status'] : 'unknown_error',
                 'message' => $e->getMessage(),
-                'rollback_performed' => $rollbackStatus === 'rollback_performed',
+                'rollback_performed' => $rollback['status'] === 'rollback_performed',
+                'rollback_reason' => $rollback['reason'],
                 'restored_version' => isset($oldVersion) ? $oldVersion : null,
                 'data' => ''
             ];
@@ -371,7 +392,7 @@ class Theme
      * Check theme integrity and rollback from temp backup if corrupted.
      *
      * @param string $theme Theme slug
-     * @return string 'not_needed' | 'rollback_performed' | 'rollback_failed'
+     * @return array ['status' => 'not_needed'|'rollback_performed'|'rollback_failed', 'reason' => string|null]
      */
     protected function rollbackIfCorrupted($theme)
     {
@@ -387,7 +408,7 @@ class Theme
             return $this->performThemeRollback($theme, 'style.css missing');
         }
 
-        return 'not_needed';
+        return ['status' => 'not_needed', 'reason' => null];
     }
 
     protected function performThemeRollback($theme, $reason)
@@ -400,10 +421,16 @@ class Theme
             ]);
             $success = isset($rollbackResult['success']) && $rollbackResult['success'];
             wp_umbrella_debug_log('rollbackIfCorrupted: rollback ' . ($success ? 'succeeded' : 'failed') . " for theme '{$theme}'");
-            return $success ? 'rollback_performed' : 'rollback_failed';
+            return [
+                'status' => $success ? 'rollback_performed' : 'rollback_failed',
+                'reason' => $reason,
+            ];
         } catch (\Throwable $e) {
             wp_umbrella_debug_log("rollbackIfCorrupted: exception during rollback for theme '{$theme}': " . $e->getMessage());
-            return 'rollback_failed';
+            return [
+                'status' => 'rollback_failed',
+                'reason' => $reason,
+            ];
         }
     }
 
