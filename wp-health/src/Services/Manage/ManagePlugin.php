@@ -108,6 +108,20 @@ class ManagePlugin
             ];
         }
 
+        // Lock per-plugin to prevent concurrent update attempts on the same plugin
+        $pluginSlug = dirname($plugin);
+        $lockKey = 'wp_umbrella_update_lock_' . $pluginSlug;
+        if (get_transient($lockKey)) {
+            wp_umbrella_debug_log("ManagePlugin::update lock active for '{$pluginSlug}', returning update_in_progress");
+            return [
+                'status' => 'in_progress',
+                'code' => 'update_in_progress',
+                'message' => sprintf('An update is already in progress for plugin %s', $pluginSlug),
+                'data' => ''
+            ];
+        }
+        set_transient($lockKey, true, 300); // 5 minutes TTL — auto-expires if process dies
+
         // As a precaution, we advise you to move the plugin in all cases, as plugins are sometimes deleted.
         wp_umbrella_debug_log("ManagePlugin::update creating temp backup for '{$plugin}'");
         $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
@@ -118,6 +132,7 @@ class ManagePlugin
 
         if (!$result['success'] && $requireBackup) {
             wp_umbrella_debug_log("ManagePlugin::update backup failed for '{$plugin}': " . ($result['code'] ?? 'unknown'));
+            delete_transient($lockKey);
             return [
                 'code' => 'temp_backup_required_failed',
                 'message' => sprintf('Temporary backup failed for plugin %s: %s. Update aborted to ensure rollback safety.', $plugin, $result['code'] ?? 'unknown'),
@@ -131,6 +146,7 @@ class ManagePlugin
 
         if ($data['status'] === 'error' && $tryAjax) {
             wp_umbrella_debug_log("ManagePlugin::update plugin '{$plugin}' failed: " . ($data['code'] ?? 'unknown'));
+            delete_transient($lockKey);
             return $data;
         }
 
@@ -141,6 +157,8 @@ class ManagePlugin
         }
 
         wp_umbrella_debug_log("ManagePlugin::update plugin '{$plugin}' completed successfully");
+
+        delete_transient($lockKey);
 
         return [
             'status' => 'success',
@@ -174,94 +192,62 @@ class ManagePlugin
 
         $pluginSlug = dirname($plugin);
 
+        // Lock per-plugin to prevent concurrent update attempts on the same plugin
+        $lockKey = 'wp_umbrella_update_lock_' . $pluginSlug;
+        $skipLock = isset($options['skip_lock']) && $options['skip_lock'];
+        if (!$skipLock && get_transient($lockKey)) {
+            wp_umbrella_debug_log("ManagePlugin::bulkUpdate lock active for '{$pluginSlug}', returning update_in_progress");
+            return [
+                'status' => 'in_progress',
+                'code' => 'update_in_progress',
+                'message' => sprintf('An update is already in progress for plugin %s', $pluginSlug),
+                'data' => ''
+            ];
+        }
+        if (!$skipLock) {
+            set_transient($lockKey, true, 300); // 5 minutes TTL — auto-expires if process dies
+        }
+
         $maintenanceMode = wp_umbrella_get_service('MaintenanceMode');
+        $stateManager = wp_umbrella_get_service('UpdateStateManager');
+        $trace = wp_umbrella_get_service('RequestTrace');
 
         try {
+            $trace->addTrace('bulk_update_started', ['plugin' => $plugin, 'require_backup' => !empty($options['require_backup'])]);
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate started for '{$plugin}' (require_backup: " . (!empty($options['require_backup']) ? 'true' : 'false') . ')');
 
             // Enable smart maintenance mode before backup (blocks visitors, allows WP Umbrella requests)
             wp_umbrella_debug_log('ManagePlugin::bulkUpdate enabling maintenance mode');
             $maintenanceMode->toggleMaintenanceMode(true);
+            $trace->addTrace('maintenance_mode_enabled');
 
-            // Skip backup if already done by /prepare-update endpoint (separate HTTP request)
-            $backupDone = isset($options['backup_done']) && $options['backup_done'];
-
-            if ($backupDone) {
-                wp_umbrella_debug_log("ManagePlugin::bulkUpdate backup already done by /prepare-update for '{$pluginSlug}'");
-            } else {
-                // As a precaution, we advise you to move the plugin in all cases, as plugins are sometimes deleted.
-                wp_umbrella_debug_log("ManagePlugin::bulkUpdate creating temp backup for '{$pluginSlug}'");
-                $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
-                    'slug' => $pluginSlug,
-                    'src' => WP_PLUGIN_DIR,
-                    'dir' => 'plugins'
-                ]);
-                wp_umbrella_debug_log('ManagePlugin::bulkUpdate temp backup result: ' . ($result['success'] ? 'success' : ($result['code'] ?? 'failed')));
-
-                $requireBackup = isset($options['require_backup']) && $options['require_backup'];
-
-                if (!$result['success'] && $requireBackup) {
-                    wp_umbrella_debug_log("ManagePlugin::bulkUpdate backup failed for '{$pluginSlug}': " . ($result['code'] ?? 'unknown'));
-                    $maintenanceMode->toggleMaintenanceMode(false);
-
-                    return [
-                        'status' => 'error',
-                        'code' => 'temp_backup_required_failed',
-                        'message' => sprintf('Temporary backup failed for plugin %s: %s. Update aborted to ensure rollback safety.', $pluginSlug, $result['code'] ?? 'unknown'),
-                        'data' => ''
-                    ];
-                }
-            }
+            // Backup is handled by:
+            // 1. The worker's PrepareUpdateBackup handler via /prepare-update (separate HTTP request, umbrella >= 2.22.1)
+            // 2. WordPress core's own move_to_temp_backup_dir (WP 6.3+, atomic rename)
+            // We no longer create an inline backup here to avoid redundant disk I/O
+            // that can cause timeouts on resource-constrained hosting.
 
             // Track the old version for rollback status reporting
             $oldVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
 
-            // Register shutdown handler to restore plugin if PHP crashes mid-update
-            // Same pattern as WordPress core WP_Upgrader::run() (shutdown actions are immune to PHP timeouts)
-            register_shutdown_function(function () use ($pluginSlug, $plugin, $maintenanceMode, $oldVersion) {
-                $error = error_get_last();
-                if ($error === null) {
-                    return;
-                }
+            // Mark update as started — the worker reads this state before deciding on rollback
+            $stateManager->setState($pluginSlug, $stateManager::STATUS_UPDATING, [
+                'plugin' => $plugin,
+                'old_version' => $oldVersion,
+            ]);
+            $trace->addTrace('state_set_updating', ['old_version' => $oldVersion]);
 
-                if (!in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE], true)) {
-                    return;
-                }
-
-                // Request a fresh time budget for the rollback operation
-                @set_time_limit(60);
-
-                // Check if plugin directory is missing or corrupted (main file absent)
-                $pluginDir = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $pluginSlug;
-                $mainFileExists = file_exists(WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $plugin);
-                if (file_exists($pluginDir) && is_dir($pluginDir) && $mainFileExists) {
-                    return;
-                }
-
-                $reason = !file_exists($pluginDir) ? 'directory missing' : 'main plugin file missing (partial corruption)';
-
-                try {
-                    wp_umbrella_debug_log("Shutdown handler: fatal error detected, plugin '{$pluginSlug}' {$reason}. Attempting rollback. Error: {$error['message']}");
-                    $rollbackResult = wp_umbrella_get_service('UpgraderTempBackup')->rollbackBackupDir([
-                        'dir' => 'plugins',
-                        'slug' => $pluginSlug,
-                    ]);
-                    $success = isset($rollbackResult['success']) && $rollbackResult['success'];
-                    wp_umbrella_debug_log('Shutdown handler: rollback ' . ($success ? 'succeeded' : 'failed') . " for plugin '{$pluginSlug}'" . ($success ? " (restored version: {$oldVersion})" : ''));
-                } catch (\Throwable $e) {
-                    wp_umbrella_debug_log("Shutdown handler: exception during rollback for plugin '{$pluginSlug}': " . $e->getMessage());
-                }
-
-                // Cleanup maintenance mode to prevent site staying locked after crash
-                $maintenanceMode->toggleMaintenanceMode(false);
-            });
+            // Hook into WP core's install_package result to detect rollback scheduling
+            $this->registerWpCoreRollbackDetection($pluginSlug, $stateManager);
 
             $pluginUpdate = wp_umbrella_get_service('PluginUpdate');
 
             $pluginUpdate->ithemesCompatibility();
 
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate calling PluginUpdate::bulkUpdate for '{$plugin}'");
+            $trace->addTrace('bulk_upgrade_started');
             $data = $pluginUpdate->bulkUpdate([$plugin], $options);
+            $trace->addTrace('bulk_upgrade_done', ['status' => $data['status'] ?? 'unknown']);
 
             $pluginUpdate->ithemesCompatibility();
 
@@ -272,17 +258,71 @@ class ManagePlugin
             } elseif ($isActive || $plugin === 'wp-health/wp-health.php') {
                 wp_umbrella_get_service('PluginActivate')->activate($plugin);
             }
+            $trace->addTrace('activation_state_restored', ['is_active' => $isActive]);
 
             // Disable maintenance mode after update completes
             $maintenanceMode->toggleMaintenanceMode(false);
+            $trace->addTrace('maintenance_mode_disabled');
+
+            // Mark final state based on update result
+            $hasError = isset($data['status']) && $data['status'] === 'error';
+            if ($hasError) {
+                $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_FAILED, [
+                    'error_code' => $data['code'] ?? 'unknown',
+                ]);
+                $trace->addTrace('state_set_failed', ['error_code' => $data['code'] ?? 'unknown']);
+            } else {
+                $newVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_COMPLETED, [
+                    'new_version' => $newVersion,
+                ]);
+                $trace->addTrace('state_set_completed', ['new_version' => $newVersion]);
+            }
 
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate completed for '{$plugin}': " . ($data['status'] ?? 'unknown'));
 
             @ob_end_clean();
 
+            if (!$skipLock) {
+                delete_transient($lockKey);
+            }
+
             return $data;
         } catch (\Throwable $e) {
+            if (!$skipLock) {
+                delete_transient($lockKey);
+            }
+            $trace->addTrace('exception', ['message' => $e->getMessage()]);
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate exception for '{$plugin}': " . $e->getMessage());
+
+            // Check if the update actually succeeded despite the exception
+            // (e.g. WooCommerce reactivation crashes after a successful upgrade)
+            $currentVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+            $versionActuallyChanged = isset($oldVersion) && !empty($currentVersion) && $currentVersion !== $oldVersion;
+
+            if ($versionActuallyChanged) {
+                $trace->addTrace('exception_but_version_changed', ['from' => $oldVersion, 'to' => $currentVersion]);
+                wp_umbrella_debug_log("ManagePlugin::bulkUpdate exception for '{$plugin}' but version changed ({$oldVersion} → {$currentVersion}), treating as success");
+
+                $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_COMPLETED, [
+                    'new_version' => $currentVersion,
+                    'exception' => $e->getMessage(),
+                ]);
+
+                $maintenanceMode->toggleMaintenanceMode(false);
+
+                @ob_end_clean();
+
+                return [
+                    'status' => 'success',
+                    'code' => 'success',
+                    'data' => [
+                        $plugin => 'success',
+                        $plugin . '_old_version' => $oldVersion,
+                        $plugin . '_new_version' => $currentVersion,
+                    ],
+                ];
+            }
 
             $requireBackup = isset($options['require_backup']) && $options['require_backup'];
 
@@ -294,6 +334,13 @@ class ManagePlugin
                 $rollback = ['status' => 'not_needed', 'reason' => null];
                 wp_umbrella_debug_log("ManagePlugin::bulkUpdate quick update exception, skipping rollback for '{$pluginSlug}'");
             }
+
+            // Mark state based on rollback outcome
+            $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_FAILED, [
+                'error_code' => 'exception',
+                'error_message' => $e->getMessage(),
+                'rollback_status' => $rollback['status'],
+            ]);
 
             $maintenanceMode->toggleMaintenanceMode(false);
 
@@ -329,6 +376,54 @@ class ManagePlugin
                 'data' => ''
             ];
         }
+    }
+
+    /**
+     * Register hooks to detect WP core's own rollback mechanism.
+     *
+     * - `upgrader_install_package_result`: fires after install_package() — if the result is
+     *   a WP_Error with a temp_backup, WP core will schedule a rollback on shutdown.
+     * - `shutdown` at priority 50: fires AFTER WP core's restore (priority 10) but BEFORE
+     *   WP core's delete (priority 100) — allows us to check if the rollback succeeded.
+     */
+    protected function registerWpCoreRollbackDetection($pluginSlug, $stateManager)
+    {
+        // Detect when WP core schedules a rollback (install_package failed with temp_backup)
+        add_filter('upgrader_install_package_result', function ($result, $hookExtra) use ($pluginSlug, $stateManager) {
+            if (!is_wp_error($result)) {
+                return $result;
+            }
+
+            if (empty($hookExtra['temp_backup'])) {
+                return $result;
+            }
+
+            $backupSlug = isset($hookExtra['temp_backup']['slug']) ? $hookExtra['temp_backup']['slug'] : null;
+            if ($backupSlug !== $pluginSlug) {
+                return $result;
+            }
+
+            wp_umbrella_debug_log("ManagePlugin: WP core rollback scheduled for '{$pluginSlug}'");
+            $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_WP_CORE_ROLLBACK_SCHEDULED);
+
+            // After WP core's restore_temp_backup (shutdown priority 10), check the result
+            add_action('shutdown', function () use ($pluginSlug, $stateManager) {
+                $pluginDir = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $pluginSlug;
+                $wpCoreBackupDir = WP_CONTENT_DIR . '/upgrade-temp-backup/plugins/' . $pluginSlug;
+
+                if (is_dir($pluginDir) && !is_dir($wpCoreBackupDir)) {
+                    // Plugin directory restored and backup consumed → WP core rollback succeeded
+                    wp_umbrella_debug_log("ManagePlugin: WP core rollback succeeded for '{$pluginSlug}'");
+                    $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_WP_CORE_ROLLBACK_DONE);
+                } else {
+                    // Plugin still missing or backup still present → WP core rollback failed
+                    wp_umbrella_debug_log("ManagePlugin: WP core rollback failed for '{$pluginSlug}' (plugin_dir: " . (is_dir($pluginDir) ? 'exists' : 'missing') . ', wp_backup: ' . (is_dir($wpCoreBackupDir) ? 'exists' : 'missing') . ')');
+                    $stateManager->updateStatus($pluginSlug, $stateManager::STATUS_WP_CORE_ROLLBACK_FAILED);
+                }
+            }, 50);
+
+            return $result;
+        }, 999, 2);
     }
 
     /**

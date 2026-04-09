@@ -17,7 +17,10 @@ class Update extends AbstractController
 
         $manageTheme = \wp_umbrella_get_service('ManageTheme');
 
+        $trace = \wp_umbrella_get_service('RequestTrace');
+
         try {
+            $trace->addTrace('third_party_check_started');
             wp_umbrella_get_service('ThemesProvider')->checkDiviTheme();
 
             if (class_exists('\YOOtheme\Theme\Wordpress\ThemeLoader', false) || is_dir(get_theme_root() . '/yootheme')) {
@@ -28,6 +31,7 @@ class Update extends AbstractController
                     'stability' => 'stable'
                 ]);
             }
+            $trace->addTrace('third_party_check_done');
 
             $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : true;
             $backupDone = isset($params['backup_done']) ? (bool) $params['backup_done'] : false;
@@ -39,6 +43,7 @@ class Update extends AbstractController
 
             return $this->returnResponse($data);
         } catch (\Exception $e) {
+            $trace->addTrace('controller_exception', ['message' => $e->getMessage()]);
             return $this->returnResponse([
                 'code' => 'unknown_error',
                 'messsage' => $e->getMessage()

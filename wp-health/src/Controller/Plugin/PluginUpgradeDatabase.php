@@ -19,17 +19,24 @@ class PluginUpgradeDatabase extends AbstractController
 
         define('WP_UMBRELLA_PROCESS_FROM_UMBRELLA', true);
 
+        $trace = wp_umbrella_get_service('RequestTrace');
+
         try {
+            $trace->addTrace('upgrade_database_started', ['plugin' => $slugPlugin]);
+
             switch($slugPlugin) {
                 case 'woocommerce/woocommerce.php':
                     wp_umbrella_get_service('WooCommerceDatabase')->updateDatabase();
+                    $trace->addTrace('woocommerce_database_upgraded');
                     break;
                 case 'elementor/elementor.php':
                 case 'elementor-pro/elementor-pro.php':
                     wp_umbrella_get_service('ElementorDatabase')->updateDatabase();
+                    $trace->addTrace('elementor_database_upgraded');
                     break;
                 default:
                     do_action('wp_umbrella_plugin_upgrade_database', $slugPlugin);
+                    $trace->addTrace('generic_database_upgraded');
                     break;
             }
 
@@ -37,6 +44,7 @@ class PluginUpgradeDatabase extends AbstractController
                 'code' => 'success',
             ]);
         } catch (\Exception $e) {
+            $trace->addTrace('upgrade_database_exception', ['message' => $e->getMessage()]);
             return $this->returnResponse([
                 'code' => 'unknown_error',
                 'messsage' => $e->getMessage()

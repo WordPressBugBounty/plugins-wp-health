@@ -198,6 +198,7 @@ class Update extends BaseManageUpdate
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
         $requireBackup = isset($options['require_backup']) && $options['require_backup']; // Only safe updates should auto-rollback
+        $trace = wp_umbrella_get_service('RequestTrace');
 
         if ($onlyAjax) { // If only ajax, we don't try to update by admin-ajax.php
             $tryAjax = false;
@@ -225,10 +226,13 @@ class Update extends BaseManageUpdate
                 wp_umbrella_debug_log('Plugin bulk update: running bulk_upgrade...');
                 $skin = new WP_Ajax_Upgrader_Skin();
                 $upgrader = new Plugin_Upgrader($skin);
+                $trace->addTrace('wp_bulk_upgrade_call');
                 $response = $upgrader->bulk_upgrade($plugins);
+                $trace->addTrace('wp_bulk_upgrade_returned', ['empty' => empty($response)]);
 
                 if (empty($response)) {
                     wp_umbrella_debug_log('Plugin bulk update: bulk_upgrade returned empty response');
+                    $trace->addTrace('wp_bulk_upgrade_empty_response');
                     return [
                         'status' => 'error',
                         'code' => 'unknown_error',
@@ -241,6 +245,7 @@ class Update extends BaseManageUpdate
 
                     if (!$plugin_info || is_wp_error($plugin_info)) {
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($this->getError($plugin_info)));
+                        $trace->addTrace('wp_bulk_upgrade_error', ['plugin' => $plugin_slug]);
 
                         if ($requireBackup) {
                             // Safe update — rollback to restore a safe state
@@ -256,17 +261,22 @@ class Update extends BaseManageUpdate
                         continue;
                     }
 
+                    $trace->addTrace('wp_bulk_upgrade_success', ['plugin' => $plugin_slug]);
+
                     if ($requireBackup) {
                         // Safe update — verify plugin integrity after update (directory, main file, readme.txt)
                         $slug = dirname($plugin_slug);
                         $mainFile = basename($plugin_slug);
+                        $trace->addTrace('integrity_check_started');
                         $rollback = $this->rollbackIfCorrupted($slug, $mainFile);
 
                         if ($rollback['status'] !== 'not_needed') {
+                            $trace->addTrace('integrity_check_failed', ['reason' => $rollback['reason'], 'rollback' => $rollback['status']]);
                             $return[$plugin_slug] = $rollback['status'];
                             $return[$plugin_slug . '_rollback_reason'] = $rollback['reason'];
                             continue;
                         }
+                        $trace->addTrace('integrity_check_passed');
                     }
 
                     // We'll need to get the new version of the plugin
@@ -278,8 +288,10 @@ class Update extends BaseManageUpdate
                     // Only try ajax if the version is the same (not updated)
                     if ($tryAjax && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) { // Need to try ajax and the version is the same
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' version unchanged after bulk_upgrade ({$oldVersions[$plugin_slug]}), trying admin-ajax fallback...");
+                        $trace->addTrace('ajax_fallback_started', ['reason' => 'version_unchanged']);
                         $result = $this->tryUpdateByAdminAjax($plugin_slug);
                         $return[$plugin_slug] = $result['code'];
+                        $trace->addTrace('ajax_fallback_done', ['code' => $result['code']]);
 
                         $newVersions = [];
                         foreach ($plugins as $plugin) {
@@ -294,8 +306,10 @@ class Update extends BaseManageUpdate
                     // Final check: if version still unchanged after all attempts, mark as error
                     if ($oldVersions[$plugin_slug] !== false && $newVersions[$plugin_slug] !== false && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) {
                         $return[$plugin_slug] = 'plugin_version_unchanged';
+                        $trace->addTrace('version_unchanged_after_all_attempts');
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' version still unchanged after all attempts: {$oldVersions[$plugin_slug]}");
                     } else {
+                        $trace->addTrace('version_changed', ['from' => $oldVersions[$plugin_slug], 'to' => $newVersions[$plugin_slug]]);
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' successfully updated from " . ($oldVersions[$plugin_slug] ?: 'unknown') . ' to ' . ($newVersions[$plugin_slug] ?: 'unknown'));
                     }
                 }
@@ -303,8 +317,10 @@ class Update extends BaseManageUpdate
                 // No verification with old version because we only use ajax here
                 foreach ($plugins as $plugin) {
                     wp_umbrella_debug_log("Plugin '{$plugin}' updating via admin-ajax only...");
+                    $trace->addTrace('ajax_only_started', ['plugin' => $plugin]);
                     $result = $this->tryUpdateByAdminAjax($plugin);
                     $return[$plugin] = $result['code'];
+                    $trace->addTrace('ajax_only_done', ['code' => $result['code']]);
 
                     if ($return[$plugin] !== 'success') {
                         if ($requireBackup) {
@@ -321,12 +337,15 @@ class Update extends BaseManageUpdate
                         // Safe update — verify integrity
                         $slug = dirname($plugin);
                         $mainFile = basename($plugin);
+                        $trace->addTrace('integrity_check_started');
                         $rollback = $this->rollbackIfCorrupted($slug, $mainFile);
 
                         if ($rollback['status'] !== 'not_needed') {
+                            $trace->addTrace('integrity_check_failed', ['reason' => $rollback['reason'], 'rollback' => $rollback['status']]);
                             $return[$plugin] = $rollback['status'];
                             $return[$plugin . '_rollback_reason'] = $rollback['reason'];
                         } else {
+                            $trace->addTrace('integrity_check_passed');
                             wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax update result: " . $return[$plugin]);
                         }
                     } else {
@@ -399,14 +418,17 @@ class Update extends BaseManageUpdate
     public function rollbackIfCorrupted($pluginSlug, $mainFile = null)
     {
         $pluginDir = WP_PLUGIN_DIR . DIRECTORY_SEPARATOR . $pluginSlug;
+        $trace = wp_umbrella_get_service('RequestTrace');
 
         // Directory missing entirely
         if (!file_exists($pluginDir) || !is_dir($pluginDir)) {
+            $trace->addTrace('plugin_dir_missing', ['slug' => $pluginSlug]);
             return $this->performRollback($pluginSlug, 'directory missing');
         }
 
         // Main plugin file missing
         if ($mainFile !== null && !file_exists($pluginDir . DIRECTORY_SEPARATOR . $mainFile)) {
+            $trace->addTrace('plugin_main_file_missing', ['slug' => $pluginSlug, 'file' => $mainFile]);
             return $this->performRollback($pluginSlug, "main plugin file missing ({$mainFile})");
         }
 
@@ -415,19 +437,27 @@ class Update extends BaseManageUpdate
 
     protected function performRollback($pluginSlug, $reason)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+
         try {
+            $trace->addTrace('rollback_started', ['slug' => $pluginSlug, 'reason' => $reason]);
             wp_umbrella_debug_log("rollbackIfCorrupted: plugin '{$pluginSlug}' {$reason}. Attempting rollback.");
             $result = wp_umbrella_get_service('UpgraderTempBackup')->rollbackBackupDir([
                 'dir' => 'plugins',
                 'slug' => $pluginSlug,
             ]);
             $success = isset($result['success']) && $result['success'];
+            $trace->addTrace($success ? 'rollback_succeeded' : 'rollback_failed', [
+                'slug' => $pluginSlug,
+                'code' => $result['code'] ?? 'unknown',
+            ]);
             wp_umbrella_debug_log('rollbackIfCorrupted: rollback ' . ($success ? 'succeeded' : 'failed') . " for '{$pluginSlug}'");
             return [
                 'status' => $success ? 'rollback_performed' : 'rollback_failed',
                 'reason' => $reason,
             ];
         } catch (\Throwable $e) {
+            $trace->addTrace('rollback_exception', ['slug' => $pluginSlug, 'error' => $e->getMessage()]);
             wp_umbrella_debug_log("rollbackIfCorrupted: exception during rollback for '{$pluginSlug}': " . $e->getMessage());
             return [
                 'status' => 'rollback_failed',

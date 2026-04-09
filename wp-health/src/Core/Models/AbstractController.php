@@ -70,6 +70,14 @@ abstract class AbstractController
     {
         wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();
 
+        // Append request trace breadcrumbs if any were recorded during this request
+        if (is_array($data)) {
+            $trace = wp_umbrella_get_service('RequestTrace')->getTrace();
+            if ($trace !== null) {
+                $data['_trace'] = $trace;
+            }
+        }
+
         $from = $this->getFrom();
 
         switch ($from) {

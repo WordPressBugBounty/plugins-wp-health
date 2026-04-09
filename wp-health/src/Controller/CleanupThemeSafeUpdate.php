@@ -21,10 +21,18 @@ class CleanupThemeSafeUpdate extends AbstractController
             ]);
         }
 
+        $trace = wp_umbrella_get_service('RequestTrace');
+        $trace->addTrace('cleanup_started', ['theme' => $theme]);
+
         $response = wp_umbrella_get_service('UpgraderTempBackup')->deleteTempBackup([
             'slug' => $theme,
             'dir' => 'themes'
         ]);
+        $trace->addTrace('temp_backup_deleted', ['success' => $response['success'] ?? false]);
+
+        // Clean up the update state option as well
+        wp_umbrella_get_service('UpdateStateManager')->deleteState($theme, 'theme');
+        $trace->addTrace('state_deleted');
 
         return $this->returnResponse($response);
     }

@@ -21,8 +21,12 @@ class Deactivate extends AbstractController
 
         $managePluginDeactivate = \wp_umbrella_get_service('PluginDeactivate');
 
+        $trace = \wp_umbrella_get_service('RequestTrace');
+
         try {
+            $trace->addTrace('deactivate_started', ['plugin' => $plugin]);
             $data = $managePluginDeactivate->deactivate($plugin);
+            $trace->addTrace('deactivate_done', ['status' => $data['status'] ?? 'unknown']);
 
             if ($data['status'] === 'error') {
                 return $this->returnResponse($data, 403);
@@ -30,6 +34,7 @@ class Deactivate extends AbstractController
 
             return $this->returnResponse($data);
         } catch (\Exception $e) {
+            $trace->addTrace('deactivate_exception', ['message' => $e->getMessage()]);
             return $this->returnResponse([
                 'code' => 'unknown_error',
                 'message' => $e->getMessage(),

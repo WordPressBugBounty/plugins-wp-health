@@ -11,7 +11,11 @@ class MaintenanceMode extends AbstractController
 {
     public function executePost($params)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+        $trace->addTrace('maintenance_mode_enable_started');
+
         wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(true);
+        $trace->addTrace('maintenance_mode_enabled');
 
         return $this->returnResponse([
             'code' => 'success'
@@ -24,7 +28,11 @@ class MaintenanceMode extends AbstractController
      */
     public function executeGet($params)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+        $trace->addTrace('maintenance_mode_disable_started');
+
         wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
+        $trace->addTrace('maintenance_mode_disabled');
 
         return $this->returnResponse([
             'code' => 'success'
@@ -33,7 +41,11 @@ class MaintenanceMode extends AbstractController
 
     public function executeDelete($params)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+        $trace->addTrace('maintenance_mode_disable_started');
+
         wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
+        $trace->addTrace('maintenance_mode_disabled');
 
         return $this->returnResponse([
             'code' => 'success'

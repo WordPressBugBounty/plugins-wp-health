@@ -73,6 +73,11 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                         $fileHandle = new UmbrellaFileHandle($tablePath, 'wb');
                         if ($fileHandle->isInError()) {
                             $this->socket->sendLog('File handle in error: ' . $table['name'], true);
+                            $this->socket->sendTelemetryCounter('backup.db.table.file_handle_error', [
+                                'requestId' => $this->context->getRequestId(),
+                                'origin' => 'plugin',
+                                'name' => $table['name'],
+                            ]);
                             continue;
                         }
                     }
@@ -112,6 +117,16 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                         }
                     } else {
                         $fileHandle->close();
+
+                        $fileSize = file_exists($tablePath) ? filesize($tablePath) : 0;
+                        if ($fileSize === 0) {
+                            $this->socket->sendLog('Empty SQL dump for table: ' . $table['name'], true);
+                            $this->socket->sendTelemetryCounter('backup.db.table.empty', [
+                                'requestId' => $this->context->getRequestId(),
+                                'origin' => 'plugin',
+                                'name' => $table['name'],
+                            ]);
+                        }
 
                         $sent = $this->socket->send($tablePath);
 

@@ -41,31 +41,34 @@ class UpgraderTempBackup
 
         $baseDirectory = $args['dir'] === 'plugins' ? WP_PLUGIN_DIR : get_theme_root($args['slug']);
         $destDirectory = $baseDirectory . DIRECTORY_SEPARATOR . $args['slug'];
+        $trace = wp_umbrella_get_service('RequestTrace');
 
-        // Create the temporary backup directory if it does not exist.
-        if (!$wp_filesystem->is_dir($destDirectory)) {
-            if (!$wp_filesystem->is_dir($destDirectory)) {
-                $wp_filesystem->mkdir($destDirectory, FS_CHMOD_DIR);
-            }
-
-            if (!$wp_filesystem->is_dir($destDirectory)) {
-                // Could not create the backup directory.
+        // Delete existing destination to prevent mixing old and new files.
+        // A corrupt mix of two versions is worse than a visible absence.
+        if ($wp_filesystem->is_dir($destDirectory)) {
+            $trace->addTrace('rollback_delete_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+            if (!$wp_filesystem->delete($destDirectory, true)) {
+                $trace->addTrace('rollback_delete_dest_failed');
                 return [
-                    'code' => 'fs_backup_mkdir',
+                    'code' => 'fs_temp_backup_delete_dest',
                     'success' => false
                 ];
             }
         }
 
-        // copy to the temporary backup directory.
-        $result = copy_dir($srcDirectory, $destDirectory);
+        // Use move_dir() for an atomic rename — same approach as WP core's restore_temp_backup().
+        // Falls back to copy_dir + delete internally if rename() is not possible.
+        $trace->addTrace('rollback_move_dir', ['src' => $args['slug'], 'dir' => $args['dir']]);
+        $result = move_dir($srcDirectory, $destDirectory, true);
         if (is_wp_error($result)) {
+            $trace->addTrace('rollback_move_dir_failed', ['error' => $result->get_error_message()]);
             return [
                 'code' => 'fs_temp_backup_move',
                 'success' => false
             ];
         }
 
+        $trace->addTrace('rollback_move_dir_success');
         return [
             'success' => true
         ];
@@ -140,8 +143,21 @@ class UpgraderTempBackup
         $src = trailingslashit($src_dir) . $args['slug'];
         $dest = $dest_dir . trailingslashit($args['dir']) . $args['slug'];
 
-        // Delete the temporary backup directory if it already exists.
+        // If a backup already exists, check if it matches the currently installed version.
+        // Same version → backup is from the current update cycle (retry scenario) → preserve it.
+        // Different version → stale backup from a previous update → overwrite with current version.
         if ($wp_filesystem->is_dir($dest)) {
+            $backupVersion = $this->getVersionFromBackup($dest, $args['slug']);
+            $currentVersion = $this->getVersionFromSource($src, $args['slug']);
+
+            if ($backupVersion !== null && $currentVersion !== null && $backupVersion === $currentVersion) {
+                return [
+                    'success' => true,
+                    'code' => 'backup_already_exists',
+                ];
+            }
+
+            // Stale backup or version mismatch — delete and recreate
             $wp_filesystem->delete($dest, true);
         }
 
@@ -230,6 +246,54 @@ class UpgraderTempBackup
             'code' => 'success',
             'success' => true
         ];
+    }
+
+    /**
+     * Read the plugin/theme version from a backup directory.
+     */
+    protected function getVersionFromBackup($backupDir, $slug)
+    {
+        return $this->extractVersionFromDir($backupDir);
+    }
+
+    /**
+     * Read the plugin/theme version from the currently installed source.
+     */
+    protected function getVersionFromSource($sourceDir, $slug)
+    {
+        return $this->extractVersionFromDir($sourceDir);
+    }
+
+    /**
+     * Extract a Version header from PHP files in a directory (plugin main file or style.css for themes).
+     */
+    protected function extractVersionFromDir($dir)
+    {
+        if (!is_dir($dir)) {
+            return null;
+        }
+
+        // Try style.css first (themes)
+        $stylePath = $dir . DIRECTORY_SEPARATOR . 'style.css';
+        if (file_exists($stylePath)) {
+            $content = file_get_contents($stylePath);
+            if ($content && preg_match('/Version:\s*(.+)$/mi', $content, $matches)) {
+                return trim($matches[1]);
+            }
+        }
+
+        // Try PHP files in root (plugins — main file contains the Version header)
+        $files = glob($dir . DIRECTORY_SEPARATOR . '*.php');
+        if ($files) {
+            foreach ($files as $file) {
+                $content = file_get_contents($file);
+                if ($content && preg_match('/Version:\s*(.+)$/mi', $content, $matches)) {
+                    return trim($matches[1]);
+                }
+            }
+        }
+
+        return null;
     }
 
 }

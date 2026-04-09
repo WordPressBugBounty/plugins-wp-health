@@ -39,8 +39,12 @@ class PrepareUpdate extends AbstractController
 
     protected function preparePluginUpdate($plugin)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
         $pluginSlug = dirname($plugin);
+
+        $trace->addTrace('prepare_update_started', ['plugin' => $plugin]);
         $currentVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+        $trace->addTrace('version_read', ['current_version' => $currentVersion]);
 
         wp_umbrella_debug_log("PrepareUpdate: starting backup for plugin '{$plugin}' (version: " . ($currentVersion ?: 'unknown') . ")");
 
@@ -49,9 +53,11 @@ class PrepareUpdate extends AbstractController
             'src' => WP_PLUGIN_DIR,
             'dir' => 'plugins',
         ]);
+        $trace->addTrace('temp_backup_move', ['success' => $result['success']]);
 
         if (!$result['success']) {
             wp_umbrella_debug_log("PrepareUpdate: backup failed for plugin '{$plugin}': " . ($result['code'] ?? 'unknown'));
+            $trace->addTrace('backup_failed', ['code' => $result['code'] ?? 'unknown']);
             return $this->returnResponse([
                 'status' => 'backup_failed',
                 'code' => $result['code'] ?? 'fs_temp_backup_move',
@@ -62,6 +68,7 @@ class PrepareUpdate extends AbstractController
         }
 
         $backupVerified = $this->verifyPluginBackup($pluginSlug, $plugin);
+        $trace->addTrace('backup_verified', ['verified' => $backupVerified]);
 
         wp_umbrella_debug_log("PrepareUpdate: backup completed for plugin '{$plugin}' (verified: " . ($backupVerified ? 'true' : 'false') . ")");
 
@@ -75,7 +82,11 @@ class PrepareUpdate extends AbstractController
 
     protected function prepareThemeUpdate($theme)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+
+        $trace->addTrace('prepare_update_started', ['theme' => $theme]);
         $currentVersion = wp_umbrella_get_service('ManageTheme')->getVersionFromThemeFile($theme);
+        $trace->addTrace('version_read', ['current_version' => $currentVersion]);
 
         wp_umbrella_debug_log("PrepareUpdate: starting backup for theme '{$theme}' (version: " . ($currentVersion ?: 'unknown') . ")");
 
@@ -84,9 +95,11 @@ class PrepareUpdate extends AbstractController
             'src' => get_theme_root($theme),
             'dir' => 'themes',
         ]);
+        $trace->addTrace('temp_backup_move', ['success' => $result['success']]);
 
         if (!$result['success']) {
             wp_umbrella_debug_log("PrepareUpdate: backup failed for theme '{$theme}': " . ($result['code'] ?? 'unknown'));
+            $trace->addTrace('backup_failed', ['code' => $result['code'] ?? 'unknown']);
             return $this->returnResponse([
                 'status' => 'backup_failed',
                 'code' => $result['code'] ?? 'fs_temp_backup_move',
@@ -97,6 +110,7 @@ class PrepareUpdate extends AbstractController
         }
 
         $backupVerified = $this->verifyThemeBackup($theme);
+        $trace->addTrace('backup_verified', ['verified' => $backupVerified]);
 
         wp_umbrella_debug_log("PrepareUpdate: backup completed for theme '{$theme}' (verified: " . ($backupVerified ? 'true' : 'false') . ")");
 

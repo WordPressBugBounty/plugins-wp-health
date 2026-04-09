@@ -437,8 +437,6 @@ abstract class Kernel
         if (self::$apiLoad) {
             self::hookThirdParties();
 
-            wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
-
             self::pluginLoadedWithSetupAdmin();
         }
 
@@ -541,7 +539,8 @@ abstract class Kernel
             $result = wp_umbrella_get_service('ManagePlugin')->bulkUpdate($plugins, [
                 'try_ajax' => false,
                 'only_ajax' => false,
-                'require_backup' => $requireBackup
+                'require_backup' => $requireBackup,
+                'skip_lock' => true,
             ]);
 
             wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();

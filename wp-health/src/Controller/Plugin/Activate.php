@@ -21,8 +21,12 @@ class Activate extends AbstractController
 
         $managePluginActivate = \wp_umbrella_get_service('PluginActivate');
 
+        $trace = \wp_umbrella_get_service('RequestTrace');
+
         try {
+            $trace->addTrace('activate_started', ['plugin' => $plugin]);
             $data = $managePluginActivate->activate($plugin);
+            $trace->addTrace('activate_done', ['status' => $data['status'] ?? 'unknown']);
 
             if ($data['status'] === 'error') {
                 return $this->returnResponse($data, 403);
@@ -30,6 +34,7 @@ class Activate extends AbstractController
 
             return $this->returnResponse($data);
         } catch (\Exception $e) {
+            $trace->addTrace('activate_exception', ['message' => $e->getMessage()]);
             return $this->returnResponse([
                 'code' => 'unknown_error',
                 'message' => $e->getMessage(),

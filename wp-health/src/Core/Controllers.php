@@ -416,6 +416,42 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/update-state' => [
+                'route' => '/update-state',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\UpdateState::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/delete-update-state' => [
+                'route' => '/delete-update-state',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\DeleteUpdateState::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/can-update' => [
+                'route' => '/can-update',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\CanUpdate::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/prepare-update' => [
                 'route' => '/prepare-update',
                 'methods' => [

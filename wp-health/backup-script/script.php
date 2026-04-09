@@ -171,10 +171,19 @@ if (!isset($request['host'])) {
 
 $host = $request['host'];
 
+// Allow override for local development (DDEV needs host.docker.internal)
+if (defined('WP_UMBRELLA_MIRROR_HOST')) {
+    $host = WP_UMBRELLA_MIRROR_HOST;
+}
+
 if (!function_exists('validHost')) {
     function validHost($host)
     {
         if (strpos($host, 'mirror.wp-umbrella.com') !== false) {
+            return true;
+        }
+
+        if ($host === 'host.docker.internal') {
             return true;
         }
 
