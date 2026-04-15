@@ -92,15 +92,22 @@ class DatabaseTables
 
     public function getTables()
     {
+        global $wpdb;
         try {
-            global $wpdb;
+            $tables = $wpdb->get_results("SHOW FULL TABLES FROM `{$wpdb->dbname}` WHERE Table_type = 'BASE TABLE'", ARRAY_N);
+            $prefix = $wpdb->prefix;
+            return array_reduce($tables, function ($current, $item) use ($prefix) {
+                if (strpos($item[0], $prefix) === 0) {
+                    array_push($current, $item[0]);
+                }
+                return $current;
+            }, []);
+        } catch (\Exception $e) {
             $tables = $wpdb->get_results("SHOW TABLES LIKE '{$wpdb->prefix}%'", ARRAY_N);
             return array_reduce($tables, function ($current, $item) {
                 array_push($current, $item[0]);
                 return $current;
             }, []);
-        } catch (\Exception $e) {
-            return [];
         }
     }
 
@@ -111,10 +118,17 @@ class DatabaseTables
         $db = wp_umbrella_get_service('WordPressContext')->getConstant('DB_NAME');
         $likePrefix = sprintf('%s%%', $wpdb->prefix);
 
-        $tables = $wpdb->get_results(
-            $wpdb->prepare('SELECT table_name AS "name", data_length as size FROM information_schema.TABLES WHERE table_schema = %s AND table_name LIKE %s', $db, $likePrefix),
-            ARRAY_A
-        );
+        try {
+            $tables = $wpdb->get_results(
+                $wpdb->prepare('SELECT table_name AS "name", data_length as size FROM information_schema.TABLES WHERE table_schema = %s AND table_name LIKE %s AND table_type = %s', $db, $likePrefix, 'BASE TABLE'),
+                ARRAY_A
+            );
+        } catch (\Exception $e) {
+            $tables = $wpdb->get_results(
+                $wpdb->prepare('SELECT table_name AS "name", data_length as size FROM information_schema.TABLES WHERE table_schema = %s AND table_name LIKE %s', $db, $likePrefix),
+                ARRAY_A
+            );
+        }
 
         $checksum = $this->getTablesChecksum([
             'tables' => array_map(function ($table) {
@@ -150,8 +164,25 @@ class DatabaseTables
      */
     public function getTablesSize()
     {
+        global $wpdb;
         try {
-            global $wpdb;
+            $tables = $wpdb->get_results("
+				SELECT
+					TABLE_NAME AS 'table',
+					ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024) AS 'size_mb'
+				FROM
+					information_schema.TABLES
+				WHERE
+					TABLE_SCHEMA = '{$wpdb->dbname}'
+				AND
+					TABLE_NAME LIKE '{$wpdb->prefix}%'
+				AND
+					TABLE_TYPE = 'BASE TABLE'
+				ORDER BY
+					(DATA_LENGTH + INDEX_LENGTH)
+				DESC
+			", ARRAY_A);
+        } catch (\Exception $th) {
             $tables = $wpdb->get_results("
 				SELECT
 					TABLE_NAME AS 'table',
@@ -166,16 +197,14 @@ class DatabaseTables
 					(DATA_LENGTH + INDEX_LENGTH)
 				DESC
 			", ARRAY_A);
-
-            return array_map(function ($item) {
-                return [
-                    'table' => $item['table'],
-                    'size_mb' => (int) $item['size_mb'],
-                ];
-            }, $tables);
-        } catch (\Exception $th) {
-            return [];
         }
+
+        return array_map(function ($item) {
+            return [
+                'table' => $item['table'],
+                'size_mb' => (int) $item['size_mb'],
+            ];
+        }, $tables);
     }
 
     public function getColumnCharLengthCheckByTable($table)

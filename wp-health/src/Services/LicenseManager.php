@@ -14,6 +14,11 @@ use WPUmbrella\Services\License\Detectors\WooCommerceExtensionLicenseDetector;
 use WPUmbrella\Services\License\Detectors\WpFormsLicenseDetector;
 use WPUmbrella\Services\License\Detectors\WpRocketLicenseDetector;
 use WPUmbrella\Services\License\Detectors\YoastPremiumLicenseDetector;
+use WPUmbrella\Services\License\Detectors\CrocoblockLicenseDetector;
+use WPUmbrella\Services\License\Detectors\ComplianzPremiumLicenseDetector;
+use WPUmbrella\Services\License\Detectors\AdminColumnsProLicenseDetector;
+use WPUmbrella\Services\License\Detectors\ReallySimpleSslProLicenseDetector;
+use WPUmbrella\Services\License\Detectors\WpmuDevLicenseDetector;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -93,6 +98,11 @@ class LicenseManager
             new WpFormsLicenseDetector(),
             new WpRocketLicenseDetector(),
             new YoastPremiumLicenseDetector(),
+            new CrocoblockLicenseDetector(),
+            new ComplianzPremiumLicenseDetector(),
+            new AdminColumnsProLicenseDetector(),
+            new ReallySimpleSslProLicenseDetector(),
+            new WpmuDevLicenseDetector(),
         ];
 
         $this->registry->registerMany($builtInDetectors);

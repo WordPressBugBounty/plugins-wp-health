@@ -55,7 +55,17 @@ class LicenseDetectorRegistry
      */
     public function get(string $pluginSlug): ?LicenseDetectorInterface
     {
-        return $this->detectors[$pluginSlug] ?? null;
+        if (isset($this->detectors[$pluginSlug])) {
+            return $this->detectors[$pluginSlug];
+        }
+
+        foreach ($this->detectors as $detector) {
+            if ($detector->supports($pluginSlug)) {
+                return $detector;
+            }
+        }
+
+        return null;
     }
 
     /**

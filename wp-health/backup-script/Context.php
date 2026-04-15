@@ -32,17 +32,17 @@ if (!class_exists('UmbrellaContext', false)):
         const DEFAULT_DIRECTORY_EXCLUDED = [
             DIRECTORY_SEPARATOR . '.git',
             DIRECTORY_SEPARATOR . '.opcache',
-            DIRECTORY_SEPARATOR . 'logs',
+            '^' . DIRECTORY_SEPARATOR . 'logs',
             DIRECTORY_SEPARATOR . 'cgi-bin',
             DIRECTORY_SEPARATOR . '.quarantine',
             DIRECTORY_SEPARATOR . '.duplicacy',
             DIRECTORY_SEPARATOR . '.tmb',
             DIRECTORY_SEPARATOR . '.wp-cli',
-            DIRECTORY_SEPARATOR . 'php_errorlog',
-            DIRECTORY_SEPARATOR . 'cache',
-            DIRECTORY_SEPARATOR . '_cache',
-            DIRECTORY_SEPARATOR . 'lscache',
-            DIRECTORY_SEPARATOR . 'rb-plugins',
+            '^' . DIRECTORY_SEPARATOR . 'php_errorlog',
+            '^' . DIRECTORY_SEPARATOR . 'cache',
+            '^' . DIRECTORY_SEPARATOR . '_cache',
+            '^' . DIRECTORY_SEPARATOR . 'lscache',
+            '^' . DIRECTORY_SEPARATOR . 'rb-plugins',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed', // Take care of this one
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed-cache', // From website with ~20Go of cache

@@ -13,6 +13,7 @@ class Plugin
     public $require_php_version;
     public $title;
     public $changelog;
+    public $license;
     public $need_update;
 
     public function getPropertiesValues()
@@ -27,6 +28,7 @@ class Plugin
             'require_wp_version' => $this->require_wp_version,
             'require_php_version' => $this->require_php_version,
             'title' => $this->title,
+            'license' => $this->license,
             'need_update' => $this->need_update,
         ];
     }

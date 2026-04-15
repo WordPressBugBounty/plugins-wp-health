@@ -38,6 +38,9 @@ if(!class_exists('UmbrellaFileHandle', false)):
             if ($this->fp === null) {
                 throw new UmbrellaException(sprintf('File %s already closed', $this->path));
             }
+            if (!is_resource($this->fp)) {
+                throw new UmbrellaException(sprintf('File handle for %s is no longer a valid resource', $this->path), 'invalid_resource');
+            }
             if (@fwrite($this->fp, $data) === false) {
                 throw new UmbrellaException('fwrite', $this->path);
             }

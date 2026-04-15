@@ -48,7 +48,7 @@ class UpgraderTempBackup
         if ($wp_filesystem->is_dir($destDirectory)) {
             $trace->addTrace('rollback_delete_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
             if (!$wp_filesystem->delete($destDirectory, true)) {
-                $trace->addTrace('rollback_delete_dest_failed');
+                $trace->addTrace('rollback_delete_dest_failed', ['dest' => $args['slug'], 'dir' => $args['dir']]);
                 return [
                     'code' => 'fs_temp_backup_delete_dest',
                     'success' => false

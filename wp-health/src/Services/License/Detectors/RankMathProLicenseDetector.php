@@ -34,12 +34,29 @@ class RankMathProLicenseDetector extends AbstractLicenseDetector
             return null;
         }
 
-        $status = !empty($apiKey) ? LicenseStatus::VALID : LicenseStatus::UNKNOWN;
+        // Rank Math stores connection status in the connect data
+        $connected = $licenseData['connected'] ?? null;
+        $plan = $licenseData['plan'] ?? null;
+
+        if ($connected === true || $connected === 'yes') {
+            $status = LicenseStatus::VALID;
+        } elseif ($connected === false || $connected === 'no') {
+            $status = LicenseStatus::INVALID;
+        } else {
+            // Fallback: check rank_math_pro_license_status option
+            $storedStatus = get_option('rank_math_pro_license_status');
+            if (!empty($storedStatus) && is_string($storedStatus)) {
+                $status = $this->normalizeStatus($storedStatus);
+            } else {
+                $status = LicenseStatus::UNKNOWN;
+            }
+        }
 
         return $this->buildLicenseData($apiKey, $status, [
             'extra_data' => [
                 'username' => $licenseData['username'] ?? null,
                 'email' => $licenseData['email'] ?? null,
+                'plan' => $plan,
             ],
         ]);
     }

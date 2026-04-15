@@ -36,7 +36,14 @@ class AcfProLicenseDetector extends AbstractLicenseDetector
         }
 
         $key = $licenseData['key'] ?? $licenseKey;
-        $status = !empty($licenseData['key']) ? LicenseStatus::VALID : LicenseStatus::UNKNOWN;
+
+        // ACF stores the actual license status in a separate option
+        $storedStatus = get_option('acf_pro_license_status');
+        if (!empty($storedStatus) && is_string($storedStatus)) {
+            $status = $this->normalizeStatus($storedStatus);
+        } else {
+            $status = !empty($licenseData['key']) ? LicenseStatus::UNKNOWN : LicenseStatus::NOT_FOUND;
+        }
 
         return $this->buildLicenseData($key, $status, [
             'extra_data' => [

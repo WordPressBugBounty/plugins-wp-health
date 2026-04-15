@@ -16,11 +16,21 @@ if (!class_exists('UmbrellaDirectoryExclusion', false)):
 		 */
 		public static function matches($path, $excludedDir)
 		{
+			$rootOnly = false;
+			if (strpos($excludedDir, '^') === 0) {
+				$rootOnly = true;
+				$excludedDir = substr($excludedDir, 1);
+			}
+
 			$cleanDir = DIRECTORY_SEPARATOR . trim($excludedDir, DIRECTORY_SEPARATOR);
 			$cleanPath = DIRECTORY_SEPARATOR . trim($path, DIRECTORY_SEPARATOR);
 
 			$pos = strpos($cleanPath, $cleanDir);
 			if ($pos === false) {
+				return false;
+			}
+
+			if ($rootOnly && $pos !== 0) {
 				return false;
 			}
 

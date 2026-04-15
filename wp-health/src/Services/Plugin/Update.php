@@ -245,7 +245,10 @@ class Update extends BaseManageUpdate
 
                     if (!$plugin_info || is_wp_error($plugin_info)) {
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade error: " . wp_json_encode($this->getError($plugin_info)));
-                        $trace->addTrace('wp_bulk_upgrade_error', ['plugin' => $plugin_slug]);
+                        $trace->addTrace('wp_bulk_upgrade_error', [
+                            'plugin' => $plugin_slug,
+                            'error' => wp_json_encode($this->getError($plugin_info)),
+                        ]);
 
                         if ($requireBackup) {
                             // Safe update — rollback to restore a safe state

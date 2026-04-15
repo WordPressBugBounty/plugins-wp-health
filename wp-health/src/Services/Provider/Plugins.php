@@ -35,6 +35,30 @@ class Plugins
         return $transient;
     }
 
+    protected function checkReallySimpleSSLProUpdates($transient)
+    {
+        if (!defined('rsssl_plugin') || !defined('rsssl_pro')) {
+            return $transient;
+        }
+
+        if (!empty($transient->response[rsssl_plugin])) {
+            return $transient;
+        }
+
+        try {
+            $rsslUpdate = (new Compatibility\ReallySimpleSSLProUpdate())->checkUpdate();
+
+            if ($rsslUpdate !== null && !empty($rsslUpdate->response[rsssl_plugin])) {
+                $transient->response[rsssl_plugin] = $rsslUpdate->response[rsssl_plugin];
+                $transient->checked[rsssl_plugin] = $rsslUpdate->checked[rsssl_plugin] ?? rsssl_version;
+            }
+        } catch (\Exception $e) {
+            // Best-effort: if RSS Pro update detection fails, continue without it.
+        }
+
+        return $transient;
+    }
+
     public function getPlugins($options = [])
     {
         wp_umbrella_get_service('RequestSettings')->triggerAdminInit();
@@ -75,6 +99,10 @@ class Plugins
 
         // Enrich with premium plugin updates (Divi, Elementor Pro, YITH, etc.)
         $current = (new PremiumUpdateDetector())->enrich($current, 'plugins');
+
+        // Really Simple SSL Pro guards its updater behind admin checks.
+        // Manually check for updates when running in our non-admin context.
+        $current = $this->checkReallySimpleSSLProUpdates($current);
 
         if (!empty($current->response)) {
             $pluginsByKey = array_column($data, 'key');

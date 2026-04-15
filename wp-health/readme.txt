@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.22.3
+Stable tag: v2.22.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.22.4 (04-15-2026) =
+- Improved: database table enumeration compatibility across MySQL versions
+- Improved: restore script reliability with SQL mode handling
+- Improved: update process stability and race condition prevention
+- Improved: compatibility with Really Simple SSL Pro
+- Improved: error handling on PHP 8.0+
+- Fixed: edge cases in plugin update version detection
 
 = 2.22.3 (04-09-2026) =
 - New: request trace breadcrumbs for update diagnostics

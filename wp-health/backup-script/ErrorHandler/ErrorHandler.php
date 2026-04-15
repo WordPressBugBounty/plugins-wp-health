@@ -47,8 +47,11 @@ if (!class_exists('UmbrellaErrorHandler', false)):
         public function handleError($type, $message, $file, $line)
         {
             self::$lastError = compact('message', 'type', 'file', 'line');
-            if (error_reporting() === 0) {
-                // Muted error.
+            // PHP 8.0+ changed @ operator behavior: error_reporting() no longer returns 0,
+            // it returns E_ERROR|E_CORE_ERROR|E_COMPILE_ERROR|E_USER_ERROR|E_RECOVERABLE_ERROR|E_PARSE (4437).
+            // Check if the error type is excluded from the current error_reporting mask.
+            if (!(error_reporting() & $type)) {
+                // Muted error (@ operator or error_reporting config).
                 return;
             }
             if (!strlen($message)) {

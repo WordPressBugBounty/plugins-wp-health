@@ -157,6 +157,9 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $frame .= $mask . $maskedMessage;
             unset($mask, $maskedMessage);
 
+            if (!is_resource($this->connection)) {
+                throw new UmbrellaPreventMaxExecutionTime();
+            }
             stream_set_timeout($this->connection, $this->timeout);
             // Check if the connection is still open
             if (feof($this->connection)) {

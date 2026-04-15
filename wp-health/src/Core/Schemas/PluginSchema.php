@@ -27,10 +27,12 @@ class PluginSchema implements SchemaInterface
                             return false;
                         }
 
+                        $pluginFile = \property_exists($data, 'plugin') ? $data->plugin : '';
+
                         return [
                             'id' => \property_exists($data, 'id') ? $data->id : '',
                             'slug' => \property_exists($data, 'slug') ? $data->slug : '',
-                            'plugin' => \property_exists($data, 'plugin') ? $data->plugin : '',
+                            'plugin' => $pluginFile,
                             'new_version' => \property_exists($data, 'new_version') ? $data->new_version : '',
                             'url' => \property_exists($data, 'url') ? $data->url : '',
                             'package' => \property_exists($data, 'package') ? $data->package : '',
