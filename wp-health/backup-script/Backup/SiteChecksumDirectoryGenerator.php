@@ -29,6 +29,7 @@ if (!class_exists('UmbrellaSiteChecksumDirectoryGenerator', false)):
             }
 
             fclose($this->siteChecksumDirectoryHandler);
+            $this->siteChecksumDirectoryHandler = null;
         }
 
         public function openSiteChecksumDirectoryHandler()

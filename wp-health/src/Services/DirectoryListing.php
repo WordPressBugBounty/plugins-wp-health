@@ -26,6 +26,10 @@ class DirectoryListing
 
     public function getData($baseDirectory = ABSPATH)
     {
+        if (!is_string($baseDirectory) || !is_dir($baseDirectory)) {
+            return ['directories' => [], 'files' => []];
+        }
+
         $finderFiles = new Finder();
         $finderFiles->files()
                 ->in($baseDirectory)

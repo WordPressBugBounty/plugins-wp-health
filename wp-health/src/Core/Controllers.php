@@ -696,6 +696,19 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/system-report' => [
+                'route' => '/system-report',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\SystemReport::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/update-theme' => [
                 'route' => '/update-theme',
                 'methods' => [

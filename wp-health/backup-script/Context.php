@@ -47,6 +47,7 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed', // Take care of this one
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'litespeed-cache', // From website with ~20Go of cache
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'upgrade',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'upgrade-temp-backup',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'updraft',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'ai1wm-backups',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'aiowps_backups',
@@ -69,7 +70,26 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'umbrella-upgrade-temp-backup',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'boost-cache' . DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'supercache',
+            DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'umb_checksum',
+            DIRECTORY_SEPARATOR . '.well-known',
+            DIRECTORY_SEPARATOR . 'wp-snapshots',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvivid_uploads',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvivid_staging',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvivid_dashboard_cache',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvivid_image_optimization',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backups-dup-pro',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'backups-dup-lite',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'infinitewp',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'ewww',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'smush-webp',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'maintenance',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'backupbuddy_backups',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'pb_backupbuddy',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'backwpup',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'mainwp',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'wc-logs',
+            DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'plugins' . DIRECTORY_SEPARATOR . 'akeebabackupwp' . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'backups',
         ];
 
         const DEFAULT_EXCLUDE_FILES = [

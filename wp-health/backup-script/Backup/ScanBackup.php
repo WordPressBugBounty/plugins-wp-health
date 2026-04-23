@@ -97,11 +97,12 @@ if (!class_exists('UmbrellaScanBackup', false)):
         }
 
         /**
-         * Detects loops in paths (repeating patterns)
-         * @param string $path
+         * Detects loops in paths (repeating patterns caused by symlinks)
+         * @param string $path Relative path from base directory
+         * @param string $basePath Absolute base directory path
          * @return bool
          */
-        protected function hasPathLoop($path)
+        protected function hasPathLoop($path, $basePath = '')
         {
             // Clean the path
             $path = trim($path, DIRECTORY_SEPARATOR);
@@ -118,21 +119,51 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
-            // Check for repeating patterns
+            // Check for repeating patterns — only a real loop if symlinks are involved
+            $hasRepeating = false;
             for ($patternLength = 1; $patternLength <= 4; $patternLength++) {
                 if ($this->hasRepeatingPattern($segments, $patternLength)) {
-                    return true;
+                    $hasRepeating = true;
+                    break;
                 }
             }
 
             // Check if the same segment appears more than 5 times
-            $segmentCounts = array_count_values($segments);
-            foreach ($segmentCounts as $count) {
-                if ($count > 5) {
-                    return true;
+            if (!$hasRepeating) {
+                $segmentCounts = array_count_values($segments);
+                foreach ($segmentCounts as $count) {
+                    if ($count > 5) {
+                        $hasRepeating = true;
+                        break;
+                    }
                 }
             }
 
+            // Repeating directory names are legitimate in vendor packages (e.g. phpseclib/phpseclib/phpseclib).
+            // Only flag as a loop when a symlink is actually involved in the path.
+            if ($hasRepeating) {
+                $fullPath = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $path;
+                return $this->pathContainsSymlink($fullPath);
+            }
+
+            return false;
+        }
+
+        /**
+         * Checks if any directory segment in the path is a symlink
+         * @param string $fullPath Absolute filesystem path
+         * @return bool
+         */
+        protected function pathContainsSymlink($fullPath)
+        {
+            $parts = explode(DIRECTORY_SEPARATOR, trim($fullPath, DIRECTORY_SEPARATOR));
+            $current = '';
+            foreach ($parts as $part) {
+                $current .= DIRECTORY_SEPARATOR . $part;
+                if (@is_link($current)) {
+                    return true;
+                }
+            }
             return false;
         }
 
@@ -320,7 +351,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     }
                     $this->socket->sendScanDirectoryCursor($lineNumber);
 
-                    if ($this->hasPathLoop($relativePath)) {
+                    if ($this->hasPathLoop($relativePath, $this->context->getBaseDirectory())) {
                         continue;
                     }
 
@@ -547,7 +578,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     continue;
                 }
 
-                if ($this->hasPathLoop($relativePath)) {
+                if ($this->hasPathLoop($relativePath, $baseDir)) {
                     continue;
                 }
 

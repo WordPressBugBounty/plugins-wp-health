@@ -9,5 +9,4 @@ return array(
     'WPUmbrella\\' => array($baseDir . '/src'),
     'WPUmbrellaVendor\\' => array($baseDir . '/vendor-scoped/Dependencies'),
     'Morphism\\' => array($vendorDir . '/gmulti/morphism/lib'),
-    'Coderatio\\SimpleBackup\\' => array($vendorDir . '/wp-umbrella/simple-backup/src'),
 );

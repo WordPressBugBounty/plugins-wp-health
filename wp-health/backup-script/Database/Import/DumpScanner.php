@@ -47,9 +47,12 @@ if (!class_exists('UmbrellaDumpScanner', false)):
                     $line = $this->buffer;
                     $this->buffer = '';
                 } else {
-                    $line = fgets($this->handle);
+                    if ($this->handle === null || !is_resource($this->handle)) {
+                        throw new UmbrellaException('Database dump file handle is closed', 'db_dump_handle_closed');
+                    }
+                    $line = @fgets($this->handle);
                     if ($line === false) {
-                        if (feof($this->handle)) {
+                        if (@feof($this->handle)) {
                             // So, this is needed...
                             break;
                         }
@@ -197,7 +200,12 @@ if (!class_exists('UmbrellaDumpScanner', false)):
 
         public function close()
         {
+            if ($this->handle === null || !is_resource($this->handle)) {
+                return;
+            }
+
             fclose($this->handle);
+            $this->handle = null;
         }
     }
 endif;

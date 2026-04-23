@@ -562,7 +562,11 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
         public function readFrame()
         {
-            $response = fread($this->connection, self::READ_CHUNK_SIZE);
+            if ($this->connection === null || !is_resource($this->connection)) {
+                throw new UmbrellaPreventMaxExecutionTime();
+            }
+
+            $response = @fread($this->connection, self::READ_CHUNK_SIZE);
             return $response;
         }
 
