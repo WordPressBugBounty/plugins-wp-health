@@ -140,8 +140,26 @@ class UpgraderTempBackup
         }
 
         $src_dir = $wp_filesystem->find_folder($args['src']);
+
+        // find_folder() can return false/empty on non-standard installs (Bedrock, Composer-managed).
+        // Fall back to the direct path which relies on WP_PLUGIN_DIR / get_theme_root() already being correct.
+        if (empty($src_dir)) {
+            $src_dir = trailingslashit($args['src']);
+        }
+
         $src = trailingslashit($src_dir) . $args['slug'];
         $dest = $dest_dir . trailingslashit($args['dir']) . $args['slug'];
+
+        // Early check: if source doesn't exist, fail fast with a diagnostic code
+        if (!$wp_filesystem->is_dir($src)) {
+            return [
+                'code' => 'fs_temp_backup_source_not_found',
+                'success' => false,
+                'src' => $src,
+                'src_dir_resolved' => $src_dir,
+                'src_dir_original' => $args['src'],
+            ];
+        }
 
         // If a backup already exists, check if it matches the currently installed version.
         // Same version → backup is from the current update cycle (retry scenario) → preserve it.
@@ -159,6 +177,16 @@ class UpgraderTempBackup
 
             // Stale backup or version mismatch — delete and recreate
             $wp_filesystem->delete($dest, true);
+        }
+
+        // copy_dir() does not create the top-level destination — its inner mkdir() is non-recursive,
+        // so the first sub-directory in $src would fail with "Could not create directory."
+        if (!$wp_filesystem->mkdir($dest, FS_CHMOD_DIR)) {
+            return [
+                'code' => 'fs_temp_backup_mkdir_dest',
+                'success' => false,
+                'dest' => $dest,
+            ];
         }
 
         // Capture copy() failures during backup (file not copied = incomplete backup)
@@ -179,6 +207,9 @@ class UpgraderTempBackup
                 'code' => 'fs_temp_backup_move',
                 'success' => false,
                 'errors' => $copyFailures,
+                'wp_error' => $result->get_error_message(),
+                'src' => $src,
+                'dest' => $dest,
             ];
         }
 

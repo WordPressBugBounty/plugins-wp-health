@@ -297,6 +297,19 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/activity-log-enabled' => [
+                'route' => '/activity-log-enabled',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\ActivityLogEnabled::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/sitemap-url' => [
                 'route' => '/sitemap-url',
                 'methods' => [

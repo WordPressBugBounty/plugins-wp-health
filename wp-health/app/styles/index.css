@@ -22,7 +22,7 @@ body.wp-umbrella-styles #wpbody{
 
 .wp-umbrella-styles .wrap {
 	margin:0 !important;
-	height:100vh;
+	min-height:100vh;
 }
 
 

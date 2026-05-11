@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.22.5');
+    define('WP_UMBRELLA_VERSION', '2.23.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -40,21 +40,20 @@ function wp_umbrella_init_defined()
     wp_umbrella_init_defined_standalone();
 
     define('WP_UMBRELLA_BNAME', plugin_basename(__DIR__ . '/wp-health.php'));
-    define('WP_UMBRELLA_DIRURL', plugin_dir_url(__FILE__));
 
-    $dist = WP_UMBRELLA_DIRURL . 'dist';
+    $dirUrl = plugin_dir_url(__FILE__);
 
-    $pos = substr_count($dist, 'wp-content/plugins');
-    if ($pos >= 2) {
-        $dist = sprintf('%s/%s', untrailingslashit(site_url()), 'wp-content/plugins/wp-health/dist');
+    if (substr_count($dirUrl, 'wp-content/plugins') >= 2) {
+        $dirUrl = sprintf('%s/%s', untrailingslashit(site_url()), 'wp-content/plugins/wp-health/');
     }
 
     $local = ['wp-health.local', 'umbrella.local', 'umbrella-test.local', 'multisite.local', 'wp-umbrella.local', 'localhost'];
     if (isset($_SERVER['HTTP_HOST']) && in_array($_SERVER['HTTP_HOST'], $local, true)) {
-        $dist = 'http://' . $_SERVER['HTTP_HOST'] . '/wp-content/plugins/wp-health/dist'; // Because of symlink
+        $dirUrl = 'http://' . $_SERVER['HTTP_HOST'] . '/wp-content/plugins/wp-health/'; // Because of symlink
     }
 
-    define('WP_UMBRELLA_URL_DIST', $dist);
+    define('WP_UMBRELLA_DIRURL', $dirUrl);
+    define('WP_UMBRELLA_URL_DIST', $dirUrl . 'dist');
 
     define('WP_UMBRELLA_TEMPLATES', WP_UMBRELLA_DIR . '/templates');
     define('WP_UMBRELLA_TEMPLATES_ADMIN', WP_UMBRELLA_TEMPLATES . '/admin');

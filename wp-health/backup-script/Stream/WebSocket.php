@@ -472,7 +472,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                     }
 
                     while (!feof($fileHandle)) {
-                        $chunk = fread($fileHandle, 8192);
+                        $chunk = fread($fileHandle, 131072);
                         $message = json_encode([
                             'type' => 'FILE_CHUNK',
                             'sequence' => $sequence++,

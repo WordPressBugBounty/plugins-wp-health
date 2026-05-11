@@ -112,6 +112,7 @@ class MoveBackupModule extends AbstractController
             $dbHost = wp_umbrella_get_service('WordPressContext')->getDbHost();
 
             $fileContent = str_replace("define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');", "define('UMBRELLA_BACKUP_KEY', '" . $requestId . "');", $fileContent);
+            $fileContent = str_replace("define('UMBRELLA_DEPLOYED_AT', '[[UMBRELLA_DEPLOYED_AT]]');", "define('UMBRELLA_DEPLOYED_AT', " . time() . ');', $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');", "define('UMBRELLA_DB_HOST', '" . $dbHost . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');", "define('UMBRELLA_DB_NAME', '" . DB_NAME . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_USER', '[[UMBRELLA_DB_USER]]');", "define('UMBRELLA_DB_USER', '" . DB_USER . "');", $fileContent);

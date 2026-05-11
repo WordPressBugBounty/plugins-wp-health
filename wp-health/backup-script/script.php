@@ -29,6 +29,7 @@ try {
 }
 
 define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');
+define('UMBRELLA_DEPLOYED_AT', '[[UMBRELLA_DEPLOYED_AT]]');
 define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');
 define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');
 define('UMBRELLA_DB_USER', '[[UMBRELLA_DB_USER]]');
@@ -45,16 +46,33 @@ if (hash_equals(UMBRELLA_BACKUP_KEY, '[[UMBRELLA_BACKUP_KEY]]')) {
     return;
 }
 
-if (!isset($_GET['umbrella-backup-key'])) {
-    die();
-    return;
-}
-
 if (!function_exists('removeScript')) {
     function removeScript()
     {
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
+        @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_attempts');
+        @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_error_log');
     }
+}
+
+$deployedAt = is_numeric(UMBRELLA_DEPLOYED_AT) ? (int) UMBRELLA_DEPLOYED_AT : 0;
+if ($deployedAt <= 0 || (time() - $deployedAt) > 36 * 3600) {
+    removeScript();
+    die();
+}
+
+$attemptsFile = __DIR__ . DIRECTORY_SEPARATOR . 'cloner_attempts';
+$attempts = 0;
+if (file_exists($attemptsFile)) {
+    $rawAttempts = @file_get_contents($attemptsFile);
+    if ($rawAttempts === false) {
+        die();
+    }
+    $attempts = (int) $rawAttempts;
+}
+if ($attempts >= 50) {
+    removeScript();
+    die();
 }
 
 //[[REPLACE]]//
@@ -112,6 +130,17 @@ try {
     die;
 }
 
+$providedKey = '';
+if (is_array($request) && isset($request['umbrella_backup_key']) && is_string($request['umbrella_backup_key'])) {
+    $providedKey = $request['umbrella_backup_key'];
+} elseif (isset($_GET['umbrella-backup-key']) && is_string($_GET['umbrella-backup-key'])) {
+    $providedKey = $_GET['umbrella-backup-key'];
+}
+
+if ($providedKey === '') {
+    die();
+}
+
 $html = new UmbrellaHTMLSynchronize();
 
 $action = '';
@@ -126,13 +155,23 @@ switch ($action) {
         return;
 }
 
-$key = $_GET['umbrella-backup-key'];
-
-if (!hash_equals(UMBRELLA_BACKUP_KEY, $_GET['umbrella-backup-key'])) {
+if (!hash_equals(UMBRELLA_BACKUP_KEY, $providedKey)) {
+    $written = @file_put_contents($attemptsFile, (string) ($attempts + 1), LOCK_EX);
+    if ($written === false) {
+        die();
+    }
     $html->render('hash-not-equal');
-    // removeScript();
     return;
 }
+
+if (file_exists($attemptsFile)) {
+    $reset = @file_put_contents($attemptsFile, '0', LOCK_EX);
+    if ($reset === false) {
+        die();
+    }
+}
+
+$key = $providedKey;
 
 if (!isset($request['host']) || !isset($request['port'])) {
     $html->render('host-or-port-not-set');

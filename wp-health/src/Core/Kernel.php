@@ -52,6 +52,7 @@ abstract class Kernel
     public static function handleHooksPlugin()
     {
         require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendErrors.php';
+        require_once WP_UMBRELLA_DIR . '/src/Async/ActionSchedulerSendActivityLog.php';
 
         switch (current_filter()) {
             case 'plugins_loaded':
@@ -64,6 +65,10 @@ abstract class Kernel
 
                 foreach (self::getContainer()->getActions() as $key => $class) {
                     if (!class_exists($class)) {
+                        continue;
+                    }
+
+                    if (!self::isInstantiable($class)) {
                         continue;
                     }
 
@@ -94,6 +99,10 @@ abstract class Kernel
                         continue;
                     }
 
+                    if (!self::isInstantiable($class)) {
+                        continue;
+                    }
+
                     $class = new $class();
                     if ($class instanceof ActivationHook) {
                         $class->activate();
@@ -106,6 +115,10 @@ abstract class Kernel
                         continue;
                     }
 
+                    if (!self::isInstantiable($class)) {
+                        continue;
+                    }
+
                     $class = new $class();
                     if ($class instanceof DeactivationHook) {
                         $class->deactivate();
@@ -113,6 +126,17 @@ abstract class Kernel
                 }
                 break;
         }
+    }
+
+    protected static function isInstantiable($class)
+    {
+        try {
+            $reflection = new \ReflectionClass($class);
+        } catch (\ReflectionException $e) {
+            return false;
+        }
+
+        return $reflection->isInstantiable();
     }
 
     /**

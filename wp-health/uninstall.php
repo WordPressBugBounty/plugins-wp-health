@@ -22,6 +22,7 @@ try {
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_backup");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_task_backup");
     $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_collected_links");
+    $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_activity_log_buffer");
 
     // Broken Link Checker options
     delete_option('wp_umbrella_broken_link_checker_enabled');

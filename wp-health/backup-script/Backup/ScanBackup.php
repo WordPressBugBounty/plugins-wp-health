@@ -76,7 +76,10 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
-            if (@filesize($filePath) >= $this->context->getFileSizeLimit()) {
+            $cap = method_exists($this->context, 'getFileSizeLimitForPath')
+                ? $this->context->getFileSizeLimitForPath($filePath)
+                : $this->context->getFileSizeLimit();
+            if (@filesize($filePath) >= $cap) {
                 return false;
             }
 

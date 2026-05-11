@@ -56,8 +56,12 @@ class PrepareUpdate extends AbstractController
         $trace->addTrace('temp_backup_move', ['success' => $result['success']]);
 
         if (!$result['success']) {
-            wp_umbrella_debug_log("PrepareUpdate: backup failed for plugin '{$plugin}': " . ($result['code'] ?? 'unknown'));
-            $trace->addTrace('backup_failed', ['code' => $result['code'] ?? 'unknown']);
+            $errorDetails = $this->extractErrorDetails($result);
+            wp_umbrella_debug_log("PrepareUpdate: backup failed for plugin '{$plugin}': " . ($result['code'] ?? 'unknown') . " | {$errorDetails}");
+            $trace->addTrace('backup_failed', [
+                'code' => $result['code'] ?? 'unknown',
+                'details' => $errorDetails,
+            ]);
             return $this->returnResponse([
                 'status' => 'backup_failed',
                 'code' => $result['code'] ?? 'fs_temp_backup_move',
@@ -98,8 +102,12 @@ class PrepareUpdate extends AbstractController
         $trace->addTrace('temp_backup_move', ['success' => $result['success']]);
 
         if (!$result['success']) {
-            wp_umbrella_debug_log("PrepareUpdate: backup failed for theme '{$theme}': " . ($result['code'] ?? 'unknown'));
-            $trace->addTrace('backup_failed', ['code' => $result['code'] ?? 'unknown']);
+            $errorDetails = $this->extractErrorDetails($result);
+            wp_umbrella_debug_log("PrepareUpdate: backup failed for theme '{$theme}': " . ($result['code'] ?? 'unknown') . " | {$errorDetails}");
+            $trace->addTrace('backup_failed', [
+                'code' => $result['code'] ?? 'unknown',
+                'details' => $errorDetails,
+            ]);
             return $this->returnResponse([
                 'status' => 'backup_failed',
                 'code' => $result['code'] ?? 'fs_temp_backup_move',
@@ -120,6 +128,40 @@ class PrepareUpdate extends AbstractController
             'current_version' => $currentVersion,
             'backup_verified' => $backupVerified,
         ]);
+    }
+
+    /**
+     * Extract diagnostic details from a failed backup result for tracing.
+     */
+    protected function extractErrorDetails($result)
+    {
+        $parts = [];
+
+        if (!empty($result['wp_error'])) {
+            $parts[] = 'wp_error:' . $result['wp_error'];
+        }
+
+        if (!empty($result['errors'])) {
+            $parts[] = 'copy_errors:' . implode(' | ', array_slice($result['errors'], 0, 3));
+        }
+
+        if (!empty($result['src'])) {
+            $parts[] = 'src:' . $result['src'];
+        }
+
+        if (!empty($result['dest'])) {
+            $parts[] = 'dest:' . $result['dest'];
+        }
+
+        if (!empty($result['src_dir_resolved'])) {
+            $parts[] = 'src_dir_resolved:' . $result['src_dir_resolved'];
+        }
+
+        if (!empty($result['src_dir_original'])) {
+            $parts[] = 'src_dir_original:' . $result['src_dir_original'];
+        }
+
+        return implode(' ; ', $parts);
     }
 
     /**

@@ -351,6 +351,30 @@ if (!class_exists('UmbrellaContext', false)):
             return $this->options['file_size_limit'];
         }
 
+        /**
+         * Resolve the size limit for a given file path, using the per-extension map first
+         * then falling back to "*" and finally to the singular file_size_limit option.
+         *
+         * @param string $filePath
+         * @return int
+         */
+        public function getFileSizeLimitForPath($filePath)
+        {
+            $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+            $limits = $this->fileSizeLimits;
+
+            if (is_array($limits)) {
+                if ($extension !== '' && array_key_exists($extension, $limits)) {
+                    return (int) $limits[$extension];
+                }
+                if (array_key_exists('*', $limits)) {
+                    return (int) $limits['*'];
+                }
+            }
+
+            return (int) $this->getFileSizeLimit();
+        }
+
         public function getMaxMoPerFile()
         {
             return $this->options['max_mo_per_file'];

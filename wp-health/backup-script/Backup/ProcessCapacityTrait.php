@@ -71,7 +71,11 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 				return false;
 			}
 
-			if (@filesize($filePath) >= $this->getContext()->getFileSizeLimit()) {
+			$context = $this->getContext();
+			$cap = method_exists($context, 'getFileSizeLimitForPath')
+				? $context->getFileSizeLimitForPath($filePath)
+				: $context->getFileSizeLimit();
+			if (@filesize($filePath) >= $cap) {
 				return false;
 			}
 

@@ -8,13 +8,6 @@ class CleanupModule extends AbstractController
 {
     public function executePost($params)
     {
-        if (!isset($params['filename'])) {
-            return $this->returnResponse([
-                'success' => false,
-                'code' => 'no_filename',
-            ]);
-        }
-
         if (!isset($params['requestId'])) {
             return $this->returnResponse([
                 'success' => false,
@@ -25,8 +18,9 @@ class CleanupModule extends AbstractController
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
 
         $files = [
-            $source . $params['filename'],
+            $source . 'cloner.php',
             $source . 'cloner_error_log',
+            $source . 'cloner_attempts',
             $source . sprintf('%s-dictionnary.php', $params['requestId']),
             $source . sprintf('dictionnary.php', $params['requestId']),
         ];

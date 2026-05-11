@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Actions\Admin;
 
+use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 use WPUmbrella\Core\Hooks\ActivationHook;
 use WPUmbrella\Core\Hooks\ExecuteHooksBackend;
 use WPUmbrella\Core\Hooks\DeactivationHook;
@@ -66,6 +67,39 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             delete_option('wp_umbrella_disallow_one_click_access');
         } else {
             update_option('wp_umbrella_disallow_one_click_access', true);
+        }
+
+        $previousIntervalSeconds = SyncScheduler::resolveInterval();
+
+        if (isset($_POST['wp_umbrella_activity_log_sync_interval_minutes'])) {
+            $minutes = (int) $_POST['wp_umbrella_activity_log_sync_interval_minutes'];
+            $seconds = $minutes * 60;
+
+            if ($seconds < SyncScheduler::MIN_INTERVAL_SECONDS) {
+                $seconds = SyncScheduler::MIN_INTERVAL_SECONDS;
+            }
+
+            if ($seconds > SyncScheduler::MAX_INTERVAL_SECONDS) {
+                $seconds = SyncScheduler::MAX_INTERVAL_SECONDS;
+            }
+
+            update_option(SyncScheduler::OPTION_INTERVAL, $seconds, false);
+        }
+
+        $newIntervalSeconds = SyncScheduler::resolveInterval();
+        $intervalChanged = $newIntervalSeconds !== $previousIntervalSeconds;
+
+        if (isset($_POST['wp_umbrella_activity_log_enabled']) && $_POST['wp_umbrella_activity_log_enabled'] === '1') {
+            update_option('wp_umbrella_activity_log_enabled', true);
+
+            if ($intervalChanged) {
+                (new SyncScheduler())->unschedule();
+            }
+
+            (new SyncScheduler())->schedule();
+        } else {
+            update_option('wp_umbrella_activity_log_enabled', false);
+            (new SyncScheduler())->unschedule();
         }
 
         $options = $this->optionService->getOptions([

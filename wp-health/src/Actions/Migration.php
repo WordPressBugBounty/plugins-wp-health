@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Actions;
 
+use WPUmbrella\Actions\ActivityLog\Framework\SchemaInstaller as ActivityLogSchemaInstaller;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
 
 class Migration implements ExecuteHooks
@@ -126,6 +127,14 @@ class Migration implements ExecuteHooks
             $wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}umbrella_collected_links");
             delete_option('wp_umbrella_broken_link_checker_enabled');
             delete_option('wp_umbrella_blc_scan_interval');
+        }
+
+        if ($currentVersion && version_compare($currentVersion, '2.23.0', '<')) {
+            // Activity Log: create the local buffer table for sites already
+            // running an older version. Fresh installs get the table on
+            // activation via the schema installer hook, this branch covers
+            // the upgrade path only.
+            ActivityLogSchemaInstaller::install();
         }
     }
 }

@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.22.5
+Stable tag: v2.23.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,6 +83,12 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 == Changelog ==
 
+= 2.23.0 (05-11-2026) =
+- New: Activity Log on demand
+- Improved: per-extension backup file size limits
+- Improved: support page now describes each setting and ships a buffer cleanup action
+- Fixed: skip non-instantiable classes when wiring action hooks
+
 = 2.22.5 (04-23-2026) =
 - Improved: backup reliability and error handling
 - Improved: backup exclusion list accuracy
@@ -138,79 +144,5 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 = 2.20.0 (12-16-2025) =
 - Improved: traceability to guarantee the entire backup process
-
-= 2.19.1 (12-04-2025) =
-- Improved: backup process with integrity check
-- Improved: restore communication process
-
-= 2.19.0 (11-03-2025) =
-- New: add safe update for themes
-- Improved: backup process with infinite symlink detection
-- Bugfix: database optimization
-
-= 2.18.6 (09-03-2025) =
-- Improved: WordPress subfolder management
-- Bugfix: Flywheel issue on backup script
-
-= 2.18.5 (07-25-2025) =
-- Bugfix: support Divi cache directory on a backup
-- Improved: change to SQL file comment to avoid error on restore
-
-= 2.18.4 (06-30-2025) =
-- Bugfix: PHP warning on WP Fastest Cache
-
-= 2.18.3 (06-27-2025) =
-- Improved: add LiteSpeed, WP Fatest Cache and WP Super Cache to the cache control
-- Improved: get changelog from premium plugins with admin_init hook
-
-= 2.18.2 (06-19-2025) =
-- Improved: remove query monitors headers during API request
-- Bugfix: PHP warning on directory functions
-- Bugfix: Prevent header already sent on backup script
-
-= 2.18.1 (06-16-2025) =
-- Improved: backup process with op cache
-- Improved: cache control on response
-- Bugfix: PHP warning with nginx purger
-- New: retrieve changelog from premium plugins
-
-= 2.18.0 (05-31-2025) =
-- New: Patchstack integration
-- New: clear cache from Nginx purger
-- Improved: backup process
-- Improved: directory listing with bedrock
-- Bugfix: remove sanitize_file_name on backup script to prevent error filename
-- Bugfix: internal error on restore script
-- Bugfix: check core update
-
-= 2.17.1 (12-05-2024) =
-- Security Fix: Unauthenticated Local File Inclusion
-
-= 2.17.0 (11-27-2024) =
-- Improved: creation of a checkpoint folder for updates.
-- Improved: backup process
-- Improved: restore process
-- Bugfix: php warning 8.1
-
-= 2.16.4 (09-27-2024) =
-- Improved: backup script and remove old file
-
-= 2.16.3 (09-24-2024) =
-- Fix: remove duplicate code
-
-= 2.16.2 (09-24-2024) =
-- New: retrieve theme updates from your WordPress
-- New: retrieve core updates from your WordPress
-- Improved: regenerate secret token
-- Improved: backup communication
-
-= 2.16.1 (08-20-2024) =
-- New: compatibility with Pressable
-
-= 2.16.0 (08-06-2024) =
-- Improved: restoration script
-- Improved: deactivation of the old backup system for new projects.
-- New: add a restore point for safe update
-- New: retrieving plugins updates from your WordPress
 
 Full changelog available [Here!](https://wp-umbrella.com/change-log/)
