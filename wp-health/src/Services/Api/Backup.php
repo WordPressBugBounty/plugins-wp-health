@@ -56,11 +56,11 @@ class Backup extends BaseClient
 
         try {
             add_filter('https_ssl_verify', '__return_false');
-            $response = wp_remote_get($url, [
+            $response = wp_umbrella_handle_outbound_response(wp_remote_get($url, [
                 'headers' => $this->getHeadersV2(),
                 'sslverify' => false,
                 'timeout' => 50,
-            ]);
+            ]));
         } catch (\Exception $e) {
             return null;
         }

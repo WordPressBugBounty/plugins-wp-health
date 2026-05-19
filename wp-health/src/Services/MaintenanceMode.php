@@ -29,13 +29,18 @@ class MaintenanceMode
 
 	private function generateSmartMaintenanceContent()
 	{
-		$apiKey = wp_umbrella_get_api_key();
+		$secretTokenHash = wp_umbrella_get_secret_token();
+
+		if (!$secretTokenHash || !wp_umbrella_is_new_hash()) {
+			return '<?php' . "\n" . '$upgrading = ' . time() . ';' . "\n";
+		}
 
 		return '<?php' . "\n"
 			. '$upgrading = ' . time() . ';' . "\n"
-			. '// Allow WP Umbrella requests through during maintenance' . "\n"
-			. 'if (isset($_SERVER[\'HTTP_X_UMBRELLA\']) && function_exists(\'hash_equals\')) {' . "\n"
-			. '    if (hash_equals(\'' . addslashes($apiKey) . '\', $_SERVER[\'HTTP_X_UMBRELLA\'])) {' . "\n"
+			. '$auth = isset($_SERVER[\'HTTP_AUTHORIZATION\']) ? $_SERVER[\'HTTP_AUTHORIZATION\'] : \'\';' . "\n"
+			. 'if (stripos($auth, \'Bearer \') === 0 && function_exists(\'hash_equals\') && function_exists(\'hash\')) {' . "\n"
+			. '    $bearer = substr($auth, 7);' . "\n"
+			. '    if (hash_equals(\'' . addslashes($secretTokenHash) . '\', hash(\'sha256\', $bearer))) {' . "\n"
 			. '        $upgrading = 0;' . "\n"
 			. '    }' . "\n"
 			. '}' . "\n";

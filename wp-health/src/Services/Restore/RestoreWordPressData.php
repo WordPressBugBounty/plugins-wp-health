@@ -7,66 +7,6 @@ if (!defined('ABSPATH')) {
 
 class RestoreWordPressData
 {
-    public function writePluginRestoreData()
-    {
-        try {
-            $upload_dir = wp_upload_dir();
-            global $wpdb;
-
-            $value = [
-                'dbname' => DB_NAME,
-                'user' => DB_USER,
-                'password' => DB_PASSWORD,
-                'charset' => DB_CHARSET,
-                'host' => wp_umbrella_get_service('WordPressContext')->getDbHost(),
-                'collate' => DB_COLLATE,
-                'prefix' => $wpdb->prefix,
-            ];
-
-            $file = 'umbrella-restore.php';
-            $current = "<?php
-
-			require_once __DIR__ . '/umbrella-restore/index.php';
-			";
-
-            file_put_contents(sprintf('%s/%s', ABSPATH, $file), $current);
-
-            $apiKey = wp_umbrella_get_api_key();
-            $projectId = wp_umbrella_get_project_id();
-
-            $file = 'security.php';
-            $current = "<?php
-
-define('TOKEN', '{$apiKey}');
-define('PROJECT_ID', {$projectId});
-			";
-
-            file_put_contents(sprintf('%s/umbrella-restore/%s', ABSPATH, $file), $current);
-
-            $file = 'security-database.php';
-            $current = "<?php
-define('DB_NAME', '{$value['dbname']}');
-define('DB_USER', '{$value['user']}');
-define('DB_PASSWORD', '{$value['password']}');
-define('DB_CHARSET', '{$value['charset']}');
-define('DB_COLLATE', '{$value['collate']}');
-define('DB_HOST', '{$value['host']}');
-define('DB_PREFIX', '{$value['prefix']}');
-			";
-
-            file_put_contents(sprintf('%s/umbrella-restore/%s', ABSPATH, $file), $current);
-
-            return  [
-                'success' => true,
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error_code' => 'write_plugin_restore_data',
-            ];
-        }
-    }
-
     public function getWordPressFiles()
     {
         $value = [

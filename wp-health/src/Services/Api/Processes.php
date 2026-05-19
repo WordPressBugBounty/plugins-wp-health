@@ -39,12 +39,12 @@ class Processes extends BaseClient
     {
         add_filter('https_ssl_verify', '__return_false');
         try {
-            $response = wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/external/processes', [
+            $response = wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/external/processes', [
                 'method' => 'POST',
                 'body' => json_encode($data),
                 'headers' => $this->getHeadersV2(),
                 'timeout' => 10,
-            ]);
+            ]));
         } catch (\Exception $e) {
             return null;
         }

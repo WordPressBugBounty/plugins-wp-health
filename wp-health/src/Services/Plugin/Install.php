@@ -55,15 +55,32 @@ class Install
                 ];
             }
 
-            $latestInstall = $this->getLatestPluginData();
+            // WP populates $upgrader->plugin_info() with the main file of the package
+            // it just extracted. The previous scandir + filemtime heuristic returned
+            // whichever plugin dir on disk had the latest mtime, which races with any
+            // other plugin writing to its own folder during the install.
+            $mainFile = $upgrader->plugin_info();
+
+            if (empty($mainFile)) {
+                return [
+                    'status' => 'error',
+                    'code' => 'install_fail_unknown_main_file',
+                    'message' => 'Install reported success but plugin main file could not be resolved',
+                    'data' => [
+                        'uri' => $urlToInstall
+                    ]
+                ];
+            }
+
+            $pluginData = get_plugin_data(WP_PLUGIN_DIR . '/' . $mainFile);
 
             return [
                 'status' => 'success',
                 'code' => 'success',
                 'data' => [
-                    'slug' => $latestInstall['slug'],
-                    'plugin' => $latestInstall['main_file'],
-                    'plugin_data' => $latestInstall['data']
+                    'slug' => dirname($mainFile),
+                    'plugin' => $mainFile,
+                    'plugin_data' => $pluginData
                 ]
             ];
         } catch (Exception $e) {
@@ -73,51 +90,5 @@ class Install
                 'data' => $e->getMessage()
             ];
         }
-    }
-
-    public function getLatestPluginData(): array
-    {
-        $plugins_dir = WP_PLUGIN_DIR;
-
-        $dir_contents = scandir($plugins_dir);
-
-        $plugin_dirs = array_filter($dir_contents, function ($dir) use ($plugins_dir) {
-            return is_dir($plugins_dir . '/' . $dir) && $dir != '.' && $dir != '..';
-        });
-
-        usort($plugin_dirs, function ($a, $b) use ($plugins_dir) {
-            return filemtime($plugins_dir . '/' . $b) - filemtime($plugins_dir . '/' . $a);
-        });
-
-        if (empty($plugin_dirs)) {
-            return [
-                'slug' => '',
-                'main_file' => '',
-                'data' => []
-            ];
-        }
-
-        $latest_plugin_dir = $plugins_dir . '/' . $plugin_dirs[0];
-
-        $latest_plugin_files = scandir($latest_plugin_dir);
-
-        $main_plugin_file = '';
-
-        $pluginData = [];
-        foreach ($latest_plugin_files as $file) {
-            if (pathinfo($file, PATHINFO_EXTENSION) == 'php') {
-                $pluginData = get_plugin_data($latest_plugin_dir . '/' . $file);
-                if (!empty($pluginData['Name'])) {
-                    $main_plugin_file = $file;
-                    break;
-                }
-            }
-        }
-
-        return [
-            'slug' => $plugin_dirs[0],
-            'main_file' => $plugin_dirs[0] . '/' . $main_plugin_file,
-            'data' => $pluginData
-        ];
     }
 }

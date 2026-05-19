@@ -22,6 +22,7 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         add_action('admin_init', [$this, 'init']);
         add_action('admin_post_wp_umbrella_support_option', [$this, 'supportOption']);
         add_action('admin_post_wp_umbrella_regenerate_secret_token', [$this, 'regenerateSecretToken']);
+        add_action('wp_ajax_wp_umbrella_repair_ajax', [$this, 'repairAjax']);
     }
 
     public function deactivate()
@@ -110,12 +111,12 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             $options['secret_token'] = !empty($_POST['secret_token']) ? wp_umbrella_get_service('WordPressContext')->getHash(sanitize_text_field($_POST['secret_token'])) : '';
         }
 
-        if (isset($_POST['api_key']) && $_POST['api_key'] !== self::SECURED_VALUE && strlen($_POST['api_key']) < 400) {
-            $options['api_key'] = !empty($_POST['api_key']) ? sanitize_text_field($_POST['api_key']) : '';
-        }
-
         if (isset($_POST['project_id']) && $_POST['project_id'] !== self::SECURED_VALUE && strlen($_POST['project_id']) < 100) {
             $options['project_id'] = isset($_POST['project_id']) ? sanitize_text_field($_POST['project_id']) : '';
+        }
+
+        if (isset($_POST['request_token']) && $_POST['request_token'] !== self::SECURED_VALUE && strlen($_POST['request_token']) < 400) {
+            $options['request_token'] = !empty($_POST['request_token']) ? sanitize_text_field($_POST['request_token']) : '';
         }
 
         $this->optionService->setOptions($options);
@@ -131,6 +132,26 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
     public function init()
     {
         register_setting(WP_UMBRELLA_OPTION_GROUP, WP_UMBRELLA_SLUG, [$this, 'parseArgs']);
+    }
+
+    public function repairAjax()
+    {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => __('Forbidden.', 'wp-health')], 403);
+        }
+
+        check_ajax_referer('wp_umbrella_repair_ajax');
+
+        $result = wp_umbrella_get_service('PairingService')->runPairing();
+
+        if ($result) {
+            wp_send_json_success(['code' => 'success']);
+        }
+
+        wp_send_json_error([
+            'code' => 'noop',
+            'message' => __('Reconnection did not complete. The site stays connected via the legacy path; you can retry.', 'wp-health'),
+        ]);
     }
 
     public function regenerateSecretToken()
@@ -187,6 +208,13 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         }
 
         $options['secret_token'] = wp_umbrella_get_service('WordPressContext')->getHash($secretToken);
+
+        $requestToken = wp_umbrella_request_token_from_response($responseValidateSecret);
+        if ($requestToken) {
+            $options['request_token'] = $requestToken;
+            $options['api_key'] = '';
+        }
+
         wp_umbrella_get_service('Option')->setOptions($options);
         wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
         return;

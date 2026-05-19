@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.23.0
+Stable tag: v2.24.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.24.0 (05-19-2026) =
+- New: WP-CLI command to connect a site to WP Umbrella with your API key, with workspace selection when you belong to several.
+- Improved: when your site is protected by HTTP Basic Authentication, the plugin now verifies your credentials against your site before saving them, and skips saving them when they are not actually needed.
+- Improved: connection stability with the WP Umbrella backend.
+- Improved: support page now includes a "Test ping" diagnostic action.
+- Fixed: HTTP Auth credentials entered during connection are now reliably saved and used on every subsequent communication with your site.
+- Fixed: plugin path resolution on hosts that use symlinked plugin directories.
 
 = 2.23.0 (05-11-2026) =
 - New: Activity Log on demand

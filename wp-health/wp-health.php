@@ -8,7 +8,7 @@ Text Domain: wp-health
 Domain Path: /languages/
 Requires at least: 5.8
 Requires PHP: 7.4
-Version: 2.23.0
+Version: 2.24.0
 License: GPLv2
 */
 
@@ -44,4 +44,11 @@ function wp_umbrella_load_plugin()
 
 if (!defined('WP_UMBRELLA_IS_INIT') && wp_umbrella_is_compatible()) {
     wp_umbrella_load_plugin();
+}
+
+if (defined('WP_CLI') && WP_CLI && class_exists('\\WPUmbrella\\CLI\\PairCommand')) {
+    \WP_CLI::add_command('wp-umbrella pair', \WPUmbrella\CLI\PairCommand::class);
+}
+if (defined('WP_CLI') && WP_CLI && class_exists('\\WPUmbrella\\CLI\\AttachByApiKeyCommand')) {
+    \WP_CLI::add_command('wp-umbrella attach', \WPUmbrella\CLI\AttachByApiKeyCommand::class);
 }

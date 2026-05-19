@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.23.0');
+    define('WP_UMBRELLA_VERSION', '2.24.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -28,6 +28,10 @@ function wp_umbrella_init_defined_standalone()
         define('WP_UMBRELLA_NEW_API_URL', 'https://api-umb1.wp-umbrella.com');
         define('WP_UMBRELLA_APP_URL', 'https://app.wp-umbrella.com');
         define('WP_UMBRELLA_DEBUG', false);
+    }
+
+    if (!defined('WP_UMBRELLA_PUBLIC_API_URL')) {
+        define('WP_UMBRELLA_PUBLIC_API_URL', 'https://public-api.wp-umbrella.com');
     }
 }
 
@@ -151,6 +155,68 @@ function wp_umbrella_get_project_id()
 function wp_umbrella_get_secret_token()
 {
     return wp_umbrella_get_option('secret_token', false);
+}
+
+function wp_umbrella_get_request_token()
+{
+    return wp_umbrella_get_option('request_token', false);
+}
+
+function wp_umbrella_get_outbound_bearer()
+{
+    $requestToken = wp_umbrella_get_request_token();
+    if ($requestToken) {
+        return $requestToken;
+    }
+    return wp_umbrella_get_api_key();
+}
+
+function wp_umbrella_clear_request_token()
+{
+    $option = wp_umbrella_get_service('Option');
+    $options = $option->getOptions(['secure' => false]);
+    $options['request_token'] = '';
+    $option->setOptions($options);
+}
+
+function wp_umbrella_request_token_from_response($response)
+{
+    if (!is_array($response) || !isset($response['request_token'])) {
+        return null;
+    }
+    if (!is_string($response['request_token']) || empty($response['request_token'])) {
+        return null;
+    }
+    return $response['request_token'];
+}
+
+function wp_umbrella_handle_outbound_response($response)
+{
+    if (is_wp_error($response)) {
+        return $response;
+    }
+
+    $code = (int) wp_remote_retrieve_response_code($response);
+    if ($code !== 401) {
+        return $response;
+    }
+
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+    if (!is_array($body) || !isset($body['code'])) {
+        return $response;
+    }
+
+    if ($body['code'] !== 'invalid_token') {
+        return $response;
+    }
+
+    if (!wp_umbrella_get_request_token()) {
+        return $response;
+    }
+
+    wp_umbrella_clear_request_token();
+
+    return $response;
 }
 
 function wp_umbrella_generate_random_string($length = 64)

@@ -56,12 +56,39 @@ class ValidationApiKey implements ExecuteHooksBackend
             $httpAuthPassword = null;
         }
 
+        $probe = $this->probeHttpAuthRequirement($httpAuthUser, $httpAuthPassword);
+
+        if ($probe['determined']) {
+            if (!$probe['needed']) {
+                $httpAuthUser = null;
+                $httpAuthPassword = null;
+            } elseif (!empty($probe['missing'])) {
+                wp_send_json_error([
+                    'code' => 'http_auth_required',
+                ]);
+                return;
+            } elseif (empty($probe['valid'])) {
+                wp_send_json_error([
+                    'code' => 'http_auth_invalid',
+                ]);
+                return;
+            }
+        }
+
         $options['allowed'] = false;
         if (empty($apiKey)) {
             wp_send_json_error([
                 'code' => 'missing_parameters',
             ]);
             exit;
+        }
+
+        if ($apiKey === Option::SECURED_VALUE) {
+            wp_send_json_success([
+                'code' => 'success',
+                'unchanged' => true,
+            ]);
+            return;
         }
 
         $optionsBdd = $this->optionService->getOptions();
@@ -172,6 +199,12 @@ class ValidationApiKey implements ExecuteHooksBackend
                     return;
                 }
 
+                $requestToken = wp_umbrella_request_token_from_response($responseValidateSecret);
+                if ($requestToken) {
+                    $newOptions['request_token'] = $requestToken;
+                    $newOptions['api_key'] = '';
+                }
+
                 $this->optionService->setOptions($newOptions);
 
                 wp_send_json_success([
@@ -243,6 +276,65 @@ class ValidationApiKey implements ExecuteHooksBackend
         }
     }
 
+    protected function probeHttpAuthRequirement($httpAuthUser, $httpAuthPassword)
+    {
+        $restUrl = rest_url();
+
+        $args = [
+            'timeout' => 5,
+            'sslverify' => false,
+            'redirection' => 0,
+        ];
+
+        $responseNoAuth = wp_remote_get($restUrl, $args);
+
+        if (is_wp_error($responseNoAuth)) {
+            error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] no-auth probe failed: ' . $responseNoAuth->get_error_message());
+            return ['determined' => false];
+        }
+
+        $status = (int) wp_remote_retrieve_response_code($responseNoAuth);
+        $wwwAuth = wp_remote_retrieve_header($responseNoAuth, 'www-authenticate');
+        error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] url=' . $restUrl . ' no-auth status=' . $status . ' www-authenticate=' . (is_array($wwwAuth) ? implode(',', $wwwAuth) : ($wwwAuth ?: '<none>')));
+
+        if ($status >= 200 && $status < 400) {
+            return ['determined' => true, 'needed' => false];
+        }
+
+        if ($status !== 401) {
+            return ['determined' => false];
+        }
+
+        if (empty($wwwAuth) || stripos((is_array($wwwAuth) ? implode(',', $wwwAuth) : $wwwAuth), 'basic') === false) {
+            return ['determined' => false];
+        }
+
+        if (empty($httpAuthUser) || empty($httpAuthPassword)) {
+            return ['determined' => true, 'needed' => true, 'missing' => true];
+        }
+
+        $argsWithAuth = $args;
+        $argsWithAuth['headers'] = [
+            'Authorization' => 'Basic ' . base64_encode($httpAuthUser . ':' . $httpAuthPassword),
+        ];
+
+        $responseWithAuth = wp_remote_get($restUrl, $argsWithAuth);
+
+        if (is_wp_error($responseWithAuth)) {
+            error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] with-auth probe failed: ' . $responseWithAuth->get_error_message());
+            return ['determined' => false];
+        }
+
+        $statusWithAuth = (int) wp_remote_retrieve_response_code($responseWithAuth);
+        error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] with-auth status=' . $statusWithAuth);
+
+        if ($statusWithAuth >= 200 && $statusWithAuth < 400) {
+            return ['determined' => true, 'needed' => true, 'valid' => true];
+        }
+
+        return ['determined' => true, 'needed' => true, 'valid' => false];
+    }
+
     public function check()
     {
         if (!current_user_can('manage_options')) {
@@ -273,6 +365,17 @@ class ValidationApiKey implements ExecuteHooksBackend
                 'code' => 'missing_parameters',
             ]);
             exit;
+        }
+
+        if ($apiKey === Option::SECURED_VALUE) {
+            wp_send_json_success([
+                'api_key' => null,
+                'user' => null,
+                'project_id' => null,
+                'code' => 'success',
+                'unchanged' => true,
+            ]);
+            return;
         }
 
         try {

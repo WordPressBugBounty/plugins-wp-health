@@ -11,14 +11,18 @@ class RequestPermissionsByUmbrellaRequest
      */
     public function isOnlyTokenAuthorized(UmbrellaRequest $request)
     {
-        $token = $request->getToken();
-        $response = wp_umbrella_get_service('ApiWordPressPermission')->isTokenAuthorized($token);
-
-        if (!isset($response['authorized'])) {
-            return false;
+        $bearer = $request->getAuthorizationBearer();
+        if ($bearer !== null) {
+            if ($this->isBearerHashSecretValid($bearer)) {
+                return true;
+            }
+            if ($this->isApiKeyValid($bearer)) {
+                return true;
+            }
         }
 
-        return $response['authorized'];
+        $token = $request->getToken();
+        return $this->isApiKeyValid($token);
     }
 
     /**
@@ -27,32 +31,75 @@ class RequestPermissionsByUmbrellaRequest
      */
     public function isFullyAuthorized(UmbrellaRequest $request)
     {
+        $action = $request->getAction();
+        $options = ['with_cache' => $action !== '/v1/validation-application-token'];
+
+        $bearer = $request->getAuthorizationBearer();
+        if ($bearer === null) {
+            $bearer = wp_umbrella_get_service('BearerTokenExtractor')->fromHeaderValue(
+                $request->getParam('x-authorization')
+            );
+        }
+        if ($bearer !== null && $this->isBearerHashSecretValid($bearer, $options)) {
+            return true;
+        }
+
         $token = $request->getToken();
         $secretToken = $request->getSecretToken();
 
-        $action = $request->getAction();
         if ($action === '/v1/login') {
             if (!$secretToken) {
                 $secretToken = $request->getParam('x-secret-token');
             }
-
             if (!$secretToken) {
                 $secretToken = $request->getParam('x-auth-token');
             }
-
             if (!$token) {
                 $token = $request->getParam('x-umbrella');
             }
         }
 
-        $response = wp_umbrella_get_service('ApiWordPressPermission')->isFullyAuthorized($token, $secretToken, [
-            'with_cache' => $action !== '/v1/validation-application-token'
-        ]);
+        return $this->isFullAuthValid($token, $secretToken, $options);
+    }
 
+    /**
+     * @param string|null $token
+     * @return boolean
+     */
+    protected function isApiKeyValid($token)
+    {
+        $response = wp_umbrella_get_service('ApiWordPressPermission')->isTokenAuthorized($token);
         if (!isset($response['authorized'])) {
             return false;
         }
+        return $response['authorized'];
+    }
 
+    /**
+     * @param string|null $token
+     * @param string|null $secretToken
+     * @param array $options
+     * @return boolean
+     */
+    protected function isFullAuthValid($token, $secretToken, $options)
+    {
+        $response = wp_umbrella_get_service('ApiWordPressPermission')->isFullyAuthorized($token, $secretToken, $options);
+        if (!isset($response['authorized'])) {
+            return false;
+        }
+        return $response['authorized'];
+    }
+
+    protected function isBearerHashSecretValid($bearer, $options = [])
+    {
+        if (empty($bearer)) {
+            return false;
+        }
+        $hashedBearer = wp_umbrella_get_service('WordPressContext')->getHash($bearer);
+        $response = wp_umbrella_get_service('ApiWordPressPermission')->isSecretTokenAuthorized($hashedBearer, $options);
+        if (!isset($response['authorized'])) {
+            return false;
+        }
         return $response['authorized'];
     }
 }

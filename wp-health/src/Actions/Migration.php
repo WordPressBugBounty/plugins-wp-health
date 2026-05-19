@@ -6,9 +6,31 @@ use WPUmbrella\Core\Hooks\ExecuteHooks;
 
 class Migration implements ExecuteHooks
 {
+    const PAIRING_RETRY_LOCK_OPTION = 'wp_umbrella_pairing_retry_lock';
+
+    const PAIRING_RETRY_LOCK_TTL = 900;
+
     public function hooks()
     {
         add_action('admin_init', [$this, 'upgrader']);
+        add_action('admin_init', [$this, 'ensurePaired']);
+    }
+
+    public function ensurePaired()
+    {
+        $pairingService = wp_umbrella_get_service('PairingService');
+
+        if (!$pairingService->shouldStartPairing()) {
+            return;
+        }
+
+        if (get_transient(self::PAIRING_RETRY_LOCK_OPTION)) {
+            return;
+        }
+
+        set_transient(self::PAIRING_RETRY_LOCK_OPTION, 1, self::PAIRING_RETRY_LOCK_TTL);
+
+        $pairingService->runPairing();
     }
 
     protected function updateMuPlugin()

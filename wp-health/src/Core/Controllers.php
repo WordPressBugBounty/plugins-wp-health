@@ -8,6 +8,34 @@ abstract class Controllers
     public static function getControllers()
     {
         $controllers = [
+            '/v1/pair-challenge' => [
+                'route' => '/pair-challenge',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Api\PairChallengeController::class,
+                    ],
+                ]
+            ],
+            '/v1/repair' => [
+                'route' => '/repair',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Api\RepairController::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Api\RepairController::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/patchstack/license-activation' => [
                 'route' => '/patchstack/license-activation',
                 'methods' => [
@@ -986,19 +1014,6 @@ abstract class Controllers
                     [
                         'method' => 'POST',
                         'class' => \WPUmbrella\Controller\Login::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/umbrella-nonce-login' => [
-                'route' => '/umbrella-nonce-login',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\UmbrellaNonceLogin::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,

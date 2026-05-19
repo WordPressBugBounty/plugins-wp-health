@@ -12,6 +12,7 @@ try {
     delete_option('wp_umbrella_backup_data_process');
     delete_option('wp_umbrella_backup_suffix_security');
     delete_option('wp_umbrella_number_trial_auto_install');
+    delete_transient('wp_umbrella_auto_install_lock');
     delete_transient('wp_umbrella_white_label_data_cache');
 
     global $wpdb;

@@ -15,6 +15,8 @@ class Option
         'allowed' => false,
     ];
 
+    protected $secureKeys = ['secret_token', 'api_key', 'request_token'];
+
     /**
      * Get options default.
      *
@@ -59,6 +61,16 @@ class Option
 		return $options['secret_token'];
 	}
 
+	public function getRequestTokenWithoutCache(){
+		$options = $this->getOptionsWithoutCache();
+
+		if(!isset($options['request_token'])){
+			return null;
+		}
+
+		return $options['request_token'];
+	}
+
 
     /**
      * @return array
@@ -70,14 +82,11 @@ class Option
         $options = wp_parse_args(get_option(WP_UMBRELLA_SLUG), $this->getOptionsDefault());
 
 		if($secure) {
-			if(isset($options['secret_token'])){
-				unset($options['secret_token']);
+			foreach ($this->secureKeys as $secureKey) {
+				if (isset($options[$secureKey])) {
+					unset($options[$secureKey]);
+				}
 			}
-
-			if(isset($options['api_key'])){
-				unset($options['api_key']);
-			}
-
 		}
         return $options;
     }
@@ -90,7 +99,7 @@ class Option
      */
     public function getOption($name, $secure = true)
     {
-		if($secure && in_array($name, ["secret_token", "api_key",], true)){
+		if ($secure && in_array($name, $this->secureKeys, true)) {
 			return null;
 		}
 

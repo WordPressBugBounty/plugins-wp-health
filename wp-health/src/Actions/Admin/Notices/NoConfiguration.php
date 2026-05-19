@@ -9,8 +9,7 @@ class NoConfiguration implements ExecuteHooksBackend
 {
     public function hooks()
     {
-        $apiKey = wp_umbrella_get_api_key();
-        if (empty($apiKey)) {
+        if (empty(wp_umbrella_get_api_key()) && empty(wp_umbrella_get_request_token())) {
             add_action('admin_notices', [$this, 'admin_notice']);
         }
 	}

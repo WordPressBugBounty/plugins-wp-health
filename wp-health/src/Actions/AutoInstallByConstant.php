@@ -6,15 +6,7 @@ use WPUmbrella\Core\Hooks\ExecuteHooks;
 
 class AutoInstallByConstant implements ExecuteHooks, ActivationHook
 {
-    protected $optionService;
-
-    protected $getOwnerService;
-
-    public function __construct()
-    {
-        $this->optionService = wp_umbrella_get_service('Option');
-        $this->getOwnerService = wp_umbrella_get_service('Owner');
-    }
+    const RETRY_LOCK = 'wp_umbrella_auto_install_lock';
 
     public function hooks()
     {
@@ -26,185 +18,51 @@ class AutoInstallByConstant implements ExecuteHooks, ActivationHook
         $this->handleAutoInstall();
     }
 
-    protected function successAutoInstall()
+    public function handleAutoInstall()
     {
-        try {
-            if (file_exists(WP_UMBRELLA_DIR_MAIN_FILE) && !is_multisite()) {
-                $pluginFileContent = @file_get_contents(WP_UMBRELLA_DIR_MAIN_FILE);
-                $pluginFileContent = str_replace('define("WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT", true);', '', $pluginFileContent);
-                $pluginFileContent = str_replace("define('WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT', true);", '', $pluginFileContent);
-                @file_put_contents(WP_UMBRELLA_DIR_MAIN_FILE, $pluginFileContent);
+        if (!$this->shouldRun()) {
+            return;
+        }
 
-                delete_option('wp_umbrella_number_trial_auto_install');
-            }
-        } catch (\Exception $e) {
-            // No black magic
+        $optionService = wp_umbrella_get_service('Option');
+
+        $optionService->setOptions([
+            'allowed' => true,
+            'api_key' => WP_UMBRELLA_API_KEY,
+            'project_id' => '',
+        ]);
+
+        $paired = wp_umbrella_get_service('PairingService')->runPairing();
+
+        if (!$paired) {
+            set_transient(self::RETRY_LOCK, 1, HOUR_IN_SECONDS);
         }
     }
 
-    public function handleAutoInstall()
+    protected function shouldRun()
     {
-        if (!defined('WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT')) {
-            return;
+        if (!defined('WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT') || !WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT) {
+            return false;
         }
 
-        if (!WP_UMBRELLA_AUTO_INSTALL_WITH_CONSTANT) {
-            return;
-        }
-
-        if (!defined('WP_UMBRELLA_API_KEY')) {
-            return;
+        if (!defined('WP_UMBRELLA_API_KEY') || empty(WP_UMBRELLA_API_KEY)) {
+            return false;
         }
 
         if (defined('DOING_AJAX') && DOING_AJAX) {
-            return;
+            return false;
         }
 
-        $apiKey = wp_umbrella_get_api_key();
-
-        if (!empty($apiKey)) {
-            return;
+        if (get_transient(self::RETRY_LOCK)) {
+            return false;
         }
 
-        $numberTrialAutoInstall = get_option('wp_umbrella_number_trial_auto_install', 0);
+        $optionService = wp_umbrella_get_service('Option');
 
-        if ($numberTrialAutoInstall > 3) {
-            return;
+        if (!empty($optionService->getRequestTokenWithoutCache())) {
+            return false;
         }
 
-        $numberTrialAutoInstall++;
-        update_option('wp_umbrella_number_trial_auto_install', $numberTrialAutoInstall, false);
-
-        $apiKey = WP_UMBRELLA_API_KEY;
-        $httpAuthUser = defined('WP_UMBRELLA_HTTP_AUTH_USER') ? WP_UMBRELLA_HTTP_AUTH_USER : null;
-        $httpAuthPassword = defined('WP_UMBRELLA_HTTP_AUTH_PASSWORD') ? WP_UMBRELLA_HTTP_AUTH_PASSWORD : null;
-
-        $data = $this->getOwnerService->validateApiKeyOnApplication([
-            'api_key' => $apiKey,
-        ]);
-
-        $secretToken = wp_umbrella_generate_random_string(128);
-
-        if (!wp_umbrella_is_new_hash()) {
-            wp_umbrella_init_new_hash();
-        }
-
-        $options = [
-            'allowed' => false,
-            'api_key' => $apiKey,
-            'project_id' => '',
-            'secret_token' => wp_umbrella_get_service('WordPressContext')->getHash($secretToken),
-        ];
-
-        $owner = $data['result'];
-
-        if (isset($owner['total_projects']) && isset($owner['limit_projects'])) {
-            if ($owner['total_projects'] >= $owner['limit_projects']) {
-                return;
-            }
-        }
-
-        // Project exist, need to regenerate secret token
-        if ($data && !isset($data['code']) && isset($owner['project']['id'])) {
-            $options['allowed'] = true;
-            $options['project_id'] = $owner['project']['id'];
-
-            $this->optionService->setOptions($options);
-
-            $responseValidateSecret = wp_umbrella_get_service('Projects')->validateSecretToken([
-                'base_url' => site_url(),
-                'rest_url' => rest_url(),
-                'secret_token' => $secretToken,
-                'http_auth_user' => $httpAuthUser,
-                'http_auth_password' => $httpAuthPassword,
-            ], $apiKey);
-
-            // Not valid secret token
-            if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-                $options['allowed'] = false;
-                $options['api_key'] = '';
-                $options['project_id'] = '';
-                $options['secret_token'] = '';
-                $this->optionService->setOptions($options);
-
-                return;
-            }
-
-            // No success
-            if (!$responseValidateSecret['success']) {
-                $options['allowed'] = false;
-                $options['api_key'] = '';
-                $options['project_id'] = '';
-                $options['secret_token'] = '';
-                $this->optionService->setOptions($options);
-
-                return;
-            }
-
-            $this->optionService->setOptions($options);
-            $this->successAutoInstall();
-            return;
-        } elseif (!isset($owner['project']['id'])) {
-            $name = get_bloginfo('name');
-            $hosting = wp_umbrella_get_service('HostResolver')->getCurrentHost();
-
-            // Necessary for call rest_url(); with universal request
-            wp_umbrella_get_service('WordPressContext')->requireWpRewrite();
-
-            $options['allowed'] = true;
-
-            $this->optionService->setOptions($options);
-
-            $dataCreateProject = [
-                'base_url' => site_url(),
-                'home_url' => home_url(),
-                'rest_url' => rest_url(),
-                'http_auth_user' => $httpAuthUser,
-                'http_auth_password' => $httpAuthPassword,
-                'backdoor_url' => plugins_url(),
-                'admin_url' => get_admin_url(),
-                'wp_umbrella_url' => WP_UMBRELLA_DIRURL,
-                'secret_token' => $secretToken,
-                'is_multisite' => is_multisite(),
-                'name' => empty($name) ? site_url() : $name,
-                'hosting' => $hosting,
-            ];
-
-            $response = wp_umbrella_get_service('Projects')->createProjectOnApplication($dataCreateProject, $apiKey);
-
-            if (!is_array($response)) {
-                $options['secret_token'] = '';
-                $options['api_key'] = '';
-                $options['project_id'] = '';
-                $options['allowed'] = false;
-                $this->optionService->setOptions($options);
-                return;
-            }
-
-            if (isset($response['code']) && !$response['code'] !== 'success') {
-                $options['secret_token'] = '';
-                $options['api_key'] = '';
-                $options['project_id'] = '';
-                $options['allowed'] = false;
-                $this->optionService->setOptions($options);
-                return;
-            }
-
-            if (!isset($response['result'])) {
-                $options['secret_token'] = '';
-                $options['api_key'] = '';
-                $options['project_id'] = '';
-                $options['allowed'] = false;
-                $this->optionService->setOptions($options);
-                return;
-            }
-
-            $options['allowed'] = true;
-            $options['project_id'] = $response['result']['id'];
-
-            $this->optionService->setOptions($options);
-
-            $this->successAutoInstall();
-        }
+        return empty($optionService->getApiKeyWithoutCache());
     }
 }

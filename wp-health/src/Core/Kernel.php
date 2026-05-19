@@ -464,9 +464,7 @@ abstract class Kernel
             self::pluginLoadedWithSetupAdmin();
         }
 
-        if ($request->getToken() === wp_umbrella_get_api_key()) {
-            self::ajaxActions();
-        }
+        self::ajaxActions();
 
         add_action('wp_ajax_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
         add_action('wp_ajax_nopriv_wp_umbrella_snapshot_data', [__CLASS__, 'snapshot']);
@@ -487,29 +485,13 @@ abstract class Kernel
 
     public static function snapshot()
     {
-        if (!isset($_POST['nonce'])) {
-            return;
-        }
-
-        if (!isset($_POST['api_key'])) {
+        $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
+        if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_snapshot_data')) {
             return;
         }
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdmin();
-
-        if (!wp_verify_nonce($_POST['nonce'], 'wp_umbrella_snapshot_data')) {
-            wp_send_json_error(
-                [
-                    'code' => 'nonce_failed',
-                    'message' => __('Admin request nonce check failed', 'wp-health'),
-                ]
-            );
-        }
-
-        if (!hash_equals(wp_umbrella_get_api_key(), $_POST['api_key'])) {
-            return;
-        }
 
         wp_update_plugins([]);
         wp_umbrella_get_service('ManagePlugin')->clearUpdates();

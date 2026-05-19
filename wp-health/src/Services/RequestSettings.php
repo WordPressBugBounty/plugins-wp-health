@@ -223,13 +223,9 @@ class RequestSettings
                 'blocking' => false,
                 'sslverify' => false,
                 'user-agent' => 'WPUmbrella',
-                'headers' => [
-                    'X-Umbrella' => wp_umbrella_get_api_key(),
-                ],
                 'body' => [
                     'action' => 'wp_umbrella_snapshot_data',
                     'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),
-                    'api_key' => wp_umbrella_get_api_key(),
                 ]
             ]
         );

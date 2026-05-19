@@ -110,28 +110,28 @@ function wp_umbrella_send_errors()
             $dataPost['php_version'] = phpversion();
             $dataPost['wordpress_version'] = get_bloginfo('version');
 
-            $response = wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/errors', [
+            $response = wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/errors', [
                 'headers' => [
                     'Content-Type' => 'application/json',
-                    'Authorization' => sprintf('Bearer %s', wp_umbrella_get_api_key()),
+                    'Authorization' => sprintf('Bearer %s', wp_umbrella_get_outbound_bearer()),
                     'X-Project' => site_url(),
                     'X-Project-Id' => wp_umbrella_get_project_id(),
                     'X-Secret-Token' => wp_umbrella_get_secret_token(),
                 ],
                 'body' => json_encode($dataPost),
-            ]);
+            ]));
 
             if (is_wp_error($response)) {
-                $response = wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/errors', [
+                $response = wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/errors', [
                     'headers' => [
                         'Content-Type' => 'application/json',
-                        'Authorization' => sprintf('Bearer %s', wp_umbrella_get_api_key()),
+                        'Authorization' => sprintf('Bearer %s', wp_umbrella_get_outbound_bearer()),
                         'X-Project' => site_url(),
                         'X-Project-Id' => wp_umbrella_get_project_id(),
                         'X-Secret-Token' => wp_umbrella_get_secret_token(),
                     ],
                     'body' => json_encode($dataPost),
-                ]);
+                ]));
             }
         } catch (\Exception $e) {
         }

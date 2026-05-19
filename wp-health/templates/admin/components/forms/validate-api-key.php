@@ -24,7 +24,7 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 		</div>
 		<div>
 			<label for="http_auth_password" class="text-sm font-medium text-gray-700 pl-3 mb-1">HTTP Auth
-				Password</label><input id="http_auth_password" name="http_auth_password" type="text"
+				Password</label><input id="http_auth_password" name="http_auth_password" type="password"
 				placeholder="HTTP Auth Password"
 				class="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-full focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
 				value="">
@@ -54,9 +54,10 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 							stroke-linejoin="round"
 						/>
 					</svg>
-					<input id="apiKey" name="apiKey" type="<?php echo !empty($data['api_key']) ? 'password' : 'text' ?>" placeholder="My API KEY"
+					<?php $isConnected = !empty($data['api_key']) || !empty($data['request_token']); ?>
+					<input id="apiKey" name="apiKey" type="<?php echo $isConnected ? 'password' : 'text' ?>" placeholder="My API KEY"
 						class="appearance-none relative block px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-full focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm w-full"
-						value="<?php if(!empty($data['api_key'])) {
+						value="<?php if($isConnected) {
 						    echo Option::SECURED_VALUE;
 						} ?>">
 
@@ -299,12 +300,15 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 
 				form.querySelector('button[type="submit"]').setAttribute('disabled', 'disabled');
 
-				const body = new FormData();
+				const body = new FormData(form);
+				body.delete('_wpnonce')
+				body.delete('action')
 				body.append('_wpnonce', form.querySelector('#nonce_wp_umbrella_valid_api_key').value);
 				body.append('action', 'wp_umbrella_valid_api_key')
 
 				if(workspaceSelected){
 					console.info("[INFO] Workspace is selected")
+					body.delete('api_key')
 					body.append('api_key', workspaceSelected)
 				}
 				else if(body.get("workspaces") === "-1"){
@@ -352,6 +356,22 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 							Swal.fire({
 								title: 'Limit excedeed',
 								text: 'You have reached the maximum number of sites allowed by your plan. (5 sites during the trial)',
+								icon: 'error',
+								confirmButtonText: "Close",
+							})
+							break;
+						case "http_auth_required":
+							Swal.fire({
+								title: 'HTTP Auth credentials needed',
+								text: 'Your site is protected by HTTP Basic Authentication. Please fill in the HTTP Auth User and Password fields above.',
+								icon: 'warning',
+								confirmButtonText: "Close",
+							})
+							break;
+						case "http_auth_invalid":
+							Swal.fire({
+								title: 'HTTP Auth credentials invalid',
+								text: 'The HTTP Auth User and Password you entered were rejected by your site. Please check them and try again.',
 								icon: 'error',
 								confirmButtonText: "Close",
 							})

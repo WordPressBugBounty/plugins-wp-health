@@ -204,4 +204,19 @@ class UmbrellaRequest
                 return null;
         }
     }
+
+    /**
+     * Return the Bearer token carried by the Authorization header, or null
+     * when the header is absent, malformed, or carries another scheme.
+     *
+     * Always read from request headers — never from POST/GET params — so that
+     * tokens cannot leak through query strings or form bodies.
+     *
+     * @return string|null
+     */
+    public function getAuthorizationBearer()
+    {
+        $value = isset($this->headers['authorization']) ? $this->headers['authorization'] : null;
+        return wp_umbrella_get_service('BearerTokenExtractor')->fromHeaderValue($value);
+    }
 }

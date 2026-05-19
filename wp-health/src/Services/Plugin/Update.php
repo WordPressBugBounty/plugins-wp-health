@@ -502,14 +502,10 @@ class Update extends BaseManageUpdate
         // Create nonce.
         $nonce = wp_create_nonce('wp_umbrella_update_admin_request');
 
-        // Request arguments.
         $args = [
             'timeout' => 45,
             'cookies' => [],
             'sslverify' => false,
-            'headers' => [
-                'X-Umbrella' => wp_umbrella_get_api_key(),
-            ],
             'body' => [
                 'action' => 'wp_umbrella_update_admin_request',
                 'nonce' => $nonce,

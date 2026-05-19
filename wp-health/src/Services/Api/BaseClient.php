@@ -9,31 +9,15 @@ abstract class BaseClient
 {
     protected function canRequestApi() : bool
     {
-        if (!wp_umbrella_get_api_key()) {
+        if (!wp_umbrella_get_api_key() && !wp_umbrella_get_request_token()) {
             return false;
         }
 
-        $secretToken = wp_umbrella_get_secret_token();
-        if (!$secretToken) {
+        if (!wp_umbrella_get_secret_token()) {
             return false;
         }
 
         return true;
-    }
-
-    public function getHeaders($apiKey = null)
-    {
-        $headers = [
-            'Content-Type' => 'application/json',
-        ];
-
-        if ($apiKey) {
-            $headers['Authorization'] = $apiKey;
-        } else {
-            $headers['Authorization'] = wp_umbrella_get_api_key();
-        }
-
-        return $headers;
     }
 
     public function getHeadersV2($apiKey = null, $options = [], $curlVersion = false)
@@ -67,7 +51,7 @@ abstract class BaseClient
         }
 
         if (!$apiKey) {
-            $apiKey = wp_umbrella_get_api_key();
+            $apiKey = wp_umbrella_get_outbound_bearer();
         }
 
         if ($curlVersion) {

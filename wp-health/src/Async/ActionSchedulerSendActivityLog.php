@@ -169,17 +169,17 @@ function wp_umbrella_activity_log_sync_one_batch(EventBuffer $buffer)
  */
 function wp_umbrella_activity_log_post_batch(array $events)
 {
-    return wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/activity-log', [
+    return wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/activity-log', [
         'headers' => [
             'Content-Type' => 'application/json',
-            'Authorization' => sprintf('Bearer %s', wp_umbrella_get_api_key()),
+            'Authorization' => sprintf('Bearer %s', wp_umbrella_get_outbound_bearer()),
             'X-Project' => site_url(),
             'X-Project-Id' => wp_umbrella_get_project_id(),
             'X-Secret-Token' => wp_umbrella_get_secret_token(),
         ],
         'body' => wp_json_encode(['events' => $events]),
         'timeout' => 15,
-    ]);
+    ]));
 }
 
 /**

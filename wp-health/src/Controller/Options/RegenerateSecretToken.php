@@ -48,6 +48,13 @@ class RegenerateSecretToken extends AbstractController
         }
 
         $options['secret_token'] = wp_umbrella_get_service('WordPressContext')->getHash($secretToken);
+
+        $requestToken = wp_umbrella_request_token_from_response($responseValidateSecret);
+        if ($requestToken) {
+            $options['request_token'] = $requestToken;
+            $options['api_key'] = '';
+        }
+
         wp_umbrella_get_service('Option')->setOptions($options);
 
         wp_load_alloptions(true);
