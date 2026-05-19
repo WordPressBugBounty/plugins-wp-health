@@ -57,6 +57,15 @@ class UmbrellaRequest
 
     protected function setTypeQuery()
     {
+        if (isset($this->headers['authorization'])) {
+            $bearer = wp_umbrella_get_service('BearerTokenExtractor')->fromHeaderValue(
+                $this->headers['authorization']
+            );
+            if ($bearer !== null) {
+                $this->checkTypeQuery = 'headers';
+            }
+        }
+
         if (isset($this->headers['x-umbrella'])) {
             $this->checkTypeQuery = 'headers';
         }
@@ -195,11 +204,11 @@ class UmbrellaRequest
     {
         switch($this->checkTypeQuery) {
             case 'headers':
-                return $this->headers['x-umbrella'];
+                return isset($this->headers['x-umbrella']) ? $this->headers['x-umbrella'] : null;
             case 'post':
-                return $this->request['x-umbrella'];
+                return isset($this->request['x-umbrella']) ? $this->request['x-umbrella'] : null;
             case 'get':
-                return $this->query['x-umbrella'];
+                return isset($this->query['x-umbrella']) ? $this->query['x-umbrella'] : null;
             default:
                 return null;
         }

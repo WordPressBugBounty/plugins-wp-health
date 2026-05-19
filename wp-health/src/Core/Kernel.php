@@ -194,20 +194,28 @@ abstract class Kernel
      */
     public static function canExecute(UmbrellaRequest $request)
     {
-        $requestVersion = $request->getRequestVersion();
-
         $action = $request->getAction();
+        $options = [
+            'with_cache' => $action !== '/v1/validation-application-token'
+        ];
+
+        $bearer = $request->getAuthorizationBearer();
+        if ($bearer !== null) {
+            $hashedBearer = wp_umbrella_get_service('WordPressContext')->getHash($bearer);
+            $response = wp_umbrella_get_service('ApiWordPressPermission')->isSecretTokenAuthorized($hashedBearer, $options);
+            if (isset($response['authorized']) && $response['authorized']) {
+                return true;
+            }
+        }
 
         $token = $request->getToken();
-        $response = wp_umbrella_get_service('ApiWordPressPermission')->isTokenAuthorized($token, [
-            'with_cache' => $action !== '/v1/validation-application-token'
-        ]);
-
-        if (!isset($response['authorized']) || !$response['authorized']) {
+        if (!$token) {
             return false;
         }
 
-        return true;
+        $response = wp_umbrella_get_service('ApiWordPressPermission')->isTokenAuthorized($token, $options);
+
+        return isset($response['authorized']) && $response['authorized'];
     }
 
     public static function maybeMagicLogin()
