@@ -66,6 +66,15 @@ class UmbrellaRequest
             }
         }
 
+        if (isset($this->headers['x-secret-token'])) {
+            $bearer = wp_umbrella_get_service('BearerTokenExtractor')->fromHeaderValue(
+                $this->headers['x-secret-token']
+            );
+            if ($bearer !== null) {
+                $this->checkTypeQuery = 'headers';
+            }
+        }
+
         if (isset($this->headers['x-umbrella'])) {
             $this->checkTypeQuery = 'headers';
         }
@@ -225,7 +234,15 @@ class UmbrellaRequest
      */
     public function getAuthorizationBearer()
     {
+        $extractor = wp_umbrella_get_service('BearerTokenExtractor');
+
         $value = isset($this->headers['authorization']) ? $this->headers['authorization'] : null;
-        return wp_umbrella_get_service('BearerTokenExtractor')->fromHeaderValue($value);
+        $bearer = $extractor->fromHeaderValue($value);
+        if ($bearer !== null) {
+            return $bearer;
+        }
+
+        $fallback = isset($this->headers['x-secret-token']) ? $this->headers['x-secret-token'] : null;
+        return $extractor->fromHeaderValue($fallback);
     }
 }

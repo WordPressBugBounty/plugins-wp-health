@@ -108,11 +108,12 @@ class Owner extends BaseClient
             return $this->ownerImplicit;
         }
 
-        if (!wp_umbrella_get_api_key()) {
+        $bearer = wp_umbrella_get_outbound_bearer();
+        if (!$bearer) {
             return null;
         }
 
-        $response = $this->getOwnerByApiKeyV2(wp_umbrella_get_api_key());
+        $response = $this->getOwnerByApiKeyV2($bearer);
 
         if (!isset($response['result'])) {
             return $response;

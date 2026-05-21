@@ -289,6 +289,21 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 				</form>
 			</div>
 		</div>
+		<div class="wpu-support-action">
+			<div class="wpu-support-action-info">
+				<strong><?php echo esc_html__('Clear WP Umbrella cache', 'wp-health'); ?></strong>
+				<p class="description">
+					<?php echo esc_html__('Clear cached data stored by WP Umbrella (white label settings, etc). Useful when your white label customisations are not reflected on this site.', 'wp-health'); ?>
+				</p>
+			</div>
+			<div class="wpu-support-action-btn">
+				<form method="post" action="<?php echo admin_url('admin-post.php'); ?>" novalidate="novalidate">
+					<?php wp_nonce_field('wp_umbrella_clean_transients'); ?>
+					<input type="hidden" name="action" value="wp_umbrella_clean_transients" />
+					<?php submit_button(esc_html__('Clear cache', 'wp-health'), 'secondary', 'submit', false); ?>
+				</form>
+			</div>
+		</div>
 	</div>
 
 	</div>
