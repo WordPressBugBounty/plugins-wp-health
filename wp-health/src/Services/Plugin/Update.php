@@ -115,6 +115,17 @@ class Update extends BaseManageUpdate
             // Verify version actually changed
             $newVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
             if ($oldVersion !== false && $newVersion !== false && $oldVersion === $newVersion) {
+                if ($this->isAlreadyAtTargetVersion($plugin, $oldVersion)) {
+                    wp_umbrella_debug_log("Plugin '{$plugin}' already at target version: {$oldVersion}");
+                    wp_umbrella_get_service('MaintenanceMode')->toggleMaintenanceMode(false);
+                    return [
+                        'status' => 'success',
+                        'code' => 'already_at_target',
+                        'message' => sprintf('The %s plugin is already at the target version (%s)', $plugin, $oldVersion),
+                        'data' => true,
+                    ];
+                }
+
                 wp_umbrella_debug_log("Plugin '{$plugin}' version unchanged after update: {$oldVersion}");
                 return [
                     'status' => 'error',
@@ -217,20 +228,102 @@ class Update extends BaseManageUpdate
             }
 
             $oldVersions = [];
+            $oldFingerprints = [];
+            $transientNewVersions = [];
+            $transientPackageHosts = [];
             foreach ($plugins as $plugin) {
                 $oldVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                $oldFingerprints[$plugin] = $this->fingerprintMainFile($plugin);
                 wp_umbrella_debug_log("Plugin '{$plugin}' current version: " . ($oldVersions[$plugin] ?: 'unknown'));
             }
 
             if (!$onlyAjax) { // If not only ajax, we try to update by bulk_upgrade
-                wp_umbrella_debug_log('Plugin bulk update: running bulk_upgrade...');
-                $skin = new WP_Ajax_Upgrader_Skin();
-                $upgrader = new Plugin_Upgrader($skin);
-                $trace->addTrace('wp_bulk_upgrade_call');
-                $response = $upgrader->bulk_upgrade($plugins);
-                $trace->addTrace('wp_bulk_upgrade_returned', ['empty' => empty($response)]);
+                $transientForTrace = get_site_transient('update_plugins');
+                foreach ($plugins as $pluginForTrace) {
+                    $entryForTrace = is_object($transientForTrace)
+                        ? ($transientForTrace->response[$pluginForTrace] ?? null)
+                        : null;
+                    $hasPackage = is_object($entryForTrace) && !empty($entryForTrace->package);
+                    $packageHost = $hasPackage ? parse_url($entryForTrace->package, PHP_URL_HOST) : null;
+                    $transientNewVersions[$pluginForTrace] = is_object($entryForTrace) ? ($entryForTrace->new_version ?? null) : null;
+                    $transientPackageHosts[$pluginForTrace] = $packageHost;
+                    $trace->addTrace('transient_state', [
+                        'plugin' => $pluginForTrace,
+                        'has_entry' => is_object($entryForTrace),
+                        'new_version' => $transientNewVersions[$pluginForTrace],
+                        'package' => $hasPackage ? 'present' : 'missing',
+                        'package_host' => $packageHost,
+                        'installed_version' => $oldVersions[$pluginForTrace] ?? null,
+                    ]);
+                }
 
-                if (empty($response)) {
+                // bulk_upgrade silently skips plugins missing from the transient
+                // ("up_to_date" no-op), and WP core wipes update_plugins after every
+                // successful upgrade. Refresh once to give wp.org and premium
+                // updaters a chance to re-inject, then exclude plugins that still
+                // have no visible update instead of running a doomed cycle.
+                $missingFromTransient = [];
+                foreach ($plugins as $pluginForTrace) {
+                    $entryForTrace = is_object($transientForTrace)
+                        ? ($transientForTrace->response[$pluginForTrace] ?? null)
+                        : null;
+                    if (!is_object($entryForTrace)) {
+                        $missingFromTransient[] = $pluginForTrace;
+                    }
+                }
+
+                if (!empty($missingFromTransient) && function_exists('wp_update_plugins')) {
+                    delete_site_transient('update_plugins');
+                    wp_update_plugins();
+                    $transientForTrace = get_site_transient('update_plugins');
+                    $trace->addTrace('update_plugins_refreshed', ['missing_before' => count($missingFromTransient)]);
+
+                    foreach ($missingFromTransient as $pluginForTrace) {
+                        $entryForTrace = is_object($transientForTrace)
+                            ? ($transientForTrace->response[$pluginForTrace] ?? null)
+                            : null;
+                        $hasPackage = is_object($entryForTrace) && !empty($entryForTrace->package);
+                        $transientNewVersions[$pluginForTrace] = is_object($entryForTrace) ? ($entryForTrace->new_version ?? null) : null;
+                        $transientPackageHosts[$pluginForTrace] = $hasPackage ? parse_url($entryForTrace->package, PHP_URL_HOST) : null;
+                        $trace->addTrace('transient_state_recheck', [
+                            'plugin' => $pluginForTrace,
+                            'has_entry' => is_object($entryForTrace),
+                            'new_version' => $transientNewVersions[$pluginForTrace],
+                            'package' => $hasPackage ? 'present' : 'missing',
+                        ]);
+                    }
+                }
+
+                $pluginsWithUpdate = [];
+                foreach ($plugins as $pluginToFilter) {
+                    $entryToFilter = is_object($transientForTrace)
+                        ? ($transientForTrace->response[$pluginToFilter] ?? null)
+                        : null;
+
+                    if (is_object($entryToFilter)) {
+                        $pluginsWithUpdate[] = $pluginToFilter;
+                        continue;
+                    }
+
+                    wp_umbrella_debug_log("Plugin '{$pluginToFilter}' has no update available in update_plugins transient, skipping");
+                    $trace->addTrace('no_update_available', ['plugin' => $pluginToFilter]);
+                    $return[$pluginToFilter] = 'no_update_available';
+                    $return[$pluginToFilter . '_skip_rollback'] = true;
+                    $return[$pluginToFilter . '_old_version'] = $oldVersions[$pluginToFilter];
+                    $return[$pluginToFilter . '_new_version'] = $oldVersions[$pluginToFilter];
+                }
+
+                $response = [];
+                if (!empty($pluginsWithUpdate)) {
+                    wp_umbrella_debug_log('Plugin bulk update: running bulk_upgrade...');
+                    $skin = new WP_Ajax_Upgrader_Skin();
+                    $upgrader = new Plugin_Upgrader($skin);
+                    $trace->addTrace('wp_bulk_upgrade_call');
+                    $response = $upgrader->bulk_upgrade($pluginsWithUpdate);
+                    $trace->addTrace('wp_bulk_upgrade_returned', ['empty' => empty($response)]);
+                }
+
+                if (!empty($pluginsWithUpdate) && empty($response)) {
                     wp_umbrella_debug_log('Plugin bulk update: bulk_upgrade returned empty response');
                     $trace->addTrace('wp_bulk_upgrade_empty_response');
                     return [
@@ -287,18 +380,25 @@ class Update extends BaseManageUpdate
                     foreach ($plugins as $plugin) {
                         $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
                     }
+                    $postBulkFingerprint = $this->fingerprintMainFile($plugin_slug);
+                    $postBulkDiff = $this->fingerprintDiff($oldFingerprints[$plugin_slug] ?? null, $postBulkFingerprint);
 
                     // Only try ajax if the version is the same (not updated)
                     if ($tryAjax && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) { // Need to try ajax and the version is the same
-                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' version unchanged after bulk_upgrade ({$oldVersions[$plugin_slug]}), trying admin-ajax fallback...");
-                        $trace->addTrace('ajax_fallback_started', ['reason' => 'version_unchanged']);
-                        $result = $this->tryUpdateByAdminAjax($plugin_slug);
-                        $return[$plugin_slug] = $result['code'];
-                        $trace->addTrace('ajax_fallback_done', ['code' => $result['code']]);
+                        if (!$postBulkDiff['mtime_changed'] && !$postBulkDiff['size_changed'] && !$postBulkDiff['hash_changed']) {
+                            wp_umbrella_debug_log("Plugin '{$plugin_slug}' bulk_upgrade left the main file untouched, skipping admin-ajax fallback");
+                            $trace->addTrace('ajax_fallback_skipped_no_op', ['plugin' => $plugin_slug]);
+                        } else {
+                            wp_umbrella_debug_log("Plugin '{$plugin_slug}' version unchanged after bulk_upgrade ({$oldVersions[$plugin_slug]}), trying admin-ajax fallback...");
+                            $trace->addTrace('ajax_fallback_started', ['reason' => 'version_unchanged']);
+                            $result = $this->tryUpdateByAdminAjax($plugin_slug);
+                            $return[$plugin_slug] = $result['code'];
+                            $trace->addTrace('ajax_fallback_done', ['code' => $result['code']]);
 
-                        $newVersions = [];
-                        foreach ($plugins as $plugin) {
-                            $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                            $newVersions = [];
+                            foreach ($plugins as $plugin) {
+                                $newVersions[$plugin] = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
+                            }
                         }
                     }
 
@@ -308,9 +408,27 @@ class Update extends BaseManageUpdate
 
                     // Final check: if version still unchanged after all attempts, mark as error
                     if ($oldVersions[$plugin_slug] !== false && $newVersions[$plugin_slug] !== false && $oldVersions[$plugin_slug] === $newVersions[$plugin_slug]) {
-                        $return[$plugin_slug] = 'plugin_version_unchanged';
-                        $trace->addTrace('version_unchanged_after_all_attempts');
-                        wp_umbrella_debug_log("Plugin '{$plugin_slug}' version still unchanged after all attempts: {$oldVersions[$plugin_slug]}");
+                        if ($this->isAlreadyAtTargetVersion($plugin_slug, $oldVersions[$plugin_slug])) {
+                            $return[$plugin_slug] = 'success';
+                            $return[$plugin_slug . '_already_at_target'] = true;
+                            $trace->addTrace('plugin_already_at_target', ['plugin' => $plugin_slug, 'version' => $oldVersions[$plugin_slug]]);
+                            wp_umbrella_debug_log("Plugin '{$plugin_slug}' already at target version: {$oldVersions[$plugin_slug]}");
+                        } else {
+                            $return[$plugin_slug] = 'plugin_version_unchanged';
+                            $return[$plugin_slug . '_skip_rollback'] = true;
+                            $finalFingerprint = $this->fingerprintMainFile($plugin_slug);
+                            $finalDiff = $this->fingerprintDiff($oldFingerprints[$plugin_slug] ?? null, $finalFingerprint);
+                            $trace->addTrace('version_unchanged_after_all_attempts_failed', [
+                                'plugin' => $plugin_slug,
+                                'installed_version' => $oldVersions[$plugin_slug],
+                                'mtime_changed' => $finalDiff['mtime_changed'],
+                                'size_changed' => $finalDiff['size_changed'],
+                                'hash_changed' => $finalDiff['hash_changed'],
+                                'transient_new_version' => $transientNewVersions[$plugin_slug] ?? null,
+                                'transient_package_host' => $transientPackageHosts[$plugin_slug] ?? null,
+                            ]);
+                            wp_umbrella_debug_log("Plugin '{$plugin_slug}' version still unchanged after all attempts: {$oldVersions[$plugin_slug]}");
+                        }
                     } else {
                         $trace->addTrace('version_changed', ['from' => $oldVersions[$plugin_slug], 'to' => $newVersions[$plugin_slug]]);
                         wp_umbrella_debug_log("Plugin '{$plugin_slug}' successfully updated from " . ($oldVersions[$plugin_slug] ?: 'unknown') . ' to ' . ($newVersions[$plugin_slug] ?: 'unknown'));
@@ -366,7 +484,7 @@ class Update extends BaseManageUpdate
             $hasError = false;
             foreach ($return as $key => $value) {
                 // Skip version metadata keys (plugin_old_version, plugin_new_version)
-                if (strpos($key, '_old_version') !== false || strpos($key, '_new_version') !== false) {
+                if (strpos($key, '_old_version') !== false || strpos($key, '_new_version') !== false || strpos($key, '_skip_rollback') !== false || strpos($key, '_already_at_target') !== false) {
                     continue;
                 }
                 if ($value !== 'success') {
@@ -497,6 +615,46 @@ class Update extends BaseManageUpdate
         ];
     }
 
+    protected function fingerprintMainFile($pluginFile)
+    {
+        $fullPath = WP_PLUGIN_DIR . '/' . $pluginFile;
+        @clearstatcache(true, $fullPath);
+        if (function_exists('opcache_invalidate')) {
+            @opcache_invalidate($fullPath, true);
+        }
+        if (!file_exists($fullPath)) {
+            return null;
+        }
+        $size = @filesize($fullPath);
+        $mtime = @filemtime($fullPath);
+        $hash = null;
+        $handle = @fopen($fullPath, 'rb');
+        if ($handle) {
+            $chunk = @fread($handle, 4096);
+            if ($chunk !== false) {
+                $hash = sha1($chunk);
+            }
+            @fclose($handle);
+        }
+        return ['mtime' => $mtime, 'size' => $size, 'hash' => $hash];
+    }
+
+    protected function fingerprintDiff($before, $after)
+    {
+        if ($before === null || $after === null) {
+            return [
+                'mtime_changed' => $before !== $after,
+                'size_changed' => $before !== $after,
+                'hash_changed' => $before !== $after,
+            ];
+        }
+        return [
+            'mtime_changed' => $before['mtime'] !== $after['mtime'],
+            'size_changed' => $before['size'] !== $after['size'],
+            'hash_changed' => $before['hash'] !== $after['hash'],
+        ];
+    }
+
     protected function sendAdminRequest($plugin)
     {
         // Create nonce.
@@ -536,5 +694,26 @@ class Update extends BaseManageUpdate
         }
 
         return false;
+    }
+
+    protected function isAlreadyAtTargetVersion($plugin, $installedVersion)
+    {
+        // Force WP to re-check upstream. If the transient no longer has an entry pointing
+        // to a newer version, the plugin is already at the target — the upgrade was a no-op.
+        delete_site_transient('update_plugins');
+        wp_update_plugins();
+        $transient = get_site_transient('update_plugins');
+
+        if (!is_object($transient) || empty($transient->response[$plugin])) {
+            return true;
+        }
+
+        $entry = $transient->response[$plugin];
+        $newVersion = isset($entry->new_version) ? $entry->new_version : null;
+        if (!$newVersion) {
+            return true;
+        }
+
+        return !version_compare($newVersion, $installedVersion, '>');
     }
 }

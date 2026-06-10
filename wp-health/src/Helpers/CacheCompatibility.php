@@ -22,6 +22,7 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\WPSuperCache",
             "\WPUmbrella\Thirds\Cache\StackCache",
             "\WPUmbrella\Thirds\Cache\SiteGround",
+            "\WPUmbrella\Thirds\Cache\RedisObjectCache",
         ]);
     }
 }

@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.24.2
+Stable tag: v2.24.3
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,17 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.24.3 (06-10-2026) =
+- Fixed: updating several plugins in a row no longer fails after the first one on some hosting setups.
+- Fixed: updates are no longer reported as failed when the plugin or theme was already at the latest version.
+- Fixed: broken link highlighting now works on sites served from a page cache.
+- Improved: premium plugin and theme updates are more reliable.
+- Improved: when no update is actually available for a plugin or theme, the task now ends quickly with a clear explanation.
+- Improved: a working site is no longer rolled back when an update finishes without changing the version.
+- Improved: failed updates are reported faster, with a clearer explanation of the most likely cause.
+- Improved: connecting a site now surfaces PHP errors detected on it, to make troubleshooting easier.
+- Improved: clearing the cache from WP Umbrella now also flushes Redis and Memcached object caches.
 
 = 2.24.2 (05-21-2026) =
 - Improved: connection reliability on a wider range of hosting setups and sites running additional plugins.

@@ -14,16 +14,23 @@ class Theme
     public function getVersionFromThemeFile($theme)
     {
         try {
-            if (!file_exists(get_theme_root($theme))) {
+            $themeRoot = get_theme_root($theme);
+            if (!file_exists($themeRoot)) {
                 return false;
             }
 
-            $filePath = get_theme_root($theme) . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'style.css';
+            $filePath = $themeRoot . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'style.css';
+
+            // WP_Upgrader's safe-update renames the theme directory mid-upgrade,
+            // leaving PHP's realpath/stat cache pointing at the pre-upgrade inode.
+            clearstatcache(true, $filePath);
+            clearstatcache(true, dirname($filePath));
+
             if (!file_exists($filePath)) {
                 return false;
             }
 
-            $content = file_get_contents(get_theme_root($theme) . DIRECTORY_SEPARATOR . $theme . DIRECTORY_SEPARATOR . 'style.css');
+            $content = file_get_contents($filePath);
             if (!$content) {
                 return false;
             }
@@ -138,6 +145,32 @@ class Theme
             $oldVersion = $this->getVersionFromThemeFile($theme);
             wp_umbrella_debug_log("Theme '{$theme}' current version: " . ($oldVersion ?: 'unknown'));
 
+            // bulk_upgrade silently no-ops when the theme is missing from the
+            // update_themes transient (premium updaters don't inject it in every
+            // request context). Verify before any destructive step.
+            $updateInfo = $this->getThemeUpdateInfo($theme);
+            $trace->addTrace('update_available_check', $updateInfo);
+
+            if (!$updateInfo['available'] && function_exists('wp_update_themes')) {
+                wp_update_themes();
+                $trace->addTrace('update_themes_refreshed');
+                $updateInfo = $this->getThemeUpdateInfo($theme);
+                $trace->addTrace('update_available_recheck', $updateInfo);
+            }
+
+            if (!$updateInfo['available']) {
+                wp_umbrella_debug_log("Theme '{$theme}' has no update available in update_themes transient, aborting");
+                $trace->addTrace('update_available_check_failed', ['code' => 'no_update_available']);
+                delete_transient($lockKey);
+
+                return [
+                    'status' => 'error',
+                    'code' => 'no_update_available',
+                    'message' => sprintf('No update is visible for theme %s in this request context. Premium themes may require their vendor updater to expose the update.', $theme),
+                    'data' => ''
+                ];
+            }
+
             // Enable smart maintenance mode before backup (blocks visitors, allows WP Umbrella requests)
             wp_umbrella_debug_log("Theme '{$theme}' enabling maintenance mode");
             $maintenanceMode->toggleMaintenanceMode(true);
@@ -208,14 +241,23 @@ class Theme
                 ], 'theme');
 
                 if ($requireBackup) {
-                    // Safe update — rollback to restore a safe state
-                    $trace->addTrace('rollback_started');
-                    $rollback = $this->performThemeRollback($theme, 'update failed with code: ' . ($result['code'] ?? 'unknown'));
-                    $trace->addTrace('rollback_done', ['status' => $rollback['status']]);
-                    $result['code'] = $rollback['status'];
-                    $result['rollback_performed'] = $rollback['status'] === 'rollback_performed';
-                    $result['rollback_reason'] = $rollback['reason'];
-                    $result['restored_version'] = $oldVersion;
+                    $originalErrorCode = $result['code'] ?? 'unknown';
+                    if (!empty($result['skip_rollback'])) {
+                        $trace->addTrace('rollback_skipped', ['reason' => 'integrity_passed_version_unchanged', 'code' => $originalErrorCode]);
+                        wp_umbrella_debug_log("Theme '{$theme}' update failed but integrity passed, skipping rollback (code: {$originalErrorCode})");
+                    } else {
+                        $trace->addTrace('rollback_started', ['reason' => $originalErrorCode]);
+                        $rollback = $this->performThemeRollback($theme, 'update failed with code: ' . $originalErrorCode);
+                        $trace->addTrace('rollback_done', [
+                            'status' => $rollback['status'],
+                            'original_error_code' => $originalErrorCode,
+                        ]);
+                        $result['original_error_code'] = $originalErrorCode;
+                        $result['code'] = $rollback['status'];
+                        $result['rollback_performed'] = $rollback['status'] === 'rollback_performed';
+                        $result['rollback_reason'] = $rollback['reason'];
+                        $result['restored_version'] = $oldVersion;
+                    }
                 } else {
                     // Quick update — no auto-rollback
                     wp_umbrella_debug_log("Theme '{$theme}' quick update failed, skipping rollback");
@@ -296,9 +338,12 @@ class Theme
             $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
 
             if ($requireBackup) {
-                $trace->addTrace('rollback_started');
+                $trace->addTrace('rollback_started', ['reason' => 'exception']);
                 $rollback = $this->performThemeRollback($theme, 'exception: ' . $e->getMessage());
-                $trace->addTrace('rollback_done', ['status' => $rollback['status']]);
+                $trace->addTrace('rollback_done', [
+                    'status' => $rollback['status'],
+                    'original_error_code' => 'exception',
+                ]);
             } else {
                 $rollback = ['status' => 'not_needed', 'reason' => null];
                 wp_umbrella_debug_log("Theme '{$theme}' quick update exception, skipping rollback");
@@ -322,6 +367,24 @@ class Theme
                 'data' => ''
             ];
         }
+    }
+
+    /**
+     * Read the update entry for a theme from the update_themes transient.
+     *
+     * @param string $theme Theme slug (stylesheet)
+     * @return array ['available' => bool, 'new_version' => string|null, 'has_package' => bool]
+     */
+    protected function getThemeUpdateInfo($theme)
+    {
+        $transient = get_site_transient('update_themes');
+        $update = isset($transient->response[$theme]) ? (array) $transient->response[$theme] : null;
+
+        return [
+            'available' => $update !== null,
+            'new_version' => isset($update['new_version']) ? $update['new_version'] : null,
+            'has_package' => !empty($update['package']),
+        ];
     }
 
     /**
@@ -365,10 +428,13 @@ class Theme
 
     private function processUpgradeResult($theme, $response, $skin, $oldVersion)
     {
+        $trace = wp_umbrella_get_service('RequestTrace');
+
         // Check for skin result errors (like Plugin update does)
         if (is_wp_error($skin->result)) {
             $errorCode = $skin->result->get_error_code();
             wp_umbrella_debug_log("Theme '{$theme}' skin result error: {$errorCode} - " . $skin->result->get_error_message());
+            $trace->addTrace('theme_skin_result_error', ['error_code' => $errorCode]);
 
             if (in_array($errorCode, ['remove_old_failed', 'mkdir_failed_ziparchive', 'copy_failed_ziparchive'], true)) {
                 return [
@@ -391,6 +457,7 @@ class Theme
         if (is_wp_error($skin->get_errors()) && $skin->get_errors()->get_error_code()) {
             $errorCode = $skin->get_errors()->get_error_code();
             wp_umbrella_debug_log("Theme '{$theme}' skin error: {$errorCode} - " . $skin->get_error_messages());
+            $trace->addTrace('theme_skin_error', ['error_code' => $errorCode]);
 
             if (in_array($errorCode, ['remove_old_failed', 'mkdir_failed_ziparchive', 'copy_failed_ziparchive'], true)) {
                 return [
@@ -419,6 +486,7 @@ class Theme
             }
 
             wp_umbrella_debug_log("Theme '{$theme}' filesystem error: " . ($message ?: 'unable to connect'));
+            $trace->addTrace('theme_filesystem_error', ['message' => $message ?: 'unable to connect']);
             return [
                 'status' => 'error',
                 'code' => 'unable_connect_filesystem',
@@ -429,6 +497,7 @@ class Theme
 
         if (empty($response)) {
             wp_umbrella_debug_log("Theme '{$theme}' upgrade returned empty response");
+            $trace->addTrace('theme_bulk_upgrade_empty_response');
             return [
                 'status' => 'error',
                 'code' => 'unknown_error',
@@ -440,6 +509,10 @@ class Theme
         foreach ($response as $theme_tmp => $theme_info) {
             if (is_wp_error($theme_info) || empty($theme_info)) {
                 wp_umbrella_debug_log("Theme '{$theme}' upgrader error: " . wp_json_encode($this->getError($theme_info)));
+                $trace->addTrace('theme_bulk_upgrade_error', [
+                    'theme' => $theme,
+                    'error' => $this->getError($theme_info),
+                ]);
                 return [
                     'status' => 'error',
                     'code' => 'theme_upgrader_error',
@@ -449,10 +522,14 @@ class Theme
             }
         }
 
+        $trace->addTrace('theme_bulk_upgrade_success', ['theme' => $theme]);
+
         // Verify theme integrity after update
+        $trace->addTrace('theme_integrity_check_started');
         $integrityCheck = $this->themeDirectoryExist($theme);
         if (!$integrityCheck['success']) {
             wp_umbrella_debug_log("Theme '{$theme}' integrity check failed: " . ($integrityCheck['code'] ?? 'unknown'));
+            $trace->addTrace('theme_integrity_check_failed', ['code' => $integrityCheck['code'] ?? 'unknown']);
             return [
                 'status' => 'error',
                 'code' => 'theme_integrity_check_failed',
@@ -460,24 +537,76 @@ class Theme
                 'data' => ''
             ];
         }
+        $trace->addTrace('theme_integrity_check_passed');
 
         // Verify version actually changed
+        $trace->addTrace('theme_version_check_started', ['old_version' => $oldVersion]);
         $newVersion = $this->getVersionFromThemeFile($theme);
+        $trace->addTrace('theme_version_check_done', [
+            'old_version' => $oldVersion,
+            'new_version' => $newVersion,
+            'changed' => $oldVersion !== $newVersion,
+        ]);
+
         if ($oldVersion !== false && $newVersion !== false && $oldVersion === $newVersion) {
             wp_umbrella_debug_log("Theme '{$theme}' version unchanged after update: {$oldVersion}");
+            $trace->addTrace('theme_version_unchanged_detected', [
+                'old_version' => $oldVersion,
+                'new_version' => $newVersion,
+            ]);
+
+            // Refresh WP transient to check if an update is genuinely pending
+            delete_site_transient('update_themes');
+            wp_update_themes();
+            $transient = get_site_transient('update_themes');
+
+            $transientEntry = null;
+            if (is_object($transient) && isset($transient->response) && is_array($transient->response) && isset($transient->response[$theme])) {
+                $transientEntry = $transient->response[$theme];
+            }
+
+            $transientNewVersion = null;
+            if (is_array($transientEntry) && isset($transientEntry['new_version'])) {
+                $transientNewVersion = $transientEntry['new_version'];
+            } elseif (is_object($transientEntry) && isset($transientEntry->new_version)) {
+                $transientNewVersion = $transientEntry->new_version;
+            }
+
+            if (empty($transientNewVersion) || !version_compare($transientNewVersion, $oldVersion, '>')) {
+                $trace->addTrace('theme_already_at_target', ['version' => $oldVersion]);
+                return [
+                    'status' => 'success',
+                    'code' => 'already_at_target',
+                    'message' => sprintf('The %s theme is already at the target version (%s)', $theme, $oldVersion),
+                    'old_version' => $oldVersion,
+                    'new_version' => $newVersion,
+                    'data' => true,
+                ];
+            }
+
+            $trace->addTrace('theme_version_unchanged_genuine_failure', [
+                'old_version' => $oldVersion,
+                'transient_new_version' => $transientNewVersion,
+            ]);
             return [
                 'status' => 'error',
                 'code' => 'theme_version_unchanged',
                 'message' => sprintf('Theme update reported success but version unchanged (%s)', $oldVersion),
+                'old_version' => $oldVersion,
+                'new_version' => $newVersion,
+                'skip_rollback' => true,
                 'data' => ''
             ];
         }
 
+        $trace->addTrace('theme_version_changed', ['from' => $oldVersion, 'to' => $newVersion]);
         wp_umbrella_debug_log("Theme '{$theme}' successfully updated from " . ($oldVersion ?: 'unknown') . ' to ' . ($newVersion ?: 'unknown'));
         return [
             'status' => 'success',
             'code' => 'success',
             'message' => sprintf('The %s theme successfully updated', $theme),
+            'old_version' => $oldVersion,
+            'new_version' => $newVersion,
             'data' => true
         ];
     }

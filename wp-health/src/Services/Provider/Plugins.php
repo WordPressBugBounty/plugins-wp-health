@@ -271,7 +271,7 @@ class Plugins
         }
 
         if (is_wp_error($api)) {
-            return null;
+            return apply_filters('wp_umbrella_plugin_information', null, $slug);
         }
 
         return $api;

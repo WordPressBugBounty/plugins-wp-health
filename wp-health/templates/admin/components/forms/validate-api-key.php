@@ -327,7 +327,7 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 					body: body
 				})
 
-				const { data : {code, ...rest} } = await response.json();
+				const { data : {code, critical_error, ...rest} } = await response.json();
 
 				loader.classList.remove('flex')
 				loader.classList.add('hidden');
@@ -374,6 +374,36 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 								text: 'The HTTP Auth User and Password you entered were rejected by your site. Please check them and try again.',
 								icon: 'error',
 								confirmButtonText: "Close",
+							})
+							break;
+						case "wordpress_critical_error":
+							const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+							const phpMessage = escapeHtml(critical_error?.message || 'Unknown PHP error');
+							const phpFile = escapeHtml(critical_error?.file || '');
+							const phpLine = critical_error?.line ? `:${escapeHtml(critical_error.line)}` : '';
+							const fileBlock = phpFile ? `<p style="font-size:14px; text-align:left; margin-bottom:10px; font-family:monospace; background:#f3f4f6; padding:8px; border-radius:4px; word-break:break-all;">${phpFile}${phpLine}</p>` : '';
+							Swal.fire({
+								icon: 'error',
+								title: '⚠ WordPress critical error detected',
+								html: `
+									<p style="font-size:16px; text-align:left; margin-bottom:10px;">Your WordPress site is currently throwing a PHP fatal error, which prevents WP Umbrella from connecting. This is not an issue with WP Umbrella itself: any plugin or external tool calling your site's REST API would fail the same way.</p>
+
+									<p style="font-size:16px; text-align:left; margin-bottom:6px;"><strong>Error reported by your site:</strong></p>
+									<p style="font-size:14px; text-align:left; margin-bottom:10px; font-family:monospace; background:#fee2e2; color:#991b1b; padding:8px; border-radius:4px; word-break:break-word;">${phpMessage}</p>
+
+									${fileBlock}
+
+									<p style="font-size:16px; text-align:left; margin-bottom:10px;"><strong>How to resolve it:</strong></p>
+									<ol style="text-align:left; font-size:16px; margin-bottom:10px; padding-left:20px;">
+										<li style="margin-bottom:6px;">Open your hosting control panel (cPanel, Plesk, etc.) or connect via FTP/SFTP.</li>
+										<li style="margin-bottom:6px;">Navigate to the file shown above and either fix it or rename it (for example, append <code>.disabled</code> to the filename) to disable it.</li>
+										<li style="margin-bottom:6px;">Reload your WordPress admin to confirm the error is gone, then click <strong>Validate</strong> again here.</li>
+									</ol>
+
+									<p style="font-size:14px; text-align:left; margin-bottom:10px; color:#6b7280;">If you do not have access to your site's files, please forward this message to your hosting provider or developer. If you need help, our team is available at <a href="mailto:support@wp-umbrella.com" style="color:#2563eb;">support@wp-umbrella.com</a>.</p>
+								`,
+								confirmButtonText: "Close",
+								width: 640,
 							})
 							break;
 						case "failed_authorize_wordpress":

@@ -15,7 +15,7 @@ abstract class Host
 
     const SPINUPWP = 'spinupwp';
 
-    const WPENGINE = 'wpengine';
+    const WPENGINE = 'wp-engine';
 
     const O2SW = 'o2switch';
 

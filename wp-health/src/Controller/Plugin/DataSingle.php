@@ -13,6 +13,9 @@ class DataSingle extends AbstractController
 
     public static function getPluginDataByAjaxRouting($plugin)
     {
+        wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
+        wp_umbrella_get_service('RequestSettings')->setupAdmin();
+
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         if (!$nonce || !wp_verify_nonce($nonce, self::NONCE_ACTION)) {
             wp_send_json_error(
@@ -24,9 +27,6 @@ class DataSingle extends AbstractController
         }
 
         $plugin = isset($_POST['plugin']) ? $_POST['plugin'] : '';
-
-        wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
-        wp_umbrella_get_service('RequestSettings')->setupAdmin();
 
         if (empty($plugin)) {
             wp_send_json_error(

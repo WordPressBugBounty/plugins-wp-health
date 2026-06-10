@@ -173,6 +173,15 @@ class ValidationApiKey implements ExecuteHooksBackend
                     $code = 'failed_authorize_wordpress';
                 }
 
+                $criticalError = null;
+                if (
+                    isset($responseValidateSecret['data']['critical_error']) &&
+                    is_array($responseValidateSecret['data']['critical_error'])
+                ) {
+                    $criticalError = $responseValidateSecret['data']['critical_error'];
+                    $code = 'wordpress_critical_error';
+                }
+
                 if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
                     $newOptions['allowed'] = false;
                     $newOptions['api_key'] = '';
@@ -180,9 +189,12 @@ class ValidationApiKey implements ExecuteHooksBackend
                     $newOptions['secret_token'] = '';
                     $this->optionService->setOptions($newOptions);
 
-                    wp_send_json_error([
-                        'code' => $code,
-                    ]);
+                    $errorPayload = ['code' => $code];
+                    if ($criticalError !== null) {
+                        $errorPayload['critical_error'] = $criticalError;
+                    }
+
+                    wp_send_json_error($errorPayload);
                     return;
                 }
 
@@ -193,9 +205,12 @@ class ValidationApiKey implements ExecuteHooksBackend
                     $newOptions['secret_token'] = '';
                     $this->optionService->setOptions($newOptions);
 
-                    wp_send_json_error([
-                        'code' => $code,
-                    ]);
+                    $errorPayload = ['code' => $code];
+                    if ($criticalError !== null) {
+                        $errorPayload['critical_error'] = $criticalError;
+                    }
+
+                    wp_send_json_error($errorPayload);
                     return;
                 }
 
@@ -262,11 +277,20 @@ class ValidationApiKey implements ExecuteHooksBackend
                 $newOptions['secret_token'] = '';
                 $this->optionService->setOptions($newOptions);
 
-                wp_send_json_error([
+                $errorPayload = [
                     'code' => $response['code'],
                     'user' => $owner,
                     'api_key' => $apiKey,
-                ]);
+                ];
+
+                if (
+                    isset($response['result']['critical_error']) &&
+                    is_array($response['result']['critical_error'])
+                ) {
+                    $errorPayload['critical_error'] = $response['result']['critical_error'];
+                }
+
+                wp_send_json_error($errorPayload);
             }
         } catch (\Exception $e) {
             wp_send_json_error([

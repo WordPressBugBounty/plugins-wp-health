@@ -27,11 +27,18 @@ class ManagePlugin
     public function getVersionFromPluginFile($pluginFile)
     {
         try {
-            if (!file_exists(WP_PLUGIN_DIR . '/' . $pluginFile)) {
+            $path = WP_PLUGIN_DIR . '/' . $pluginFile;
+
+            // WP_Upgrader's safe-update renames the plugin directory mid-upgrade,
+            // leaving PHP's realpath/stat cache pointing at the pre-upgrade inode.
+            clearstatcache(true, $path);
+            clearstatcache(true, dirname($path));
+
+            if (!file_exists($path)) {
                 return false;
             }
 
-            $content = file_get_contents(WP_PLUGIN_DIR . '/' . $pluginFile);
+            $content = file_get_contents($path);
             if (!$content) {
                 return false;
             }

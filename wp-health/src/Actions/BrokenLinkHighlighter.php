@@ -32,6 +32,8 @@ class BrokenLinkHighlighter implements ExecuteHooksFrontend
                 return;
             }
 
+            function baseUrl(u) { return u.split('?')[0].split('#')[0]; }
+
             var style = document.createElement('style');
             style.textContent =
                 '.wpu-broken-link-highlight {' +
@@ -64,7 +66,8 @@ class BrokenLinkHighlighter implements ExecuteHooksFrontend
             for (var i = 0; i < links.length; i++) {
                 var link = links[i];
                 for (var j = 0; j < hrefs.length; j++) {
-                    if (link.href === hrefs[j] || link.getAttribute('href') === hrefs[j]) {
+                    var target = baseUrl(hrefs[j]);
+                    if (baseUrl(link.href) === target || baseUrl(link.getAttribute('href') || '') === target) {
                         link.classList.add('wpu-broken-link-highlight');
                         matched.push(link);
                         break;

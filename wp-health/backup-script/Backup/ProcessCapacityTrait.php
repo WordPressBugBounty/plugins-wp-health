@@ -90,8 +90,15 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 		{
 			$incrementalDate = $this->getContext()->getIncrementalDate();
 
+			// Use the most recent of mtime and ctime. Plugin/theme updates and
+			// Composer/rsync deploys preserve the archive's mtime (often backdated
+			// to the release date), so mtime alone misses freshly-deployed files.
+			// ctime is set by the OS when the inode is written and cannot be
+			// backdated by extraction tooling.
+			$lastChange = max(@filemtime($filePath) ?: 0, @filectime($filePath) ?: 0);
+
 			// If the file is older than the incremental date, we skip it
-			if ($incrementalDate !== null && @filemtime($filePath) < $incrementalDate) {
+			if ($incrementalDate !== null && $lastChange < $incrementalDate) {
 				return false;
 			}
 
