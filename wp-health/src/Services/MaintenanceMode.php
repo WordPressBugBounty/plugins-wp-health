@@ -29,19 +29,32 @@ class MaintenanceMode
 
 	private function generateSmartMaintenanceContent()
 	{
-		$secretTokenHash = wp_umbrella_get_secret_token();
+		$bearer = \WPUmbrella\Core\UmbrellaRequest::createFromGlobals()->getAuthorizationBearer();
 
-		if (!$secretTokenHash || !wp_umbrella_is_new_hash()) {
+		wp_umbrella_debug_log('MaintenanceMode: bypass=' . ($bearer ? 'enabled' : 'DISABLED')
+			. ' (incoming_bearer=' . ($bearer ? 'present' : 'absent') . ')');
+
+		if (!$bearer || !function_exists('hash')) {
 			return '<?php' . "\n" . '$upgrading = ' . time() . ';' . "\n";
 		}
 
+		$expected = hash('sha256', $bearer);
+
 		return '<?php' . "\n"
 			. '$upgrading = ' . time() . ';' . "\n"
-			. '$auth = isset($_SERVER[\'HTTP_AUTHORIZATION\']) ? $_SERVER[\'HTTP_AUTHORIZATION\'] : \'\';' . "\n"
-			. 'if (stripos($auth, \'Bearer \') === 0 && function_exists(\'hash_equals\') && function_exists(\'hash\')) {' . "\n"
-			. '    $bearer = substr($auth, 7);' . "\n"
-			. '    if (hash_equals(\'' . addslashes($secretTokenHash) . '\', hash(\'sha256\', $bearer))) {' . "\n"
-			. '        $upgrading = 0;' . "\n"
+			. '$wpum_cands = array();' . "\n"
+			. 'foreach (array(\'HTTP_X_SECRET_TOKEN\', \'HTTP_X_AUTHORIZATION\', \'HTTP_AUTHORIZATION\', \'REDIRECT_HTTP_AUTHORIZATION\') as $wpum_k) {' . "\n"
+			. '    if (!empty($_SERVER[$wpum_k])) { $wpum_cands[] = $_SERVER[$wpum_k]; }' . "\n"
+			. '}' . "\n"
+			. 'if (function_exists(\'getallheaders\')) {' . "\n"
+			. '    foreach ((array) getallheaders() as $wpum_hk => $wpum_hv) {' . "\n"
+			. '        $wpum_lk = strtolower($wpum_hk);' . "\n"
+			. '        if ($wpum_lk === \'x-authorization\' || $wpum_lk === \'authorization\' || $wpum_lk === \'x-secret-token\') { $wpum_cands[] = $wpum_hv; }' . "\n"
+			. '    }' . "\n"
+			. '}' . "\n"
+			. 'if (function_exists(\'hash_equals\') && function_exists(\'hash\')) {' . "\n"
+			. '    foreach ($wpum_cands as $wpum_c) {' . "\n"
+			. '        if (stripos($wpum_c, \'Bearer \') === 0 && hash_equals(\'' . $expected . '\', hash(\'sha256\', substr($wpum_c, 7)))) { $upgrading = 0; break; }' . "\n"
 			. '    }' . "\n"
 			. '}' . "\n";
 	}

@@ -293,7 +293,7 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 			<div class="wpu-support-action-info">
 				<strong><?php echo esc_html__('Clear WP Umbrella cache', 'wp-health'); ?></strong>
 				<p class="description">
-					<?php echo esc_html__('Clear cached data stored by WP Umbrella (white label settings, etc). Useful when your white label customisations are not reflected on this site.', 'wp-health'); ?>
+					<?php echo esc_html__('Clear cached data stored by WP Umbrella (white label settings, etc) and refresh WordPress\' cached PHP version check. Useful when your white label customisations are not reflected, or when the PHP version recommendation looks out of date.', 'wp-health'); ?>
 				</p>
 			</div>
 			<div class="wpu-support-action-btn">

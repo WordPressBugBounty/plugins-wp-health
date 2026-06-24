@@ -116,7 +116,7 @@ class Plugins
                 if (strlen($pluginData['Name']) > 0 && strlen($pluginData['Version']) > 0) {
                     $index = array_search($pluginPath, $pluginsByKey);
 
-                    if (isset($current->response[$pluginPath])) {
+                    if ($index !== false && isset($current->response[$pluginPath])) {
                         $current->response[$pluginPath]->name = $pluginData['Name'];
                         $current->response[$pluginPath]->old_version = $pluginData['Version'];
                         $current->response[$pluginPath]->file = $pluginPath;
@@ -137,7 +137,9 @@ class Plugins
             if (!empty($needUpdates)) {
                 foreach ($needUpdates as $plugin) {
                     $index = array_search($plugin->Name, $pluginsByName);
-                    $data[$index]['update'] = $plugin->update;
+                    if ($index !== false) {
+                        $data[$index]['update'] = $plugin->update;
+                    }
                 }
             }
 

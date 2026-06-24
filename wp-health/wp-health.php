@@ -8,7 +8,7 @@ Text Domain: wp-health
 Domain Path: /languages/
 Requires at least: 5.8
 Requires PHP: 7.4
-Version: 2.24.3
+Version: 2.24.4
 License: GPLv2
 */
 

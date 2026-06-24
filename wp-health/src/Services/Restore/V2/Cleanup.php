@@ -2,11 +2,9 @@
 namespace WPUmbrella\Services\Restore\V2;
 
 use Exception;
-use WPUmbrella\Services\Restore\V2\RestorationDirectory;
 use function file_exists;
 use function sprintf;
 use function unlink;
-use function wp_umbrella_get_service;
 
 class Cleanup
 {
@@ -17,9 +15,6 @@ class Cleanup
                 WP_UMBRELLA_DIR_WPU_RESTORE . '/index.php',
                 WP_UMBRELLA_DIR_WPU_RESTORE . '/.htaccess'
             ]);
-
-            $restorationDirectory = wp_umbrella_get_service(RestorationDirectory::class);
-            $restorationDirectory->removeSecureFile();
 
             $response = [
                 'success' => true,

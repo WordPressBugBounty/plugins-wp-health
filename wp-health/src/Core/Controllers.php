@@ -854,6 +854,18 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/users/suspend' => [
+                'route' => '/users/suspend',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\User\Suspend::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/backups/scan' => [
                 'route' => '/backups/scan',
                 'methods' => [

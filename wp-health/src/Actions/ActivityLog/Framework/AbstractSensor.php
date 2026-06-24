@@ -23,7 +23,7 @@ abstract class AbstractSensor
     /**
      * @param EventBuffer|null $buffer
      */
-    public function __construct(EventBuffer $buffer = null)
+    public function __construct(?EventBuffer $buffer = null)
     {
         $this->buffer = $buffer !== null ? $buffer : new EventBuffer();
     }

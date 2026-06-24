@@ -603,6 +603,17 @@ class Update extends BaseManageUpdate
         if (!empty($response)) {
             $decoded = json_decode($response, true);
             wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax response: " . ($decoded['code'] ?? 'unknown'));
+
+            if (!empty($decoded['_trace_child']) && is_array($decoded['_trace_child'])) {
+                $trace = wp_umbrella_get_service('RequestTrace');
+                foreach ($decoded['_trace_child'] as $entry) {
+                    $meta = isset($entry['meta']) ? $entry['meta'] : [];
+                    $meta['child_ms'] = isset($entry['elapsed_ms']) ? $entry['elapsed_ms'] : null;
+                    $trace->addTrace('ajax_child:' . (isset($entry['label']) ? $entry['label'] : 'unknown'), $meta);
+                }
+                unset($decoded['_trace_child']);
+            }
+
             return $decoded;
         }
 
@@ -678,11 +689,30 @@ class Update extends BaseManageUpdate
             }
         }
 
+        $bearer = \WPUmbrella\Core\UmbrellaRequest::createFromGlobals()->getAuthorizationBearer();
+        if ($bearer) {
+            $args['headers']['X-Secret-Token'] = 'Bearer ' . $bearer;
+        }
+
+        $httpAuth = isset($_SERVER['PHP_AUTH_USER']);
+        if ($httpAuth) {
+            $args['headers']['Authorization'] = 'Basic ' . base64_encode(
+                $_SERVER['PHP_AUTH_USER'] . ':' . (isset($_SERVER['PHP_AUTH_PW']) ? $_SERVER['PHP_AUTH_PW'] : '')
+            );
+        } elseif ($bearer) {
+            $args['headers']['Authorization'] = 'Bearer ' . $bearer;
+        }
+
         // Make post request.
-        $response = wp_remote_post(admin_url('admin-ajax.php'), $args);
+        // force-check=1 lets premium updaters that gate their refresh on the
+        // WordPress "Check again" request expose a pending update in this context.
+        $url = admin_url('admin-ajax.php?force-check=1');
+        wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax fallback POST to {$url} (cookies: " . count($args['cookies']) . ', bearer: ' . ($bearer ? 'yes' : 'no') . ', httpauth: ' . ($httpAuth ? 'yes' : 'no') . ')');
+        $response = wp_remote_post($url, $args);
 
         // If request not failed.
         if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+            wp_umbrella_debug_log("Plugin '{$plugin}' admin-ajax fallback HTTP 200");
             // Get response body.
             return wp_remote_retrieve_body($response);
         }

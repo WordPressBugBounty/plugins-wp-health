@@ -35,6 +35,8 @@ class CleanTransients implements ExecuteHooksBackend
             delete_transient($key);
         }
 
+        delete_site_transient('php_check_' . md5(PHP_VERSION));
+
         wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
         return;
     }

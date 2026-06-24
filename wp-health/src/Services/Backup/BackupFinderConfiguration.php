@@ -81,7 +81,7 @@ class BackupFinderConfiguration
 
             default:
                 try {
-                    if (!is_dir(untrailingslashit($source) . DIRECTORY_SEPARATOR . 'wp-content')) {
+                    if (!is_dir(WP_CONTENT_DIR)) {
                         $source = rtrim(str_replace(['\\', '/'], DIRECTORY_SEPARATOR, dirname(ABSPATH)), DIRECTORY_SEPARATOR)
                             . DIRECTORY_SEPARATOR;
                     }

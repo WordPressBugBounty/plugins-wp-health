@@ -4,10 +4,18 @@ if (!class_exists('DatabaseImportTable', false)):
     class DatabaseImportTable
     {
         protected $socket;
+        protected $allowCollationFallback;
 
-        public function __construct(UmbrellaWebSocket $socket)
+        /**
+         * @param UmbrellaWebSocket $socket
+         * @param bool $allowCollationFallback Forwarded to UmbrellaCharsetFixer.
+         *   Enabled for cloning only so unknown collations (MySQL 8 utf8mb4_0900_*)
+         *   are remapped to a supported one; off for in-place restore.
+         */
+        public function __construct(UmbrellaWebSocket $socket, $allowCollationFallback = false)
         {
             $this->socket = $socket;
+            $this->allowCollationFallback = $allowCollationFallback;
         }
 
         public function filterStatement($statement, array $filters)
@@ -67,6 +75,13 @@ if (!class_exists('DatabaseImportTable', false)):
                     break;
                 }
 
+                // Time-limit guard (between tables): persist the cursor and let
+                // the worker resume rather than running every table in a single
+                // execution and getting hard-killed mid-import.
+                if ($this->isTimeLimitApproaching()) {
+                    throw new UmbrellaDatabasePreventMaxExecutionTime($this->computeGlobalCursor($state));
+                }
+
                 $totalAttempts++;
 
                 // Track this specific table attempt
@@ -92,6 +107,12 @@ if (!class_exists('DatabaseImportTable', false)):
                             'processed_bytes' => $dump->processed ?? 0,
                             'total_bytes' => $dump->size ?? 0
                         ];
+                        $this->socket->sendTelemetryCounter('restore.database.table', [
+                            'origin' => 'plugin',
+                            'table' => basename($dump->path),
+                            'status' => 'skipped',
+                            'errorCode' => 'max_retries_exceeded',
+                        ]);
                     }
                     continue;
                 }
@@ -100,7 +121,19 @@ if (!class_exists('DatabaseImportTable', false)):
                     $this->socket->sendLog('Importing table: ' . $dump->path, true);
                     $this->importSingleTable($connection, $state, $dump, $maxCount, $maxPacket, $realMaxPacket, $shifts, $filters);
                     $this->socket->sendLog('Table imported: ' . $dump->path, true);
-                    $successfulTables[] = $dump->path;
+                    if (!in_array($dump->path, $successfulTables)) {
+                        $successfulTables[] = $dump->path;
+                        $this->socket->sendTelemetryCounter('restore.database.table', [
+                            'origin' => 'plugin',
+                            'table' => basename($dump->path),
+                            'status' => 'imported',
+                        ]);
+                    }
+                } catch (UmbrellaDatabasePreventMaxExecutionTime $e) {
+                    // Not a table failure: propagate so importTables() returns the
+                    // cursor and the worker resumes, instead of being swallowed by
+                    // the generic catch below and marking the table skipped.
+                    throw $e;
                 } catch (UmbrellaException $e) {
                     // Log the error but continue with other tables
                     $errorInfo = [
@@ -113,6 +146,12 @@ if (!class_exists('DatabaseImportTable', false)):
 
                     if (!in_array($dump->path, array_column($importErrors, 'table'))) {
                         $importErrors[] = $errorInfo;
+                        $this->socket->sendTelemetryCounter('restore.database.table', [
+                            'origin' => 'plugin',
+                            'table' => basename($dump->path),
+                            'status' => 'error',
+                            'errorCode' => $errorInfo['code'],
+                        ]);
                     }
 
                     // Log the error for debugging
@@ -145,6 +184,12 @@ if (!class_exists('DatabaseImportTable', false)):
 
                     if (!in_array($dump->path, array_column($importErrors, 'table'))) {
                         $importErrors[] = $errorInfo;
+                        $this->socket->sendTelemetryCounter('restore.database.table', [
+                            'origin' => 'plugin',
+                            'table' => basename($dump->path),
+                            'status' => 'error',
+                            'errorCode' => $errorInfo['code'],
+                        ]);
                     }
 
                     $this->socket->sendLog(sprintf(
@@ -192,7 +237,7 @@ if (!class_exists('DatabaseImportTable', false)):
                 $scanner->seek($dump->processed);
             }
 
-            $charsetFixer = new UmbrellaCharsetFixer($connection);
+            $charsetFixer = new UmbrellaCharsetFixer($connection, $this->allowCollationFallback);
             while (strlen($statements = $scanner->scan($maxCount, $maxPacket))) {
                 if ($realMaxPacket && strlen($statements) + 20 > $realMaxPacket) {
                     throw new UmbrellaException(sprintf("A query in the backup (%d bytes) is too big for the SQL server to process (max %d bytes); please set the server's variable 'max_allowed_packet' to at least %d and retry the process", strlen($statements), $realMaxPacket, strlen($statements) + 20), 'db_max_packet_size_reached', strlen($statements));
@@ -417,18 +462,86 @@ if (!class_exists('DatabaseImportTable', false)):
                 }
 
                 $dump->processed = $scanner->tell();
-                // if ($deadline->done()) {
-                // If there are any locked tables we might hang forever with the next query, unlock them.
-                // $connection->execute('UNLOCK TABLES');
-                // We're cutting the import here - remember the encoding!!!
-                // $charset = $connection->query("SHOW VARIABLES LIKE 'character_set_client'")->fetch();
-                // $dump->encoding = (string)end($charset);
-                // break 2;
-                // }
+
+                // Time-limit guard (mid-table): a single large dump (e.g.
+                // wp_postmeta) can exceed PHP's max execution time on its own.
+                // Persist the byte cursor and bail out so the worker resumes the
+                // import from here. Without this the PHP process is hard-killed
+                // mid-import: restore.database.finished is never emitted, no
+                // restore.error is raised, and the worker (which only waits on the
+                // connection ACK) reports the restoration as successful while the
+                // database was only partially applied.
+                if ($this->isTimeLimitApproaching()) {
+                    try {
+                        $connection->execute('UNLOCK TABLES');
+                    } catch (Exception $e) {
+                        // Ignore — we're interrupting the import anyway.
+                    }
+                    $scanner->close();
+                    throw new UmbrellaDatabasePreventMaxExecutionTime($this->computeGlobalCursor($state));
+                }
             }
 
             $dump->processed = $scanner->tell();
             $scanner->close();
+        }
+
+        /**
+         * Whether we are about to hit PHP's max execution time. Relies on the
+         * $startTimer / $safeTimeLimit globals set by the restore script.php.
+         * Falls back to "never" if they are not defined, preserving the previous
+         * single-shot behaviour.
+         *
+         * @return bool
+         */
+        private function isTimeLimitApproaching()
+        {
+            global $startTimer, $safeTimeLimit;
+
+            if (empty($startTimer) || empty($safeTimeLimit) || (int) $safeTimeLimit < 1) {
+                return false;
+            }
+
+            return (time() - $startTimer) >= $safeTimeLimit;
+        }
+
+        /**
+         * Resume cursor as a glob-order PREFIX byte offset, matching exactly how
+         * DatabaseRestoration redistributes UMBRELLA_DATABASE_CURSOR on resume:
+         * it re-globs the *.sql files (PHP sorts glob() alphabetically) and fills
+         * each file's `processed` in that order until the cursor is exhausted.
+         *
+         * It must therefore be a single contiguous prefix: the sum of the sizes
+         * of the fully-imported leading files plus the partial offset of the
+         * FIRST not-yet-complete file. We must NOT simply sum every file's
+         * `processed`, because import() reorders $state->files (DROP TABLE first
+         * for FK safety, via pushNextToEnd), so a later glob file can already
+         * carry a few bytes (its own DROP) while an earlier file is still in
+         * progress. Summing those bytes would push the redistributed offset past
+         * a statement boundary and seek() would land mid-line, corrupting the
+         * resumed import. Any progress on files after the first incomplete one is
+         * intentionally dropped; those files are re-imported from scratch on
+         * resume (idempotent — each dump starts with DROP TABLE IF EXISTS).
+         *
+         * @return int
+         */
+        private function computeGlobalCursor(UmbrellaImportState $state)
+        {
+            $files = $state->files;
+            usort($files, function ($a, $b) {
+                return strcmp($a->path, $b->path);
+            });
+
+            $cursor = 0;
+            foreach ($files as $file) {
+                if ((int) $file->processed >= (int) $file->size) {
+                    $cursor += (int) $file->size;
+                    continue;
+                }
+                $cursor += (int) $file->processed;
+                break;
+            }
+            return $cursor;
         }
     }
 endif;

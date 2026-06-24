@@ -480,6 +480,8 @@ abstract class Kernel
         add_action('wp_ajax_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
         add_action('wp_ajax_nopriv_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
 
+        add_action('init', [__CLASS__, 'maybePrepareForceCheckContext'], PHP_INT_MAX);
+
         add_action('plugins_loaded', [__CLASS__, 'handleHooksPlugin'], 10);
         register_activation_hook($data['file'], [__CLASS__, 'handleHooksPlugin']);
         register_deactivation_hook($data['file'], [__CLASS__, 'handleHooksPlugin']);
@@ -506,6 +508,49 @@ abstract class Kernel
 
         wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();
         return;
+    }
+
+    public static function maybePrepareForceCheckContext()
+    {
+        if (!defined('DOING_AJAX') || !DOING_AJAX) {
+            return;
+        }
+
+        $action = isset($_POST['action']) ? $_POST['action'] : '';
+        if ($action !== 'wp_umbrella_update_admin_request') {
+            return;
+        }
+
+        if (filter_input(INPUT_GET, 'force-check') !== '1') {
+            return;
+        }
+
+        wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
+        wp_umbrella_get_service('RequestSettings')->setupAdmin();
+
+        $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
+        if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_update_admin_request')) {
+            wp_set_current_user(0);
+            return;
+        }
+
+        $previousPagenow = isset($GLOBALS['pagenow']) ? $GLOBALS['pagenow'] : null;
+        $GLOBALS['pagenow'] = 'update-core.php';
+
+        add_action('admin_init', function () use ($previousPagenow) {
+            if ($previousPagenow === null) {
+                unset($GLOBALS['pagenow']);
+            } else {
+                $GLOBALS['pagenow'] = $previousPagenow;
+            }
+        }, PHP_INT_MAX);
+
+        wp_umbrella_get_service('RequestTrace')->addTrace('force_check_context_prepared', [
+            'pagenow' => 'update-core.php',
+            'can_update_plugins' => current_user_can('update_plugins') ? 1 : 0,
+        ]);
+
+        wp_umbrella_debug_log('admin-ajax fallback: prepared force-check admin context (pagenow=update-core.php) before admin_init');
     }
 
     public static function updateAdminRequest()
@@ -549,6 +594,15 @@ abstract class Kernel
 
         $plugins = [$plugin];
 
+        wp_umbrella_debug_log(sprintf(
+            "admin-ajax fallback for '%s': logged_in=%s can_update_plugins=%s pagenow=%s force_check=%s",
+            $plugin,
+            is_user_logged_in() ? 'yes' : 'no',
+            current_user_can('update_plugins') ? 'yes' : 'no',
+            isset($GLOBALS['pagenow']) ? $GLOBALS['pagenow'] : '(unset)',
+            filter_input(INPUT_GET, 'force-check') ?: '(none)'
+        ));
+
         try {
             $result = wp_umbrella_get_service('ManagePlugin')->bulkUpdate($plugins, [
                 'try_ajax' => false,
@@ -556,6 +610,15 @@ abstract class Kernel
                 'require_backup' => $requireBackup,
                 'skip_lock' => true,
             ]);
+
+            wp_umbrella_debug_log("admin-ajax fallback for '{$plugin}' result: " . (isset($result['code']) ? $result['code'] : 'unknown'));
+
+            if (is_array($result)) {
+                $childTrace = wp_umbrella_get_service('RequestTrace')->getTrace();
+                if (!empty($childTrace)) {
+                    $result['_trace_child'] = $childTrace;
+                }
+            }
 
             wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();
 

@@ -1,7 +1,6 @@
 <?php
 namespace WPUmbrella\Core;
 
-use WPUmbrella\Services\Restore\V2\RestorationDirectory;
 use WPUmbrella\Helpers\Controller;
 
 class UmbrellaRequest
@@ -44,13 +43,6 @@ class UmbrellaRequest
         ]);
 
         $request->setTypeQuery();
-
-        $action = $request->getAction();
-
-        if ($action && strpos($action, '/v1/restores') === 0) {
-            $restorationDirectory = wp_umbrella_get_service(RestorationDirectory::class);
-            $restorationDirectory->loadSecureFile();
-        }
 
         return $request;
     }

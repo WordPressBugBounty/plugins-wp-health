@@ -207,7 +207,7 @@ class WordPress
             include_once ABSPATH . '/wp-admin/includes/misc.php';
         }
 
-        $response = wp_check_php_version();
+        $response = $this->checkPhpVersionBypassingHostMirror();
 
         if (!is_array($response)) {
             return [
@@ -224,6 +224,32 @@ class WordPress
             'is_secure' => $response['is_secure'],
             'is_supported' => $response['is_supported'],
         ];
+    }
+
+    /**
+     * SiteGround mirrors the wordpress.org APIs through a pre_http_request hook and can serve a stale
+     * serve-happy response, which freezes is_supported/recommended_version on an outdated value. When that
+     * hook is present, bypass it and clear the cached check so wp_check_php_version() hits wordpress.org
+     * directly, then restore the hook to keep the host optimisation intact for the rest of the request.
+     *
+     * @return mixed
+     */
+    protected function checkPhpVersionBypassingHostMirror()
+    {
+        $priority = has_filter('pre_http_request', 'siteground_enable_wpupdates_api');
+
+        if ($priority === false) {
+            return wp_check_php_version();
+        }
+
+        remove_filter('pre_http_request', 'siteground_enable_wpupdates_api', $priority);
+        delete_site_transient('php_check_' . md5(PHP_VERSION));
+
+        $response = wp_check_php_version();
+
+        add_filter('pre_http_request', 'siteground_enable_wpupdates_api', $priority, 3);
+
+        return $response;
     }
 
     public function isUpToDate()

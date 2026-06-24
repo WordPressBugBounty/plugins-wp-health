@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.24.3
+Stable tag: v2.24.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.24.4 (06-23-2026) =
+- Added: a pre-restore check that warns you when the saved database settings do not match your site's current database, so a restoration cannot silently target the wrong database.
+- Fixed: one-click plugin and theme updates now go through reliably on sites protected by HTTP Basic Authentication, behind LiteSpeed, or with a strict maintenance setup, where they could previously stall.
+- Fixed: restoring or cloning a site no longer fails when the database uses a newer MySQL 8 collation.
+- Fixed: backups now locate your site's content correctly on installations that use a custom content directory.
+- Fixed: during bulk updates, one plugin's update can no longer be matched against another plugin's version.
+- Improved: SiteGround integration
 
 = 2.24.3 (06-10-2026) =
 - Fixed: updating several plugins in a row no longer fails after the first one on some hosting setups.
