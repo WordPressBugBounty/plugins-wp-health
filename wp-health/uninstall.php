@@ -29,6 +29,8 @@ try {
     delete_option('wp_umbrella_broken_link_checker_enabled');
     delete_option('wp_umbrella_blc_scan_interval');
 
+    delete_option('wp_umbrella_hardening_settings');
+
     wp_clear_scheduled_hook('wp_umbrella_snapshot_data_run_queue');
 
     // Backup scheduelr

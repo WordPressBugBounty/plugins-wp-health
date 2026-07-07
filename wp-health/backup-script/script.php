@@ -254,6 +254,15 @@ $preventTimeout = $request['seconds_prevent_timeout'] ?? 6;
 
 $safeTimeLimit = $maxExecutionTime - $preventTimeout; // seconds for preventing timeout
 
+// Cap the budget below the site's reverse-proxy read timeout. The worker learns that
+// timeout per-site (from gateway-timeout responses) and sends it as max_batch_seconds, so
+// the cloner checkpoints (UmbrellaPreventMaxExecutionTime) before the proxy kills the
+// request. Without this, on hosts whose proxy cuts well under PHP's max_execution_time the
+// cursor is never persisted and the backup loops forever.
+if (isset($request['max_batch_seconds']) && (int) $request['max_batch_seconds'] > 0) {
+    $safeTimeLimit = min($safeTimeLimit, (int) $request['max_batch_seconds']);
+}
+
 /**
  * Init Context
  */

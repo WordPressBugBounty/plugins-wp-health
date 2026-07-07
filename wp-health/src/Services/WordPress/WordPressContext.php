@@ -164,6 +164,10 @@ class WordPressContext
 
     public function getHash($value)
     {
+        if ($value === null) {
+            $value = '';
+        }
+
         if (!function_exists('wp_hash')) {
             include_once ABSPATH . '/wp-includes/pluggable.php';
         }

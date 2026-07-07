@@ -24,12 +24,16 @@ class UpdateMultiple extends AbstractController
         $onlyAjax = isset($params['only_ajax']) ? $params['only_ajax'] : false;
         $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : false;
         $backupDone = isset($params['backup_done']) ? (bool) $params['backup_done'] : false;
+        $providedUpdates = isset($params['provided_updates']) && is_array($params['provided_updates'])
+            ? $params['provided_updates']
+            : [];
 
         try {
             $data = $managePlugin->bulkUpdate($plugins, [
                 'only_ajax' => $onlyAjax,
                 'require_backup' => $requireBackup,
                 'backup_done' => $backupDone,
+                'provided_updates' => $providedUpdates,
             ]);
 
             return $this->returnResponse($data);

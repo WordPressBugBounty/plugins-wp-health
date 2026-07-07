@@ -116,6 +116,13 @@ class AttachByApiKeyCommand
                     isset($chosenWorkspace['name']) ? $chosenWorkspace['name'] : '?',
                     isset($chosenWorkspace['id']) ? $chosenWorkspace['id'] : '?'
                 ));
+
+                $ownerData = $ownerService->validateApiKeyOnApplication(['api_key' => $apiKey]);
+                if (!is_array($ownerData) || !isset($ownerData['result'])) {
+                    $this->fail($optionService, $snapshot, 'Unexpected response re-resolving the chosen workspace.');
+                    return;
+                }
+                $owner = $ownerData['result'];
             }
 
             if (isset($owner['total_projects'], $owner['limit_projects']) && $owner['total_projects'] >= $owner['limit_projects']) {

@@ -160,6 +160,7 @@ class MoveBackupModule extends AbstractController
         return $this->returnResponse([
             'success' => true,
             'code' => 'success',
+            'module_url' => untrailingslashit(site_url()) . '/' . $filename,
         ]);
     }
 }

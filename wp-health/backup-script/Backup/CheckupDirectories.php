@@ -83,6 +83,13 @@ if (!class_exists('UmbrellaCheckupDirectories', false)):
                         continue;
                     }
 
+                    $currentTime = time();
+
+                    if (($currentTime - $startTimer) >= $safeTimeLimit) {
+                        $this->socket->sendLog('During checkup directory fileinfo: throw UmbrellaPreventMaxExecutionTime');
+                        throw new UmbrellaPreventMaxExecutionTime($index);
+                    }
+
                     $filePath = $fileInfo->getPathname();
 
                     if (!$this->checkProcessFile($filePath)) {

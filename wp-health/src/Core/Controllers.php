@@ -338,6 +338,27 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/hardening' => [
+                'route' => '/hardening',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\Hardening::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\Hardening::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/sitemap-url' => [
                 'route' => '/sitemap-url',
                 'methods' => [

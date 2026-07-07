@@ -2,6 +2,7 @@
 
 namespace WPUmbrella\Actions\ActivityLog\Framework;
 
+use WPUmbrella\Actions\ActivityLog\Sensors\AiConnectorSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\CommentTermMenuSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\ContentSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\PluginSensor;
@@ -106,6 +107,7 @@ class SensorBootstrap implements ExecuteHooks, ActivationHook, DeactivationHook
             new ContentSensor($buffer),
             new ThemeCoreOptionSensor($buffer),
             new CommentTermMenuSensor($buffer),
+            new AiConnectorSensor($buffer),
         ];
     }
 

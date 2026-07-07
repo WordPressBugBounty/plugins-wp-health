@@ -50,6 +50,10 @@ if (!class_exists('UmbrellaFileBackup', false)):
             $lineNumber = 0;
             $startProcessing = false;
 
+            $lastProcessedFilename = $this->context->getLastProcessedFilename();
+            $resumeInPreviousDirectory = !empty($lastProcessedFilename) && $this->context->getFileCursor() > 1;
+            $startCursor = $resumeInPreviousDirectory ? $this->context->getFileCursor() - 1 : $this->context->getFileCursor();
+
             $this->siteChecksumDirectoryGenerator->rewind();
 
             while (($line = $this->siteChecksumDirectoryGenerator->getNextLine()) !== false) {
@@ -62,7 +66,7 @@ if (!class_exists('UmbrellaFileBackup', false)):
                     break; // Stop if we are close to the time limit
                 }
 
-                if (!$startProcessing && $lineNumber >= $this->context->getFileCursor()) {
+                if (!$startProcessing && $lineNumber >= $startCursor) {
                     $startProcessing = true; // Find the cursor, start processing from the next file
                 }
 
@@ -86,15 +90,19 @@ if (!class_exists('UmbrellaFileBackup', false)):
 
                 $directoryPath = $this->context->getBaseDirectory() . $directory;
 
+                $skipping = false;
+                if ($resumeInPreviousDirectory) {
+                    $resumeInPreviousDirectory = false;
+                    $skipping = true;
+                    $this->socket->sendLog('Resuming from file: ' . $lastProcessedFilename);
+                }
+
                 if (file_exists($directoryPath)) {
                     $dirIterator = new DirectoryIterator($directoryPath);
-                    $this->socket->sendFileCursor($lineNumber); // File cursor correspond to the line number in the directory dictionary
 
-					$skipping = false;
-					if ($lineNumber === $this->context->getFileCursor() && !empty($lastProcessedFilename)) {
-						$skipping = true;
-						$this->socket->sendLog('Resuming from file: ' . $lastProcessedFilename);
-					}
+                    if (!$skipping) {
+                        $this->socket->sendFileCursor($lineNumber); // File cursor correspond to the line number in the directory dictionary
+                    }
 
                     foreach ($dirIterator as $fileInfo) {
                         if ($fileInfo->isDot()) {
@@ -120,15 +128,15 @@ if (!class_exists('UmbrellaFileBackup', false)):
                             continue;
                         }
 
-						if ($skipping) {
-							if ($fileInfo->getFilename() === basename($this->context->getFileName())) {
-								$skipping = false;
-								$this->socket->sendLog('Found last processed file, resuming...');
-							}
-							continue;
-						}
-
                         $this->checksumDictionaryGenerator->addFile($fileInfo->getFilename());
+
+                        if ($skipping) {
+                            if ($fileInfo->getFilename() === basename($lastProcessedFilename)) {
+                                $skipping = false;
+                                $this->socket->sendLog('Found last processed file, resuming...');
+                            }
+                            continue;
+                        }
 
                         if (!$this->canProcessIncrementalFile($filePath)) {
                             continue;

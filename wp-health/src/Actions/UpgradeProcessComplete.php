@@ -6,11 +6,52 @@ use WPUmbrella\Helpers\GodTransient;
 
 class UpgradeProcessComplete implements ExecuteHooks
 {
+    protected $coreUpdateReported = false;
+
     public function hooks()
     {
         add_action('upgrader_package_options', [$this, 'getOldVersion'], 10, 1);
         add_action('upgrader_process_complete', [$this, 'processComplete'], 10, 2);
         add_action('core_upgrade_preamble', [$this, 'getOldVersionWordPressCore']);
+        add_action('_core_updated_successfully', [$this, 'coreUpdatedSuccessfully'], 10, 1);
+    }
+
+    public function coreUpdatedSuccessfully($newVersion)
+    {
+        if (defined('WP_UMBRELLA_PROCESS_FROM_UMBRELLA') && WP_UMBRELLA_PROCESS_FROM_UMBRELLA) {
+            return;
+        }
+
+        if ($this->coreUpdateReported) {
+            return;
+        }
+
+        if (empty($newVersion) || !is_string($newVersion)) {
+            return;
+        }
+
+        global $umbrellaPreUpdateData, $wp_version;
+
+        $oldVersion = isset($umbrellaPreUpdateData['old_version'])
+            ? $umbrellaPreUpdateData['old_version']
+            : $wp_version;
+
+        if ($oldVersion === $newVersion) {
+            return;
+        }
+
+        $this->coreUpdateReported = true;
+
+        wp_umbrella_get_service('Processes')->addProcessTask([
+            'type' => 'core',
+            'action' => 'update',
+            'values' => [
+                [
+                    'old_version' => $oldVersion,
+                    'new_version' => $newVersion,
+                ],
+            ],
+        ]);
     }
 
     public function getOldVersionWordPressCore()
@@ -57,6 +98,10 @@ class UpgradeProcessComplete implements ExecuteHooks
 
         switch ($options['type']) {
             case 'core':
+                if ($this->coreUpdateReported) {
+                    return $upgraderObject;
+                }
+
                 global $umbrellaPreUpdateData;
 
                 $oldVersion = get_bloginfo('version');
@@ -74,6 +119,8 @@ class UpgradeProcessComplete implements ExecuteHooks
                         ]
                     ],
                 ];
+
+                $this->coreUpdateReported = true;
 
                 break;
             case 'plugin':

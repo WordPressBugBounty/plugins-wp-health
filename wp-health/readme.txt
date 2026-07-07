@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.24.4
+Stable tag: v2.25.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.25.0 (07-07-2026) =
+- Added: security hardening options you can enable per site from the dashboard: hide the WordPress version, block user enumeration, mask login error details, disable the file editor, and add recommended security headers.
+- Fixed: updates for some premium plugins could fail silently even with a valid license; they now install reliably.
+- Fixed: reconnecting an already-paired site no longer creates a duplicate in your dashboard.
+- Fixed: improved interrupted backups.
+- Improved: backups adapt their pace to your server and stuck backups are detected sooner.
+- Improved: the Activity Log now tracks WordPress 7.0 AI configuration changes.
 
 = 2.24.4 (06-23-2026) =
 - Added: a pre-restore check that warns you when the saved database settings do not match your site's current database, so a restoration cannot silently target the wrong database.

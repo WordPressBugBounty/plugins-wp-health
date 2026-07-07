@@ -209,6 +209,9 @@ class Update extends BaseManageUpdate
         $onlyAjax = isset($options['only_ajax']) ? $options['only_ajax'] : false; // Try only by admin-ajax.php
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true; // For retry with admin-ajax.php if plugin update failed
         $requireBackup = isset($options['require_backup']) && $options['require_backup']; // Only safe updates should auto-rollback
+        $providedUpdates = isset($options['provided_updates']) && is_array($options['provided_updates'])
+            ? $options['provided_updates']
+            : [];
         $trace = wp_umbrella_get_service('RequestTrace');
 
         if ($onlyAjax) { // If only ajax, we don't try to update by admin-ajax.php
@@ -239,6 +242,46 @@ class Update extends BaseManageUpdate
 
             if (!$onlyAjax) { // If not only ajax, we try to update by bulk_upgrade
                 $transientForTrace = get_site_transient('update_plugins');
+
+                if (!empty($providedUpdates)) {
+                    if (!is_object($transientForTrace)) {
+                        $transientForTrace = new \stdClass();
+                        $transientForTrace->response = [];
+                    }
+                    if (!isset($transientForTrace->response) || !is_array($transientForTrace->response)) {
+                        $transientForTrace->response = [];
+                    }
+
+                    $seeded = false;
+                    foreach ($plugins as $pluginToSeed) {
+                        $provided = isset($providedUpdates[$pluginToSeed]) ? $providedUpdates[$pluginToSeed] : null;
+                        $package = is_array($provided) && !empty($provided['package']) ? $provided['package'] : null;
+
+                        if (!$package || isset($transientForTrace->response[$pluginToSeed])) {
+                            continue;
+                        }
+
+                        $entry = new \stdClass();
+                        $entry->slug = explode('/', $pluginToSeed)[0];
+                        $entry->plugin = $pluginToSeed;
+                        $entry->new_version = isset($provided['new_version']) ? $provided['new_version'] : '';
+                        $entry->package = $package;
+                        $entry->url = isset($provided['url']) ? $provided['url'] : false;
+
+                        $transientForTrace->response[$pluginToSeed] = $entry;
+                        $seeded = true;
+                        $trace->addTrace('provided_update_seeded', [
+                            'plugin' => $pluginToSeed,
+                            'new_version' => $entry->new_version,
+                            'package_host' => parse_url($package, PHP_URL_HOST),
+                        ]);
+                    }
+
+                    if ($seeded) {
+                        set_site_transient('update_plugins', $transientForTrace);
+                    }
+                }
+
                 foreach ($plugins as $pluginForTrace) {
                     $entryForTrace = is_object($transientForTrace)
                         ? ($transientForTrace->response[$pluginForTrace] ?? null)
