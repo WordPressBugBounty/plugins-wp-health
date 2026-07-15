@@ -235,6 +235,7 @@ class UserSensor extends AbstractSensor
 
         $info = $this->getUserInfo($userId);
         $previousRoles = is_array($oldRoles) ? array_values($oldRoles) : [];
+        $newRoles = is_string($newRole) && $newRole !== '' ? [$newRole] : [];
 
         $promotedToAdmin = is_string($newRole)
             && $newRole === self::ROLE_ADMINISTRATOR
@@ -247,8 +248,11 @@ class UserSensor extends AbstractSensor
         $this->recordEvent('user.role.changed', $severity, [
             'targetUserId' => (int) $userId,
             'targetUsername' => $info !== null ? $info['login'] : null,
+            'targetEmail' => $info !== null ? $info['email'] : null,
             'newRole' => is_string($newRole) ? $newRole : null,
+            'newRoles' => $newRoles,
             'previousRoles' => $previousRoles,
+            'promotedToAdmin' => $promotedToAdmin,
         ]);
     }
 

@@ -24,17 +24,24 @@ class PluginUpgrader extends \Plugin_Upgrader
         add_filter('upgrader_pre_install', [$this, 'deactivate_plugin_before_upgrade' ], 10, 2);
         add_filter('upgrader_clear_destination', [$this, 'delete_old_plugin' ], 10, 4);
 
-        $this->run([
-            'package'           => $url,
-            'destination'       => WP_PLUGIN_DIR,
-            'clear_destination' => true,
-            'clear_working'     => true,
-            'hook_extra'        => array(
-                'plugin' => $plugin,
-                'type'   => 'plugin',
-                'action' => 'update',
-            ),
-        ]);
+        $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+        $upgradeContext->begin();
+
+        try {
+            $this->run([
+                'package'           => $url,
+                'destination'       => WP_PLUGIN_DIR,
+                'clear_destination' => true,
+                'clear_working'     => true,
+                'hook_extra'        => array(
+                    'plugin' => $plugin,
+                    'type'   => 'plugin',
+                    'action' => 'update',
+                ),
+            ]);
+        } finally {
+            $upgradeContext->end();
+        }
 
         remove_filter('upgrader_pre_install', [$this, 'deactivate_plugin_before_upgrade']);
         remove_filter('upgrader_clear_destination', [$this, 'delete_old_plugin']);

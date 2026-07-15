@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Actions\Admin;
 
+use WPUmbrella\Actions\Hardening\LoginGuard\FilterStorage;
 use WPUmbrella\Core\Hooks\ExecuteHooksBackend;
 
 class CleanTransients implements ExecuteHooksBackend
@@ -36,6 +37,8 @@ class CleanTransients implements ExecuteHooksBackend
         }
 
         delete_site_transient('php_check_' . md5(PHP_VERSION));
+
+        (new FilterStorage())->clear();
 
         wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
         return;

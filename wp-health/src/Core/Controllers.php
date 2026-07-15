@@ -359,6 +359,32 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/security/analysis' => [
+                'route' => '/security/analysis',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Security\Analysis::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/security/hidden-admin/clean' => [
+                'route' => '/security/hidden-admin/clean',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Security\CleanHiddenAdmin::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/sitemap-url' => [
                 'route' => '/sitemap-url',
                 'methods' => [

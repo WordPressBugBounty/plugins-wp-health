@@ -220,7 +220,14 @@ class Theme
 
             wp_umbrella_debug_log("Theme '{$theme}' running bulk_upgrade...");
             $trace->addTrace('bulk_upgrade_call');
-            $response = $upgrader->bulk_upgrade([$theme]);
+            $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+            $upgradeContext->begin();
+
+            try {
+                $response = $upgrader->bulk_upgrade([$theme]);
+            } finally {
+                $upgradeContext->end();
+            }
             $trace->addTrace('bulk_upgrade_returned', ['empty' => empty($response)]);
 
             @flush();

@@ -12,6 +12,8 @@ class ClearCache
 {
     public function clearCache()
     {
+        do_action('wp_umbrella_clear_cache');
+
         $collection = new CacheCollection();
 
         $items = CacheCompatibility::getCacheCompatibilities();

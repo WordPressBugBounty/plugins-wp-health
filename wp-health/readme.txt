@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.25.0
+Stable tag: v2.25.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,12 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.25.1 (15-07-2026) =
+- Added: a security option to block installing, updating, and editing plugins and themes from the WordPress admin.
+- Added: a security option to disable XML-RPC, reducing a common attack surface on your site.
+- Added: security checks.
+- Fixed: updated the bundled task scheduler so it no longer triggers PHP 8.4 and 8.5 deprecation notices, keeping your debug log clean and preparing for future PHP versions.
 
 = 2.25.0 (07-07-2026) =
 - Added: security hardening options you can enable per site from the dashboard: hide the WordPress version, block user enumeration, mask login error details, disable the file editor, and add recommended security headers.

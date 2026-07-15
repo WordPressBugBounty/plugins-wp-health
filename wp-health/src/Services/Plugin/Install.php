@@ -32,7 +32,14 @@ class Install
                 return $options;
             });
 
-            $result = $upgrader->install($urlToInstall);
+            $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+            $upgradeContext->begin();
+
+            try {
+                $result = $upgrader->install($urlToInstall);
+            } finally {
+                $upgradeContext->end();
+            }
 
             if ($result !== true) {
                 return [

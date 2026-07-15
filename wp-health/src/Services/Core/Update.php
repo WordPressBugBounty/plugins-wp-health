@@ -74,7 +74,14 @@ class Update extends BaseManageUpdate
 
             @ob_start();
             $core = new Core_Upgrader(new UpdaterSkin());
-            $result = $core->upgrade($current_update);
+            $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+            $upgradeContext->begin();
+
+            try {
+                $result = $core->upgrade($current_update);
+            } finally {
+                $upgradeContext->end();
+            }
             @ob_end_flush();
             @ob_end_clean();
 
@@ -239,7 +246,14 @@ class Update extends BaseManageUpdate
             }
 
             wp_umbrella_debug_log("Core update: running WP_Automatic_Updater...");
-            $upgrader->run();
+            $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+            $upgradeContext->begin();
+
+            try {
+                $upgrader->run();
+            } finally {
+                $upgradeContext->end();
+            }
 
             // check populated var from hook
             if (empty($this->updateResults['core'])) {

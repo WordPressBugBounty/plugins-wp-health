@@ -67,6 +67,67 @@ class ManageUser
         ];
     }
 
+    public function cleanOrphanCapabilities($userId)
+    {
+        global $wpdb;
+
+        $userId = (int) $userId;
+
+        if ($userId <= 0) {
+            return [
+                'status' => 'error',
+                'code' => 'invalid_user_id',
+            ];
+        }
+
+        $existingUser = $wpdb->get_var(
+            $wpdb->prepare("SELECT ID FROM {$wpdb->users} WHERE ID = %d", $userId)
+        );
+
+        if (!empty($existingUser)) {
+            return [
+                'status' => 'error',
+                'code' => 'user_exists',
+            ];
+        }
+
+        $metaKeys = [
+            $wpdb->prefix . 'capabilities',
+            $wpdb->prefix . 'user_level',
+        ];
+
+        $placeholders = implode(', ', array_fill(0, count($metaKeys), '%s'));
+
+        $found = (int) $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE user_id = %d AND meta_key IN ({$placeholders})",
+                array_merge([$userId], $metaKeys)
+            )
+        );
+
+        if ($found === 0) {
+            return [
+                'status' => 'error',
+                'code' => 'no_orphan',
+            ];
+        }
+
+        $deleted = 0;
+
+        foreach ($metaKeys as $metaKey) {
+            $deleted += (int) $wpdb->delete($wpdb->usermeta, [
+                'user_id' => $userId,
+                'meta_key' => $metaKey,
+            ]);
+        }
+
+        return [
+            'status' => 'success',
+            'code' => 'success',
+            'deleted' => $deleted,
+        ];
+    }
+
     protected function isLastAdministrator($user)
     {
         if (!in_array('administrator', (array) $user->roles, true)) {

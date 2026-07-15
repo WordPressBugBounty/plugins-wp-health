@@ -36,7 +36,14 @@ class Update extends BaseManageUpdate
             $upgrader = new Plugin_Upgrader($skin);
 
             wp_umbrella_debug_log("Plugin '{$plugin}' running upgrader...");
-            $response = $upgrader->upgrade($plugin);
+            $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+            $upgradeContext->begin();
+
+            try {
+                $response = $upgrader->upgrade($plugin);
+            } finally {
+                $upgradeContext->end();
+            }
 
             if (is_wp_error($skin->result)) {
                 $errorCode = $skin->result->get_error_code();
@@ -362,7 +369,14 @@ class Update extends BaseManageUpdate
                     $skin = new WP_Ajax_Upgrader_Skin();
                     $upgrader = new Plugin_Upgrader($skin);
                     $trace->addTrace('wp_bulk_upgrade_call');
-                    $response = $upgrader->bulk_upgrade($pluginsWithUpdate);
+                    $upgradeContext = wp_umbrella_get_service('UpgradeContext');
+                    $upgradeContext->begin();
+
+                    try {
+                        $response = $upgrader->bulk_upgrade($pluginsWithUpdate);
+                    } finally {
+                        $upgradeContext->end();
+                    }
                     $trace->addTrace('wp_bulk_upgrade_returned', ['empty' => empty($response)]);
                 }
 
