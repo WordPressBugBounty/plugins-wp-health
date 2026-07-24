@@ -199,6 +199,36 @@ abstract class Kernel
             'with_cache' => $action !== '/v1/validation-application-token'
         ];
 
+        $verifier = wp_umbrella_get_service('SignedRequestVerifier');
+        if ($verifier->hasSignatureHeaders($request->getHeaders())) {
+            $verified = $verifier->verify(
+                $request->getHeaders(),
+                $request->getMethod(),
+                $request->getRequestPath(),
+                $request->getRawBody()
+            );
+            if ($verified) {
+                return true;
+            }
+        }
+
+        // One-click login signed via request params (browser form, no headers).
+        if ($action === '/v1/login' && $request->getParam('x-umb-login-sig')) {
+            if ($verifier->verifyLogin(
+                $request->getParam('user_id'),
+                $request->getParam('x-umb-login-sig'),
+                $request->getParam('x-umb-login-ts'),
+                $request->getParam('x-umb-login-nonce'),
+                $request->getParam('x-umb-login-keyid')
+            )) {
+                return true;
+            }
+        }
+
+        if (wp_umbrella_is_signature_only()) {
+            return false;
+        }
+
         $bearer = $request->getAuthorizationBearer();
         if ($bearer !== null) {
             $hashedBearer = wp_umbrella_get_service('WordPressContext')->getHash($bearer);

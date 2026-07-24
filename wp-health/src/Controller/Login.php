@@ -11,8 +11,13 @@ class Login extends AbstractController
 {
     public function executePost($params)
     {
+        // Bind the login to the exact user id the permission callback verified
+        // the signature against (UmbrellaRequest::getParam), NOT WP core's merged
+        // get_params(): a query/body split of user_id must not let a signature
+        // minted for X create a session for Y.
+        $userId = \WPUmbrella\Core\UmbrellaRequest::createFromGlobals()->getParam('user_id');
 
-		if (!isset($params['user_id'])) {
+		if ($userId === null || $userId === '') {
             return $this->returnResponse([
                 'code' => 'missing_parameters'
             ], 401);
@@ -24,7 +29,7 @@ class Login extends AbstractController
             ], 401);
 		}
 
-        $user = wp_umbrella_get_service('WordPressContext')->getUserData($params['user_id']);
+        $user = wp_umbrella_get_service('WordPressContext')->getUserData($userId);
 
         if (!$user) {
             return $this->returnResponse([

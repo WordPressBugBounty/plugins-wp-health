@@ -172,6 +172,15 @@ abstract class Controllers
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
                         ]
                     ],
+                    [
+                        // Some hosting providers strip query strings from GET requests
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\BackupV4\MoveBackupModule::class,
+
+                        'options' => [
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
                 ]
             ],
             '/v1/cleanup-module' => [
@@ -1057,6 +1066,69 @@ abstract class Controllers
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
                         ]
                     ]
+                ]
+            ],
+            '/v1/receive-signing-key' => [
+                'route' => '/receive-signing-key',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\ReceiveSigningKey::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\ReceiveSigningKey::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ]
+                ]
+            ],
+            '/v1/kill-legacy-communication' => [
+                'route' => '/kill-legacy-communication',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\KillLegacyCommunication::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SIGNATURE,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\KillLegacyCommunication::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SIGNATURE,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/signature-self-test' => [
+                'route' => '/signature-self-test',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\SignatureSelfTest::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SIGNATURE,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Options\SignatureSelfTest::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SIGNATURE,
+                        ]
+                    ],
                 ]
             ],
             '/v1/login' => [

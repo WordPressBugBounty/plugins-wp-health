@@ -137,6 +137,9 @@ trait TraitPhpController
             case Controller::PERMISSION_WITH_SECRET_TOKEN:
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($request);
                 break;
+            case Controller::PERMISSION_WITH_SIGNATURE:
+                return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($request);
+                break;
             default:
                 return true;
         }

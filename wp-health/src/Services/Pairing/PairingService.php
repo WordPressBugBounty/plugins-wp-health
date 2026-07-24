@@ -81,10 +81,13 @@ class PairingService
             return false;
         }
 
-        $ackOk = $this->callAck($requestToken, $projectId);
-        if (!$ackOk) {
+        $ackResponse = $this->callAck($requestToken, $projectId);
+        if ($ackResponse === null) {
+            $this->persistRequestToken('');
             return false;
         }
+
+        $this->persistSigningKey($ackResponse);
 
         return $this->wipeApiKey();
     }
@@ -169,15 +172,42 @@ class PairingService
             ],
             'body' => wp_json_encode([
                 'project_id' => $bodyProjectId,
+                'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
             ]),
             'sslverify' => false,
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
 
         if (is_wp_error($response)) {
-            return false;
+            return null;
         }
 
-        return (int) wp_remote_retrieve_response_code($response) === 200;
+        if ((int) wp_remote_retrieve_response_code($response) !== 200) {
+            return null;
+        }
+
+        $decoded = json_decode(wp_remote_retrieve_body($response), true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    protected function persistSigningKey($ackResponse)
+    {
+        $payload = isset($ackResponse['data']) && is_array($ackResponse['data'])
+            ? $ackResponse['data']
+            : $ackResponse;
+
+        $signingKey = wp_umbrella_signing_key_from_response($payload);
+        if (!$signingKey) {
+            return;
+        }
+
+        $optionService = wp_umbrella_get_service('Option');
+
+        $options = $optionService->getOptions(['secure' => false]);
+        $options['public_key'] = $signingKey['public_key'];
+        $options['key_id'] = $signingKey['key_id'];
+        $options['key_state'] = 'dual';
+        $optionService->setOptions($options);
     }
 }

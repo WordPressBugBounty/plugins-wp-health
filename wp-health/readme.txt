@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.25.1
+Stable tag: v2.26.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,7 +83,14 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 == Changelog ==
 
-= 2.25.1 (15-07-2026) =
+= 2.26.0 (07-24-2026) =
+- Improved: security protections now record the attacks they stop (blocked login attempts, XML-RPC calls, and user enumeration scans) in your Activity Log, so you can see what WP Umbrella blocked for you.
+- Improved: strengthened the security of the connection between your site and WP Umbrella.
+- Added: an expanded .htaccess hardening option, validated safely before it is applied to your site.
+- Fixed: a restoration that only partially imported the database is no longer reported as successful.
+- Improved: backups now gather more information while building the backup script, so we can detect upfront what would prevent a backup from completing.
+
+= 2.25.1 (07-15-2026) =
 - Added: a security option to block installing, updating, and editing plugins and themes from the WordPress admin.
 - Added: a security option to disable XML-RPC, reducing a common attack surface on your site.
 - Added: security checks.

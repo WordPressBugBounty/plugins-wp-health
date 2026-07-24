@@ -37,6 +37,31 @@ class ClientIpResolver
         '2c0f:f248::/32',
     ];
 
+    public static function resolveRemoteAddr()
+    {
+        return isset($_SERVER['REMOTE_ADDR']) ? self::sanitizeIp($_SERVER['REMOTE_ADDR']) : null;
+    }
+
+    public static function isBehindTrustedProxy()
+    {
+        return self::isTrustedProxy(self::resolveRemoteAddr());
+    }
+
+    public static function matches($ip, array $ranges)
+    {
+        if (!is_string($ip) || $ip === '') {
+            return false;
+        }
+
+        foreach ($ranges as $range) {
+            if (self::ipInRange($ip, $range)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function resolve()
     {
         $remoteAddr = isset($_SERVER['REMOTE_ADDR']) ? self::sanitizeIp($_SERVER['REMOTE_ADDR']) : null;

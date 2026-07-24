@@ -23,6 +23,7 @@ class WordPressUpdate
     public $zip_is_defined;
     public $defined_data;
     public $hardening;
+    public $web_server;
     public $base_directory;
     public $latest;
     public $wp_content_directory;

@@ -7,70 +7,56 @@ if (!defined('ABSPATH')) {
 
 class HtaccessPostureAnalyzer
 {
+    const FINGERPRINT_PREFIX = 'v2:';
+
     public function analyze()
     {
-        $path = ABSPATH . '.htaccess';
-        $server = $this->detectServer();
+        $htaccessFile = wp_umbrella_get_service('HtaccessFile');
+        $server = wp_umbrella_get_service('WebServer')->getType();
 
-        if (!file_exists($path)) {
-            $directives = [
-                'deny_php_in_uploads' => false,
-                'protect_wp_config' => false,
-                'protect_htaccess' => false,
-                'disable_directory_browsing' => false,
-                'block_xmlrpc' => false,
-            ];
+        $exists = $htaccessFile->exists();
+        $contents = $exists ? $htaccessFile->getContents() : '';
 
-            return [
-                'exists' => false,
-                'server' => $server,
-                'directives' => $directives,
-                'umbrella_block_hash' => null,
-                'fingerprint' => $this->fingerprint($directives, null),
-            ];
-        }
-
-        $contents = file_get_contents($path);
-        if ($contents === false) {
-            $contents = '';
+        $customerContents = preg_replace('/# BEGIN WP Umbrella.*?# END WP Umbrella\n?/s', '', $contents);
+        if (!is_string($customerContents)) {
+            $customerContents = $contents;
         }
 
         $directives = [
-            'deny_php_in_uploads' => $this->hasDenyPhpInUploads($contents),
-            'protect_wp_config' => $this->hasProtectWpConfig($contents),
-            'protect_htaccess' => $this->hasProtectHtaccess($contents),
-            'disable_directory_browsing' => $this->hasDisableDirectoryBrowsing($contents),
-            'block_xmlrpc' => $this->hasBlockXmlrpc($contents),
+            'deny_php_in_uploads' => $this->hasDenyPhpInUploads($customerContents),
+            'protect_wp_config' => $this->hasProtectWpConfig($customerContents),
+            'protect_htaccess' => $this->hasProtectHtaccess($customerContents),
+            'disable_directory_browsing' => $this->hasDisableDirectoryBrowsing($customerContents),
+            'block_xmlrpc' => $this->hasBlockXmlrpc($customerContents),
         ];
 
-        $umbrellaBlockHash = $this->umbrellaBlockHash($contents);
+        $blockVersion = $htaccessFile->getBlockVersion();
+        $blockIntact = $this->isBlockIntact($htaccessFile, $blockVersion);
 
         return [
-            'exists' => true,
+            'exists' => $exists,
             'server' => $server,
             'directives' => $directives,
-            'umbrella_block_hash' => $umbrellaBlockHash,
-            'fingerprint' => $this->fingerprint($directives, $umbrellaBlockHash),
+            'umbrella_block_hash' => $this->umbrellaBlockHash($contents),
+            'umbrella_block_version' => $blockVersion,
+            'umbrella_block_intact' => $blockIntact,
+            'fingerprint' => $this->fingerprint($directives, $blockIntact),
         ];
     }
 
-    private function detectServer()
+    private function isBlockIntact($htaccessFile, $blockVersion)
     {
-        $software = isset($_SERVER['SERVER_SOFTWARE']) ? strtolower($_SERVER['SERVER_SOFTWARE']) : '';
-
-        if (strpos($software, 'litespeed') !== false) {
-            return 'litespeed';
+        if (is_multisite() && !is_main_site()) {
+            return true;
         }
 
-        if (strpos($software, 'apache') !== false) {
-            return 'apache';
+        $enabled = wp_umbrella_get_service('HardeningSettings')->isEnabled('htaccess_umbrella_block');
+
+        if (!$enabled) {
+            return $blockVersion === null;
         }
 
-        if (strpos($software, 'nginx') !== false) {
-            return 'nginx';
-        }
-
-        return 'unknown';
+        return $htaccessFile->isUmbrellaBlockCanonical();
     }
 
     private function hasDenyPhpInUploads($contents)
@@ -118,13 +104,13 @@ class HtaccessPostureAnalyzer
         return null;
     }
 
-    private function fingerprint($directives, $umbrellaBlockHash)
+    private function fingerprint($directives, $blockIntact)
     {
         $posture = [
             'directives' => $directives,
-            'umbrella_block_hash' => $umbrellaBlockHash,
+            'umbrella_block_intact' => $blockIntact,
         ];
 
-        return md5(json_encode($posture));
+        return self::FINGERPRINT_PREFIX . md5(json_encode($posture));
     }
 }

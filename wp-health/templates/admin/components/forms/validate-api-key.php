@@ -5,7 +5,119 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 
 ?>
 
-<form id="wp_umbrella_valid_api_key" action="<?php echo admin_url('admin-ajax.php'); ?>">
+<style>
+	.wpu-sec-overlay {
+		position: absolute;
+		inset: -12px;
+		z-index: 20;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		border-radius: 18px;
+		background: rgba(255, 255, 255, 0.82);
+		-webkit-backdrop-filter: blur(6px);
+		backdrop-filter: blur(6px);
+		animation: wpu-sec-pop 260ms ease-out both;
+	}
+	.wpu-sec-emblem {
+		position: relative;
+		width: 96px;
+		height: 96px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 22px;
+	}
+	.wpu-sec-glow {
+		position: absolute;
+		inset: 8px;
+		border-radius: 9999px;
+		background: radial-gradient(circle, rgba(99, 102, 241, 0.55) 0%, rgba(99, 102, 241, 0) 70%);
+		animation: wpu-sec-glow 1.8s ease-in-out infinite;
+	}
+	.wpu-sec-ring {
+		position: absolute;
+		border-radius: 9999px;
+		border-style: solid;
+	}
+	.wpu-sec-ring-outer {
+		inset: 0;
+		border-width: 3px;
+		border-color: rgba(99, 102, 241, 0.18);
+		border-top-color: #4f46e5;
+		border-right-color: #6366f1;
+		animation: wpu-sec-spin 1.1s linear infinite;
+	}
+	.wpu-sec-ring-inner {
+		inset: 16px;
+		border-width: 2px;
+		border-color: rgba(129, 140, 248, 0.22);
+		border-bottom-color: #818cf8;
+		animation: wpu-sec-spin-rev 1.5s linear infinite;
+	}
+	.wpu-sec-shield {
+		width: 40px;
+		height: 40px;
+		color: #4f46e5;
+	}
+	.wpu-sec-title {
+		font-size: 17px;
+		font-weight: 600;
+		color: #111827;
+		margin-bottom: 6px;
+	}
+	.wpu-sec-step {
+		font-size: 13.5px;
+		color: #4b5563;
+		min-height: 18px;
+		transition: opacity 200ms ease;
+	}
+	.wpu-sec-track {
+		position: relative;
+		width: 240px;
+		max-width: 70%;
+		height: 6px;
+		border-radius: 9999px;
+		background: #e5e7eb;
+		margin-top: 18px;
+		overflow: hidden;
+	}
+	.wpu-sec-fill {
+		position: absolute;
+		inset: 0 auto 0 0;
+		width: 8%;
+		border-radius: 9999px;
+		background: linear-gradient(90deg, #6366f1, #4f46e5);
+		transition: width 320ms ease;
+		overflow: hidden;
+	}
+	.wpu-sec-shimmer {
+		position: absolute;
+		top: 0;
+		left: 0;
+		height: 100%;
+		width: 40%;
+		background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0));
+		animation: wpu-sec-shimmer 1.1s linear infinite;
+	}
+	@keyframes wpu-sec-spin { to { transform: rotate(360deg); } }
+	@keyframes wpu-sec-spin-rev { to { transform: rotate(-360deg); } }
+	@keyframes wpu-sec-glow {
+		0%, 100% { opacity: 0.4; transform: scale(1); }
+		50% { opacity: 0.75; transform: scale(1.14); }
+	}
+	@keyframes wpu-sec-shimmer {
+		0% { transform: translateX(-120%); }
+		100% { transform: translateX(320%); }
+	}
+	@keyframes wpu-sec-pop {
+		0% { opacity: 0; transform: scale(0.97); }
+		100% { opacity: 1; transform: scale(1); }
+	}
+</style>
+
+<form id="wp_umbrella_valid_api_key" class="relative" action="<?php echo admin_url('admin-ajax.php'); ?>">
 	<div class="space-y-4">
 		<?php if($data['has_htpasswd']): ?>
 		<p class="p-2 rounded-lg bg-indigo-50 border-indigo-100 border my-4 text-sm mt-8">We have
@@ -54,7 +166,7 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 							stroke-linejoin="round"
 						/>
 					</svg>
-					<?php $isConnected = !empty($data['api_key']) || !empty($data['request_token']); ?>
+					<?php $isConnected = !empty($data['api_key']) || !empty($data['request_token']) || !empty($data['secret_token']); ?>
 					<input id="apiKey" name="apiKey" type="<?php echo $isConnected ? 'password' : 'text' ?>" placeholder="My API KEY"
 						class="appearance-none relative block px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-full focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm w-full"
 						value="<?php if($isConnected) {
@@ -114,6 +226,23 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 			</button>
 		</div>
 	</div>
+	<div class="wpu-sec-overlay js-securing-overlay hidden">
+		<div class="wpu-sec-emblem">
+			<span class="wpu-sec-glow"></span>
+			<span class="wpu-sec-ring wpu-sec-ring-outer"></span>
+			<span class="wpu-sec-ring wpu-sec-ring-inner"></span>
+			<svg class="wpu-sec-shield" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+				<path d="M9.2 12.2l1.9 1.9 3.7-3.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+			</svg>
+		</div>
+		<div class="wpu-sec-title">Securing your site</div>
+		<div class="wpu-sec-step js-securing-step">Establishing a secure connection</div>
+		<div class="wpu-sec-track">
+			<div class="wpu-sec-fill js-securing-fill"><span class="wpu-sec-shimmer"></span></div>
+		</div>
+	</div>
+
 	<?php wp_nonce_field('wp_umbrella_valid_api_key', 'nonce_wp_umbrella_valid_api_key'); ?>
 	<?php wp_nonce_field('wp_umbrella_check_api_key', 'nonce_wp_umbrella_check_api_key'); ?>
 
@@ -155,6 +284,72 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 		}
 
 		let workspaceSelected = null
+
+		const securingSteps = [
+			'Establishing a secure connection',
+			'Pairing your site with WP Umbrella',
+			'Generating your encryption keys',
+			'Signing and sealing the connection',
+			'Finalizing your setup'
+		];
+		let securingStepTimer = null;
+		let securingTrickleTimer = null;
+
+		function wpuSecuringEls(){
+			const form = document.getElementById('wp_umbrella_valid_api_key');
+			return {
+				overlay: form.querySelector('.js-securing-overlay'),
+				step: form.querySelector('.js-securing-step'),
+				fill: form.querySelector('.js-securing-fill')
+			};
+		}
+
+		function wpuShowSecuring(){
+			const { overlay, step, fill } = wpuSecuringEls();
+			if(!overlay){ return; }
+
+			overlay.classList.remove('hidden');
+			overlay.classList.add('flex');
+
+			let index = 0;
+			step.textContent = securingSteps[0];
+			clearInterval(securingStepTimer);
+			securingStepTimer = setInterval(function(){
+				index = (index + 1) % securingSteps.length;
+				step.style.opacity = '0';
+				setTimeout(function(){
+					step.textContent = securingSteps[index];
+					step.style.opacity = '1';
+				}, 180);
+			}, 1600);
+
+			let pct = 8;
+			fill.style.width = pct + '%';
+			clearInterval(securingTrickleTimer);
+			securingTrickleTimer = setInterval(function(){
+				pct += Math.max(0.4, (92 - pct) * 0.07);
+				if(pct > 92){ pct = 92; }
+				fill.style.width = pct + '%';
+			}, 320);
+		}
+
+		function wpuHideSecuring(success){
+			const { overlay, step, fill } = wpuSecuringEls();
+			if(!overlay){ return; }
+
+			clearInterval(securingStepTimer);
+			clearInterval(securingTrickleTimer);
+
+			if(success){
+				fill.style.width = '100%';
+				step.style.opacity = '1';
+				step.textContent = 'Your site is connected';
+				return;
+			}
+
+			overlay.classList.remove('flex');
+			overlay.classList.add('hidden');
+		}
 
 		function handleCheckApiKey(){
 
@@ -322,6 +517,8 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 				loader.classList.remove('hidden')
 				loader.classList.add('flex');
 
+				wpuShowSecuring();
+
 				const response = await fetch(form.getAttribute('action'), {
 					method: 'POST',
 					body: body
@@ -332,6 +529,8 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 				loader.classList.remove('flex')
 				loader.classList.add('hidden');
 				form.querySelector('button[type="submit"]').removeAttribute('disabled');
+
+				wpuHideSecuring(code === "success");
 
 
 				if(code !== "success"){

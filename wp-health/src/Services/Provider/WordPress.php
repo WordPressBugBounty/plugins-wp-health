@@ -360,6 +360,7 @@ class WordPress
 
         $data['wordpress_version'] = $this->getWordPressVersion();
         $data['hardening'] = wp_umbrella_get_service('HardeningSettings')->getStates();
+        $data['web_server'] = wp_umbrella_get_service('WebServer')->getType();
 
         // $data['disk_free_space'] = null;
         // try {
@@ -392,6 +393,7 @@ class WordPress
             'zip_is_defined' => 'zip_is_defined',
             'defined_data' => 'defined_data',
             'hardening' => 'hardening',
+            'web_server' => 'web_server',
             'base_directory' => 'base_directory',
             'wp_content_directory' => 'wp_content_directory',
             'wp_plugin_directory' => 'wp_plugin_directory',

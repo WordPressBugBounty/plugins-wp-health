@@ -5,6 +5,14 @@ if (!defined('WP_UNINSTALL_PLUGIN')) { // If uninstall not called from WordPress
 }
 
 try {
+    if (!class_exists('WPUmbrella\Services\Security\HtaccessFile')
+        && file_exists(__DIR__ . '/src/Services/Security/HtaccessFile.php')) {
+        require_once __DIR__ . '/src/Services/Security/HtaccessFile.php';
+    }
+    if (class_exists('WPUmbrella\Services\Security\HtaccessFile')) {
+        (new WPUmbrella\Services\Security\HtaccessFile())->cleanUmbrellaBlock();
+    }
+
     delete_option('wp_health_allow_tracking');
     delete_option('wp_umbrella_disallow_one_click_access');
     delete_option('wp-health');
@@ -30,6 +38,7 @@ try {
     delete_option('wp_umbrella_blc_scan_interval');
 
     delete_option('wp_umbrella_hardening_settings');
+    delete_option('wp_umbrella_htaccess_pending_write');
 
     wp_clear_scheduled_hook('wp_umbrella_snapshot_data_run_queue');
 

@@ -80,6 +80,32 @@ class MoveBackupModule extends AbstractController
         $wp_filesystem->put_contents($outputFilePath, "<?php \n" . $outputContent, 0755);
     }
 
+    protected function getWriteDiagnostics($destinationPath)
+    {
+        $directory = dirname($destinationPath);
+        $probePath = $directory . DIRECTORY_SEPARATOR . 'umbrella-write-probe.tmp';
+
+        $lastError = error_get_last();
+
+        $nativeWrite = @file_put_contents($probePath, 'probe') !== false;
+
+        if ($nativeWrite) {
+            @unlink($probePath);
+        }
+
+        return [
+            'filesystem_method' => function_exists('get_filesystem_method') ? get_filesystem_method() : null,
+            'native_write' => $nativeWrite,
+            'directory_writable' => @is_writable($directory),
+            'php_error' => isset($lastError['message']) ? substr($lastError['message'], 0, 200) : null,
+        ];
+    }
+
+    public function executePost($params)
+    {
+        return $this->executeGet($params);
+    }
+
     public function executeGet($params)
     {
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
@@ -147,6 +173,7 @@ class MoveBackupModule extends AbstractController
                 return $this->returnResponse([
                     'success' => false,
                     'code' => 'write_error',
+                    'diagnostics' => $this->getWriteDiagnostics($destinationPath),
                 ]);
             }
         } catch (\Exception $e) {

@@ -87,6 +87,9 @@ trait TraitApiController
             case Controller::PERMISSION_WITH_SECRET_TOKEN:
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($umbrellaRequest);
                 break;
+            case Controller::PERMISSION_WITH_SIGNATURE:
+                return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($umbrellaRequest);
+                break;
             default:
                 return true;
         }

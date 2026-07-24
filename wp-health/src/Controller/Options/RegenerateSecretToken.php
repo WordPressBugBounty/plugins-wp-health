@@ -55,6 +55,15 @@ class RegenerateSecretToken extends AbstractController
             $options['api_key'] = '';
         }
 
+        $signingKey = wp_umbrella_signing_key_from_response($responseValidateSecret);
+        if ($signingKey) {
+            $options['public_key'] = $signingKey['public_key'];
+            $options['key_id'] = $signingKey['key_id'];
+            if (!isset($options['key_state']) || $options['key_state'] !== 'new') {
+                $options['key_state'] = 'dual';
+            }
+        }
+
         wp_umbrella_get_service('Option')->setOptions($options);
 
         wp_load_alloptions(true);

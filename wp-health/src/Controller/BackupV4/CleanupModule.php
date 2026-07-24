@@ -43,6 +43,13 @@ class CleanupModule extends AbstractController
             DirectoryFunctions::destroyDir($directory);
         }
 
+        // The restore writes the database outside WordPress: a persistent
+        // object cache (Redis/Memcached drop-in) keeps serving pre-restore
+        // rows until flushed, making a successful restore look like a no-op.
+        if (function_exists('wp_cache_flush')) {
+            wp_cache_flush();
+        }
+
         return $this->returnResponse([
             'success' => true,
             'code' => 'success',

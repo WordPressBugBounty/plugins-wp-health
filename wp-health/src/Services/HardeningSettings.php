@@ -9,6 +9,13 @@ class HardeningSettings
 {
     const OPTION_KEY = 'wp_umbrella_hardening_settings';
 
+    protected $lastHtaccessResult = null;
+
+    public function getLastHtaccessResult()
+    {
+        return $this->lastHtaccessResult;
+    }
+
     public function getDefaultSettings()
     {
         return [
@@ -83,6 +90,7 @@ class HardeningSettings
 
         if ($after) {
             $result = $htaccess->writeUmbrellaBlock();
+            $this->lastHtaccessResult = $result;
 
             if (!isset($result['status']) || $result['status'] !== 'ok') {
                 $settings['htaccess_umbrella_block'] = false;
@@ -92,6 +100,7 @@ class HardeningSettings
         }
 
         $result = $htaccess->cleanUmbrellaBlock();
+        $this->lastHtaccessResult = $result;
 
         if (isset($result['status']) && $result['status'] === 'error') {
             $settings['htaccess_umbrella_block'] = true;

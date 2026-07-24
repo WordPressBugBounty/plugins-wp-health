@@ -78,6 +78,17 @@ class UmbrellaRequest
         if (isset($this->query['x-umbrella'])) {
             $this->checkTypeQuery = 'get';
         }
+
+        // A signed one-click login carries no x-umbrella (the wp_token is gone
+        // from the browser). Select the bucket from the login signature param so
+        // getParam reads the same source the signature is verified against.
+        if ($this->checkTypeQuery === null && isset($this->request['x-umb-login-sig'])) {
+            $this->checkTypeQuery = 'post';
+        }
+
+        if ($this->checkTypeQuery === null && isset($this->query['x-umb-login-sig'])) {
+            $this->checkTypeQuery = 'get';
+        }
     }
 
     public function canTryExecuteWPUmbrella()
@@ -236,5 +247,28 @@ class UmbrellaRequest
 
         $fallback = isset($this->headers['x-secret-token']) ? $this->headers['x-secret-token'] : null;
         return $extractor->fromHeaderValue($fallback);
+    }
+
+    public function getHeaders()
+    {
+        return $this->headers;
+    }
+
+    public function getRequestPath()
+    {
+        $requestUri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : null;
+
+        if ($requestUri === null) {
+            return null;
+        }
+
+        return parse_url($requestUri, PHP_URL_PATH);
+    }
+
+    public function getRawBody()
+    {
+        $body = file_get_contents('php://input');
+
+        return $body === false ? '' : $body;
     }
 }

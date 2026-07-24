@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.25.1');
+    define('WP_UMBRELLA_VERSION', '2.26.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -162,6 +162,40 @@ function wp_umbrella_get_request_token()
     return wp_umbrella_get_option('request_token', false);
 }
 
+function wp_umbrella_get_public_key()
+{
+    return wp_umbrella_get_option('public_key', false);
+}
+
+function wp_umbrella_get_key_id()
+{
+    return wp_umbrella_get_option('key_id', false);
+}
+
+function wp_umbrella_get_key_state()
+{
+    return wp_umbrella_get_option('key_state', false);
+}
+
+function wp_umbrella_is_signature_only()
+{
+    if (wp_umbrella_get_key_state() !== 'new') {
+        return false;
+    }
+
+    $publicKey = wp_umbrella_get_public_key();
+
+    return is_string($publicKey) && $publicKey !== '';
+}
+
+function wp_umbrella_set_key_state($state)
+{
+    $option = wp_umbrella_get_service('Option');
+    $options = $option->getOptions(['secure' => false]);
+    $options['key_state'] = $state;
+    $option->setOptions($options);
+}
+
 function wp_umbrella_get_outbound_bearer()
 {
     $requestToken = wp_umbrella_get_request_token();
@@ -188,6 +222,33 @@ function wp_umbrella_request_token_from_response($response)
         return null;
     }
     return $response['request_token'];
+}
+
+function wp_umbrella_signing_key_from_response($response)
+{
+    if (!is_array($response)) {
+        return null;
+    }
+
+    if (!isset($response['signing_public_key']) || !isset($response['key_id'])) {
+        return null;
+    }
+
+    $publicKey = $response['signing_public_key'];
+    $keyId = $response['key_id'];
+
+    if (!is_string($publicKey) || $publicKey === '') {
+        return null;
+    }
+
+    if (!is_string($keyId) || $keyId === '') {
+        return null;
+    }
+
+    return [
+        'public_key' => $publicKey,
+        'key_id' => $keyId,
+    ];
 }
 
 function wp_umbrella_handle_outbound_response($response)

@@ -149,6 +149,9 @@ class ValidationApiKey implements ExecuteHooksBackend
             $newOptions['api_key'] = $apiKey;
             $newOptions['project_id'] = $projectId;
 
+            $newOptions['request_token'] = '';
+            unset($newOptions['public_key'], $newOptions['key_id'], $newOptions['key_state']);
+
             $this->optionService->setOptions($newOptions);
 
             wp_cache_flush(); // Flush cache to get new options
@@ -220,6 +223,13 @@ class ValidationApiKey implements ExecuteHooksBackend
                     $newOptions['api_key'] = '';
                 }
 
+                $signingKey = wp_umbrella_signing_key_from_response($responseValidateSecret);
+                if ($signingKey) {
+                    $newOptions['public_key'] = $signingKey['public_key'];
+                    $newOptions['key_id'] = $signingKey['key_id'];
+                    $newOptions['key_state'] = 'dual';
+                }
+
                 $this->optionService->setOptions($newOptions);
 
                 wp_send_json_success([
@@ -258,6 +268,22 @@ class ValidationApiKey implements ExecuteHooksBackend
 
                 if ($response['success'] === 'success' && $projectId !== null) {
                     $newOptions['project_id'] = $projectId;
+
+                    $result = isset($response['result']) && is_array($response['result']) ? $response['result'] : [];
+
+                    $requestToken = wp_umbrella_request_token_from_response($result);
+                    if ($requestToken) {
+                        $newOptions['request_token'] = $requestToken;
+                        $newOptions['api_key'] = '';
+                    }
+
+                    $signingKey = wp_umbrella_signing_key_from_response($result);
+                    if ($signingKey) {
+                        $newOptions['public_key'] = $signingKey['public_key'];
+                        $newOptions['key_id'] = $signingKey['key_id'];
+                        $newOptions['key_state'] = 'dual';
+                    }
+
                     $this->optionService->setOptions($newOptions);
 
                     // Force update option to v4 for new project only

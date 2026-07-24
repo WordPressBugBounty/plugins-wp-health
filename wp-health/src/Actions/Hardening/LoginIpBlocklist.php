@@ -3,6 +3,8 @@ namespace WPUmbrella\Actions\Hardening;
 
 use WP_Error;
 use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
+use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
+use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 use WPUmbrella\Actions\Hardening\LoginGuard\BloomFilter;
 use WPUmbrella\Actions\Hardening\LoginGuard\FilterStorage;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
@@ -21,6 +23,12 @@ class LoginIpBlocklist implements ExecuteHooks
 
     const ORACLE_TIMEOUT_MS = 800;
 
+    const BLOCK_EVENT_KEY = 'umbrella.protection.login_blocked';
+
+    const BLOCK_BUCKET_KEY = 'wp_umbrella_login_block_bucket';
+
+    const BLOCK_WINDOW = 1800;
+
     protected $storage;
 
     public function __construct()
@@ -34,11 +42,15 @@ class LoginIpBlocklist implements ExecuteHooks
             return;
         }
 
-        add_filter('authenticate', [$this, 'enforce'], 25, 1);
+        add_filter('authenticate', [$this, 'enforce'], 25, 3);
         add_action('wp_login', [$this, 'onSuccess'], 10, 1);
+
+        add_action('init', function () {
+            (new SyncScheduler())->schedule();
+        }, 20);
     }
 
-    public function enforce($user)
+    public function enforce($user, $username = '', $password = '')
     {
         $ip = BloomFilter::canonicalizeIp(ClientIpResolver::resolve());
 
@@ -54,10 +66,22 @@ class LoginIpBlocklist implements ExecuteHooks
             return $user;
         }
 
+        $this->recordBlock($username);
+
         return new WP_Error(
             'wp_umbrella_login_ip_blocked',
             __('Access from your network is temporarily restricted.', 'wp-health')
         );
+    }
+
+    protected function recordBlock($username)
+    {
+        (new ProtectionEventRecorder())->recordAggregated(self::BLOCK_EVENT_KEY, 'INFO', [
+            'kind' => 'protection',
+            'protection' => 'login_ip_blocklist',
+            'outcome' => 'blocked',
+            'targetUsername' => is_string($username) && $username !== '' ? $username : null,
+        ], self::BLOCK_BUCKET_KEY, self::BLOCK_WINDOW);
     }
 
     public function onSuccess($login)

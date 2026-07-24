@@ -44,6 +44,20 @@ function wp_umbrella_prevent_not_active()
 
 function wp_umbrella_load_wp() {
 
+	// Dev only: when the plugin is symlinked into the site, __FILE__ / getcwd()
+	// resolve to the repo, not the WordPress install, so the walks below never
+	// find wp-load.php. The dev override file `wp-umbrella-config.php` at the
+	// docroot marks an Umbrella dev site; load WordPress from DOCUMENT_ROOT
+	// there. Production sites have no such file, so this block is skipped.
+	if (
+		isset( $_SERVER['DOCUMENT_ROOT'] )
+		&& is_file( $_SERVER['DOCUMENT_ROOT'] . '/wp-umbrella-config.php' )
+		&& is_file( $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php' )
+	) {
+		require_once( $_SERVER['DOCUMENT_ROOT'] . '/wp-load.php' );
+		return;
+	}
+
 	while ( ! is_file( 'wp-load.php' ) ) {
 		if ( is_dir( '..' ) && getcwd() != '/' ) {
 			chdir( '..' );
