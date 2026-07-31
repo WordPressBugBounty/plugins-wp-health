@@ -12,10 +12,45 @@ if (!defined('ABSPATH')) {
 class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHooks
 {
     const PENDING_WRITE_OPTION = 'wp_umbrella_htaccess_pending_write';
+    const BACKFILL_RETRY_LOCK = 'wp_umbrella_htaccess_uploads_backfill_lock';
 
     public function hooks()
     {
         add_action('init', [$this, 'maybeCompletePendingWrite']);
+        add_action('admin_init', [$this, 'maybeEnsureUploadsBlock']);
+    }
+
+    /**
+     * Ordered by cost: an autoloaded option, then one small file read, and only
+     * on a missing block the write and its verification requests.
+     */
+    public function maybeEnsureUploadsBlock()
+    {
+        if (wp_doing_ajax() || !current_user_can('manage_options')) {
+            return;
+        }
+
+        if (!wp_umbrella_get_service('HardeningSettings')->isEnabled('htaccess_umbrella_block')) {
+            return;
+        }
+
+        $htaccess = wp_umbrella_get_service('HtaccessFile');
+
+        if ($htaccess->hasUploadsBlock()) {
+            return;
+        }
+
+        if (get_transient(self::BACKFILL_RETRY_LOCK)) {
+            return;
+        }
+
+        set_transient(self::BACKFILL_RETRY_LOCK, 1, 12 * HOUR_IN_SECONDS);
+
+        $result = $htaccess->writeUploadsBlock();
+
+        if (isset($result['status']) && $result['status'] === 'ok') {
+            delete_transient(self::BACKFILL_RETRY_LOCK);
+        }
     }
 
     public function activate()
@@ -55,6 +90,7 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
     {
         wp_umbrella_get_service('HtaccessFile')->cleanUmbrellaBlock();
         delete_option(self::PENDING_WRITE_OPTION);
+        delete_transient(self::BACKFILL_RETRY_LOCK);
     }
 
     protected function writeOrDisable()

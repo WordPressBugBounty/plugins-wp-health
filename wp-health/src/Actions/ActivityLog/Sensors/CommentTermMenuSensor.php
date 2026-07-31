@@ -227,6 +227,7 @@ class CommentTermMenuSensor extends AbstractSensor
                 'commentAuthorEmail' => null,
                 'commentStatus' => null,
                 'commentType' => null,
+                'offenderIp' => null,
             ];
         }
 
@@ -236,6 +237,9 @@ class CommentTermMenuSensor extends AbstractSensor
             'commentAuthorEmail' => isset($comment->comment_author_email) ? (string) $comment->comment_author_email : null,
             'commentStatus' => isset($comment->comment_approved) ? (string) $comment->comment_approved : null,
             'commentType' => isset($comment->comment_type) ? (string) $comment->comment_type : null,
+            'offenderIp' => isset($comment->comment_author_IP) && $comment->comment_author_IP !== ''
+                ? (string) $comment->comment_author_IP
+                : null,
         ];
     }
 

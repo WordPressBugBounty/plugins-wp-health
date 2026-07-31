@@ -37,8 +37,11 @@ class PluginSchema implements SchemaInterface
                             'url' => \property_exists($data, 'url') ? $data->url : '',
                             'package' => \property_exists($data, 'package') ? $data->package : '',
                             'tested' => \property_exists($data, 'tested') ? $data->tested : '',
+                            'requires' => \property_exists($data, 'requires') ? $data->requires : '',
                             'requires_php' => \property_exists($data, 'requires_php') ? $data->requires_php : '',
                             'compatibility' => \property_exists($data, 'compatibility') ? $data->compatibility : '',
+                            'is_blocked' => \property_exists($data, 'is_blocked') ? (bool) $data->is_blocked : false,
+                            'blocked_reason' => \property_exists($data, 'blocked_reason') ? $data->blocked_reason : '',
                         ];
                     },
                 ],

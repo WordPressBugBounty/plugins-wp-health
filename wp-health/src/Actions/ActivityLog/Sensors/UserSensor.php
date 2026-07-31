@@ -79,6 +79,14 @@ class UserSensor extends AbstractSensor
         add_action('deleted_user', [$this, 'onUserDeleted'], 10, 3);
         add_action('set_user_role', [$this, 'onUserRoleChanged'], 10, 3);
         add_action('after_password_reset', [$this, 'onPasswordReset'], 10, 1);
+        add_action('retrieve_password', [$this, 'onPasswordResetRequested'], 10, 1);
+    }
+
+    public function onPasswordResetRequested($userLogin = '')
+    {
+        $this->recordEvent('user.password.reset_requested', 'MEDIUM', [
+            'targetUsername' => is_string($userLogin) && $userLogin !== '' ? $userLogin : null,
+        ]);
     }
 
     /**

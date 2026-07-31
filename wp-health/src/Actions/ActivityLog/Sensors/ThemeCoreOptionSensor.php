@@ -3,6 +3,7 @@
 namespace WPUmbrella\Actions\ActivityLog\Sensors;
 
 use WPUmbrella\Actions\ActivityLog\Framework\AbstractSensor;
+use WPUmbrella\Actions\ActivityLog\Framework\RoleMapDiff;
 
 defined('ABSPATH') or die('Cheatin&#8217; uh?');
 
@@ -26,13 +27,14 @@ defined('ABSPATH') or die('Cheatin&#8217; uh?');
  * - updated_option fires for every option write, including hundreds of WP
  *   internals. We only emit for a curated whitelist plus a filter for
  *   site owners who want to extend it.
+ * - The role map option is handled apart from the whitelist: its name depends
+ *   on the database prefix, and it is reported as a capability delta.
  */
 class ThemeCoreOptionSensor extends AbstractSensor
 {
     /**
      * Default whitelist of options worth tracking. The map controls the
      * severity emitted, with a focus on security relevant changes:
-     * - CRITICAL for events that point to active compromise (capability map)
      * - HIGH for security primitives (admin URL, registration, anti-spam)
      * - MEDIUM for moderation-side effects and visible content layout
      * - LOW for cosmetic/identity changes
@@ -40,9 +42,6 @@ class ThemeCoreOptionSensor extends AbstractSensor
      * @var array<string, string>
      */
     protected static $defaultTrackedOptions = [
-        // Capability map — direct manipulation is the smoking gun of a shell
-        'wp_user_roles' => 'CRITICAL',
-
         // Admin URL / account hijack
         'siteurl' => 'HIGH',
         'home' => 'HIGH',
@@ -197,6 +196,12 @@ class ThemeCoreOptionSensor extends AbstractSensor
             return;
         }
 
+        if (self::isRoleMapOption($optionName)) {
+            $this->recordRoleMapChange($optionName, $oldValue, $newValue);
+
+            return;
+        }
+
         $tracked = self::getTrackedOptions();
 
         if (!array_key_exists($optionName, $tracked)) {
@@ -210,6 +215,68 @@ class ThemeCoreOptionSensor extends AbstractSensor
             'oldValue' => $this->stringifyValue($oldValue),
             'newValue' => $this->stringifyValue($newValue),
         ]);
+    }
+
+    /**
+     * The role map is stored as a large serialized array, so the raw values
+     * carry no readable information. We emit the capability delta instead,
+     * and nothing at all when the delta is empty.
+     *
+     * @param string $optionName
+     * @param mixed  $oldValue
+     * @param mixed  $newValue
+     *
+     * @return void
+     */
+    protected function recordRoleMapChange($optionName, $oldValue, $newValue)
+    {
+        $diff = RoleMapDiff::compute($oldValue, $newValue);
+
+        if ($diff === null) {
+            $this->recordEvent('option.updated', 'CRITICAL', [
+                'optionName' => $optionName,
+                'oldValue' => $this->stringifyValue($oldValue),
+                'newValue' => $this->stringifyValue($newValue),
+            ]);
+
+            return;
+        }
+
+        if (RoleMapDiff::isEmpty($diff)) {
+            return;
+        }
+
+        $severity = RoleMapDiff::hasGain($diff) ? 'CRITICAL' : 'LOW';
+
+        $this->recordEvent('option.updated', $severity, array_filter([
+            'optionName' => $optionName,
+            'rolesAdded' => $this->stringifyValue(implode(', ', $diff['rolesAdded'])),
+            'rolesRemoved' => $this->stringifyValue(implode(', ', $diff['rolesRemoved'])),
+            'capabilitiesAdded' => $this->stringifyValue(implode(', ', $diff['capabilitiesAdded'])),
+            'capabilitiesRemoved' => $this->stringifyValue(implode(', ', $diff['capabilitiesRemoved'])),
+        ], function ($value) {
+            return $value !== '';
+        }));
+    }
+
+    /**
+     * The role map option name follows the database prefix of the current
+     * site (wp_user_roles, wp_2_user_roles, custom prefixes), so it cannot be
+     * matched against a hardcoded key.
+     *
+     * @param string $optionName
+     *
+     * @return bool
+     */
+    protected static function isRoleMapOption($optionName)
+    {
+        global $wpdb;
+
+        if (isset($wpdb) && is_object($wpdb) && method_exists($wpdb, 'get_blog_prefix')) {
+            return $optionName === $wpdb->get_blog_prefix() . 'user_roles';
+        }
+
+        return substr($optionName, -10) === 'user_roles';
     }
 
     /**

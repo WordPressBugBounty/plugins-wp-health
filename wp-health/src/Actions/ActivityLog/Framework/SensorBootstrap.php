@@ -8,6 +8,8 @@ use WPUmbrella\Actions\ActivityLog\Sensors\ContentSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\PluginSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\ThemeCoreOptionSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\UserSensor;
+use WPUmbrella\Actions\ActivityLog\Sensors\WooCommerceSensor;
+use WPUmbrella\Actions\ActivityLog\Sensors\XmlRpcSensor;
 use WPUmbrella\Core\Hooks\ActivationHook;
 use WPUmbrella\Core\Hooks\DeactivationHook;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
@@ -108,6 +110,8 @@ class SensorBootstrap implements ExecuteHooks, ActivationHook, DeactivationHook
             new ThemeCoreOptionSensor($buffer),
             new CommentTermMenuSensor($buffer),
             new AiConnectorSensor($buffer),
+            new XmlRpcSensor($buffer),
+            new WooCommerceSensor($buffer),
         ];
     }
 

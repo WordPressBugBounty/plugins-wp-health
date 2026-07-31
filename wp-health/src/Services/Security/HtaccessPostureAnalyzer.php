@@ -22,8 +22,10 @@ class HtaccessPostureAnalyzer
             $customerContents = $contents;
         }
 
+        $uploadsExecution = $htaccessFile->probeUploadsPhpExecution();
+
         $directives = [
-            'deny_php_in_uploads' => $this->hasDenyPhpInUploads($customerContents),
+            'deny_php_in_uploads' => $this->deniesPhpInUploads($uploadsExecution, $customerContents),
             'protect_wp_config' => $this->hasProtectWpConfig($customerContents),
             'protect_htaccess' => $this->hasProtectHtaccess($customerContents),
             'disable_directory_browsing' => $this->hasDisableDirectoryBrowsing($customerContents),
@@ -37,11 +39,26 @@ class HtaccessPostureAnalyzer
             'exists' => $exists,
             'server' => $server,
             'directives' => $directives,
+            'uploads_php_execution' => $uploadsExecution,
+            'uploads_block_present' => $htaccessFile->hasUploadsBlock(),
             'umbrella_block_hash' => $this->umbrellaBlockHash($contents),
             'umbrella_block_version' => $blockVersion,
             'umbrella_block_intact' => $blockIntact,
             'fingerprint' => $this->fingerprint($directives, $blockIntact),
         ];
+    }
+
+    protected function deniesPhpInUploads($uploadsExecution, $customerContents)
+    {
+        if ($uploadsExecution === 'blocked') {
+            return true;
+        }
+
+        if ($uploadsExecution === 'executed') {
+            return false;
+        }
+
+        return $this->hasDenyPhpInUploads($customerContents);
     }
 
     private function isBlockIntact($htaccessFile, $blockVersion)

@@ -5,7 +5,11 @@ use WP_Error;
 
 class UpgraderTempBackup
 {
+    const STALE_BACKUP_MAX_AGE = 604800;
+
     protected $dirName = 'umbrella-upgrade-temp-backup';
+
+    protected static $staleBackupsSwept = false;
 
     public function rollbackBackupDir($args)
     {
@@ -120,6 +124,8 @@ class UpgraderTempBackup
                 'success' => false
             ];
         }
+
+        $this->deleteStaleBackups();
 
         $dest_dir = $wp_filesystem->wp_content_dir() . $this->dirName . '/';
         $sub_dir = $dest_dir . $args['dir'] . '/';
@@ -264,6 +270,8 @@ class UpgraderTempBackup
             ];
         }
 
+        $this->deleteStaleBackups();
+
         $temp_backup_dir = $wp_filesystem->wp_content_dir() . "{$this->dirName}/{$args['dir']}/{$args['slug']}";
 
         if (!$wp_filesystem->delete($temp_backup_dir, true)) {
@@ -276,6 +284,90 @@ class UpgraderTempBackup
         return [
             'code' => 'success',
             'success' => true
+        ];
+    }
+
+    /**
+     * @param int $maxAge Age in seconds.
+     * @param bool $force
+     */
+    public function deleteStaleBackups($maxAge = self::STALE_BACKUP_MAX_AGE, $force = false)
+    {
+        global $wp_filesystem;
+
+        if ($wp_filesystem === null) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+
+        if (self::$staleBackupsSwept && !$force) {
+            return [
+                'success' => true,
+                'deleted' => []
+            ];
+        }
+
+        self::$staleBackupsSwept = true;
+
+        if (!$wp_filesystem->wp_content_dir()) {
+            return [
+                'code' => 'fs_no_content_dir',
+                'success' => false
+            ];
+        }
+
+        $rootDir = $wp_filesystem->wp_content_dir() . $this->dirName;
+
+        if (!$wp_filesystem->is_dir($rootDir)) {
+            return [
+                'success' => true,
+                'deleted' => []
+            ];
+        }
+
+        $threshold = time() - $maxAge;
+        $deleted = [];
+
+        foreach (['plugins', 'themes'] as $type) {
+            $typeDir = $rootDir . DIRECTORY_SEPARATOR . $type;
+
+            if (!$wp_filesystem->is_dir($typeDir)) {
+                continue;
+            }
+
+            $entries = $wp_filesystem->dirlist($typeDir);
+
+            if (!is_array($entries)) {
+                continue;
+            }
+
+            foreach ($entries as $name => $entry) {
+                if (!isset($entry['type']) || $entry['type'] !== 'd') {
+                    continue;
+                }
+
+                $lastModified = isset($entry['lastmodunix']) ? (int) $entry['lastmodunix'] : 0;
+
+                if ($lastModified <= 0 || $lastModified > $threshold) {
+                    continue;
+                }
+
+                if ($wp_filesystem->delete($typeDir . DIRECTORY_SEPARATOR . $name, true)) {
+                    $deleted[] = $type . '/' . $name;
+                }
+            }
+        }
+
+        if (!empty($deleted)) {
+            wp_umbrella_get_service('RequestTrace')->addTrace('stale_temp_backups_deleted', [
+                'count' => count($deleted),
+                'entries' => array_slice($deleted, 0, 10),
+            ]);
+        }
+
+        return [
+            'success' => true,
+            'deleted' => $deleted
         ];
     }
 

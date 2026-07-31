@@ -9,7 +9,11 @@ class HtaccessFile
 {
     const MARKER = 'WP Umbrella';
     const BLOCK_VERSION = 2;
+    const UPLOADS_BLOCK_VERSION = 1;
     const SANDBOX_DIRNAME = 'wpu-htcheck';
+    const CANARY_DIRNAME = 'wpu-canary';
+    const UPLOADS_PROBE_TRANSIENT = 'wp_umbrella_uploads_php_probe';
+    const CANARY_OUTPUT = 'wpu-canary-ok';
 
     public function getPath()
     {
@@ -25,6 +29,30 @@ class HtaccessFile
     public function exists()
     {
         return file_exists($this->getPath());
+    }
+
+    public function getUploadsPath()
+    {
+        $upload = wp_upload_dir(null, false);
+
+        if (!is_array($upload) || empty($upload['basedir']) || !empty($upload['error'])) {
+            return null;
+        }
+
+        return rtrim($upload['basedir'], '/\\') . '/.htaccess';
+    }
+
+    public function hasUploadsBlock()
+    {
+        $path = $this->getUploadsPath();
+
+        if ($path === null || !file_exists($path) || !is_readable($path)) {
+            return false;
+        }
+
+        $contents = file_get_contents($path);
+
+        return is_string($contents) && strpos($contents, '# BEGIN ' . self::MARKER) !== false;
     }
 
     public function isWritable()
@@ -76,7 +104,22 @@ class HtaccessFile
         $lines[] = '</IfModule>';
         $lines[] = 'Options -Indexes';
 
-        $denied = [
+        $denied = $this->getDenyLines();
+
+        $lines[] = '<FilesMatch "^(wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt|composer\.json|composer\.lock|package\.json)$">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        $lines[] = '<FilesMatch "(\.(sql|sql\.gz|bak|old|swp)|~)$">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        return $lines;
+    }
+
+    protected function getDenyLines()
+    {
+        return [
             '<IfModule mod_authz_core.c>',
             'Require all denied',
             '</IfModule>',
@@ -85,13 +128,14 @@ class HtaccessFile
             'Deny from all',
             '</IfModule>',
         ];
+    }
 
-        $lines[] = '<FilesMatch "^(wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt|composer\.json|composer\.lock|package\.json)$">';
-        $lines = array_merge($lines, $denied);
-        $lines[] = '</FilesMatch>';
+    public function getUploadsBlockLines()
+    {
+        $lines = ['# Version: ' . self::UPLOADS_BLOCK_VERSION];
 
-        $lines[] = '<FilesMatch "(\.(sql|sql\.gz|bak|old|swp)|~)$">';
-        $lines = array_merge($lines, $denied);
+        $lines[] = '<FilesMatch "(?i)\.(php[0-9]?|pht|phtm|phtml|phps|phar|sh)(\.|$)">';
+        $lines = array_merge($lines, $this->getDenyLines());
         $lines[] = '</FilesMatch>';
 
         return $lines;
@@ -214,21 +258,92 @@ class HtaccessFile
             return ['status' => 'error', 'reason' => 'write_failed'];
         }
 
+        $uploadsBlockExisted = $this->hasUploadsBlock();
+        $uploads = $this->writeUploadsBlock(false);
+
         try {
             $selfCheck = $this->selfCheck();
         } catch (\Throwable $error) {
-            $this->restore($path, $snapshot);
-
-            return ['status' => 'error', 'reason' => 'self_check_failed'];
+            $selfCheck = false;
         }
 
         if ($selfCheck !== true) {
             $this->restore($path, $snapshot);
 
+            if (!$uploadsBlockExisted && isset($uploads['status']) && $uploads['status'] === 'ok') {
+                $this->cleanUploadsBlock();
+            }
+
             return ['status' => 'error', 'reason' => 'self_check_failed'];
         }
 
-        return ['status' => 'ok'];
+        return ['status' => 'ok', 'uploads' => $uploads];
+    }
+
+    public function writeUploadsBlock($verifyDirectives = true)
+    {
+        if (empty($_SERVER['SERVER_SOFTWARE'])) {
+            return ['status' => 'not_applicable', 'reason' => 'no_server_context'];
+        }
+
+        if (wp_umbrella_get_service('WebServer')->isNginx()) {
+            return ['status' => 'not_applicable', 'reason' => 'nginx'];
+        }
+
+        $path = $this->getUploadsPath();
+
+        if ($path === null) {
+            return ['status' => 'error', 'reason' => 'no_uploads_dir'];
+        }
+
+        if (file_exists($path)) {
+            if (!is_writable($path)) {
+                return ['status' => 'error', 'reason' => 'not_writable'];
+            }
+        } elseif (!is_dir(dirname($path)) || !is_writable(dirname($path))) {
+            return ['status' => 'error', 'reason' => 'not_writable'];
+        }
+
+        $lines = $this->getUploadsBlockLines();
+
+        if ($verifyDirectives) {
+            $sandbox = $this->sandboxCheck($lines);
+
+            if ($sandbox !== 'ok') {
+                return ['status' => 'error', 'reason' => $sandbox];
+            }
+        }
+
+        if (!function_exists('insert_with_markers')) {
+            require_once ABSPATH . 'wp-admin/includes/misc.php';
+        }
+
+        $written = insert_with_markers($path, self::MARKER, $lines);
+
+        return $written ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
+    }
+
+    public function cleanUploadsBlock()
+    {
+        $path = $this->getUploadsPath();
+
+        if ($path === null || !file_exists($path)) {
+            return ['status' => 'noop', 'reason' => 'no_file'];
+        }
+
+        if (!is_writable($path)) {
+            return ['status' => 'error', 'reason' => 'not_writable'];
+        }
+
+        $contents = file_get_contents($path);
+
+        if (!is_string($contents) || strpos($contents, '# BEGIN ' . self::MARKER) === false) {
+            return ['status' => 'noop', 'reason' => 'no_block'];
+        }
+
+        $written = file_put_contents($path, $this->stripBlock($contents));
+
+        return $written !== false ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
     }
 
     protected function sandboxCheck($lines)
@@ -292,26 +407,163 @@ class HtaccessFile
             return false;
         }
 
-        $canaryPath = rtrim($upload['basedir'], '/\\') . '/wp-umbrella-canary.php';
-        $canaryUrl = rtrim($upload['baseurl'], '/\\') . '/wp-umbrella-canary.php';
+        $canary = $this->createCanary($upload);
 
-        $created = file_put_contents($canaryPath, "<?php http_response_code(200); echo 'wp-umbrella-canary';");
-
-        if ($created === false) {
+        if ($canary === null) {
             return false;
         }
 
         try {
             $homeCode = $this->probeCode(home_url('/'));
 
-            return $this->probeCode($canaryUrl) === 403
+            return $this->probeCode($canary['url']) === 403
                 && $homeCode !== null && $homeCode < 400;
         } finally {
-            wp_delete_file($canaryPath);
+            $this->deleteCanary($canary);
         }
     }
 
+    /**
+     * @return string blocked|executed|unknown
+     */
+    public function probeUploadsPhpExecution()
+    {
+        $signature = $this->rulesSignature();
+        $cached = get_transient(self::UPLOADS_PROBE_TRANSIENT);
+
+        if (is_array($cached) && isset($cached['signature'], $cached['state']) && $cached['signature'] === $signature) {
+            return $cached['state'];
+        }
+
+        $state = $this->measureUploadsPhpExecution();
+
+        // A loopback that cannot answer is a property of the host, not a transient
+        // condition, so retrying it often only costs the customer a PHP worker.
+        $ttl = $state === 'unknown' ? DAY_IN_SECONDS : 12 * HOUR_IN_SECONDS;
+
+        set_transient(self::UPLOADS_PROBE_TRANSIENT, ['signature' => $signature, 'state' => $state], $ttl);
+
+        return $state;
+    }
+
+    protected function rulesSignature()
+    {
+        $uploadsPath = $this->getUploadsPath();
+        $uploads = '';
+
+        if ($uploadsPath !== null && file_exists($uploadsPath) && is_readable($uploadsPath)) {
+            $contents = file_get_contents($uploadsPath);
+            $uploads = is_string($contents) ? $contents : '';
+        }
+
+        return md5($this->getContents() . '|' . $uploads);
+    }
+
+    protected function measureUploadsPhpExecution()
+    {
+        $upload = wp_upload_dir();
+
+        if (!is_array($upload) || empty($upload['basedir']) || empty($upload['baseurl']) || !empty($upload['error'])) {
+            return 'unknown';
+        }
+
+        $canary = $this->createCanary($upload);
+
+        if ($canary === null) {
+            return 'unknown';
+        }
+
+        try {
+            $control = $this->probeResponse($canary['controlUrl']);
+
+            if ($control === null || $control['code'] !== 200 || strpos($control['body'], self::CANARY_OUTPUT) === false) {
+                return 'unknown';
+            }
+
+            $response = $this->probeResponse($canary['url']);
+
+            if ($response === null) {
+                return 'unknown';
+            }
+
+            return $response['code'] === 200 && strpos($response['body'], self::CANARY_OUTPUT) !== false
+                ? 'executed'
+                : 'blocked';
+        } finally {
+            $this->deleteCanary($canary);
+        }
+    }
+
+    protected function createCanary($upload)
+    {
+        $dir = rtrim($upload['basedir'], '/\\') . '/' . self::CANARY_DIRNAME;
+
+        if (!wp_mkdir_p($dir)) {
+            return null;
+        }
+
+        $this->sweepCanaryDirectory($dir);
+
+        $name = 'wp-umbrella-canary-' . uniqid();
+        $path = $dir . '/' . $name . '.php';
+        $controlPath = $dir . '/' . $name . '.txt';
+
+        $created = file_put_contents($path, "<?php echo 'wpu' . '-canary-' . 'ok';");
+
+        if ($created === false) {
+            return null;
+        }
+
+        if (file_put_contents($controlPath, self::CANARY_OUTPUT) === false) {
+            wp_delete_file($path);
+
+            return null;
+        }
+
+        $baseUrl = rtrim($upload['baseurl'], '/\\') . '/' . self::CANARY_DIRNAME;
+
+        return [
+            'dir' => $dir,
+            'path' => $path,
+            'controlPath' => $controlPath,
+            'url' => $baseUrl . '/' . $name . '.php',
+            'controlUrl' => $baseUrl . '/' . $name . '.txt',
+        ];
+    }
+
+    /**
+     * Cleanup runs in a finally block, which a fatal or a timeout skips.
+     */
+    protected function sweepCanaryDirectory($dir)
+    {
+        $leftovers = glob($dir . '/wp-umbrella-canary-*');
+
+        if (!is_array($leftovers)) {
+            return;
+        }
+
+        foreach ($leftovers as $leftover) {
+            if (is_file($leftover) && filemtime($leftover) < time() - HOUR_IN_SECONDS) {
+                wp_delete_file($leftover);
+            }
+        }
+    }
+
+    protected function deleteCanary($canary)
+    {
+        wp_delete_file($canary['path']);
+        wp_delete_file($canary['controlPath']);
+        @rmdir($canary['dir']);
+    }
+
     protected function probeCode($url)
+    {
+        $response = $this->probeResponse($url);
+
+        return $response === null ? null : $response['code'];
+    }
+
+    protected function probeResponse($url)
     {
         $url = add_query_arg('wpu_probe', uniqid(), $url);
 
@@ -325,7 +577,10 @@ class HtaccessFile
             return null;
         }
 
-        return (int) wp_remote_retrieve_response_code($response);
+        return [
+            'code' => (int) wp_remote_retrieve_response_code($response),
+            'body' => (string) wp_remote_retrieve_body($response),
+        ];
     }
 
     protected function restore($path, $snapshot)
@@ -343,6 +598,19 @@ class HtaccessFile
 
     public function cleanUmbrellaBlock()
     {
+        $result = $this->cleanRootBlock();
+
+        if ($result['status'] === 'error') {
+            return $result;
+        }
+
+        $result['uploads'] = $this->cleanUploadsBlock();
+
+        return $result;
+    }
+
+    protected function cleanRootBlock()
+    {
         $path = $this->getPath();
 
         if (!file_exists($path)) {
@@ -357,10 +625,17 @@ class HtaccessFile
             return ['status' => 'error', 'reason' => 'not_writable'];
         }
 
+        $written = file_put_contents($path, $this->stripBlock($this->getContents()));
+
+        return $written !== false ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
+    }
+
+    protected function stripBlock($contents)
+    {
         $begin = '# BEGIN ' . self::MARKER;
         $end = '# END ' . self::MARKER;
 
-        $lines = preg_split('/\r\n|\r|\n/', $this->getContents());
+        $lines = preg_split('/\r\n|\r|\n/', $contents);
         $result = [];
         $inside = false;
 
@@ -381,10 +656,7 @@ class HtaccessFile
         }
 
         $output = rtrim(implode("\n", $result));
-        $output = $output === '' ? '' : $output . "\n";
 
-        $written = file_put_contents($path, $output);
-
-        return $written !== false ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
+        return $output === '' ? '' : $output . "\n";
     }
 }

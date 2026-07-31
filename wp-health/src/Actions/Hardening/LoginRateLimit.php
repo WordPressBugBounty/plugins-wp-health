@@ -16,9 +16,21 @@ class LoginRateLimit implements ExecuteHooks
 {
     const TRANSIENT_PREFIX = 'wp_umbrella_login_rl_';
 
-    const MAX_FAILURES = 8;
+    const BLOCK_PREFIX = 'wp_umbrella_login_rl_lock_';
 
-    const WINDOW_MINUTES = 5;
+    const STRIKES_PREFIX = 'wp_umbrella_login_rl_strikes_';
+
+    const MIN_FAILURES = 6;
+
+    const MAX_FAILURES = 9;
+
+    const MIN_WINDOW_MINUTES = 5;
+
+    const MAX_WINDOW_MINUTES = 12;
+
+    const STRIKES_TTL = 86400;
+
+    const BLOCK_DURATIONS = [300, 1800, 14400];
 
     const BLOCK_EVENT_KEY = 'umbrella.protection.login_blocked';
 
@@ -49,10 +61,55 @@ class LoginRateLimit implements ExecuteHooks
             return $user;
         }
 
-        if ($this->getCount($ip) < self::MAX_FAILURES) {
+        if (get_transient($this->blockKey($ip)) !== false) {
+            return $this->deny($username);
+        }
+
+        if ($this->getCount($ip) < $this->maxFailures()) {
             return $user;
         }
 
+        $strikes = $this->getStrikes($ip) + 1;
+
+        set_transient($this->strikesKey($ip), $strikes, self::STRIKES_TTL);
+
+        $durations = self::BLOCK_DURATIONS;
+        $duration = $durations[min($strikes, count($durations)) - 1];
+
+        set_transient($this->blockKey($ip), 1, $duration);
+
+        delete_transient($this->key($ip));
+
+        return $this->deny($username);
+    }
+
+    public function onFailure($username)
+    {
+        $ip = ClientIpResolver::resolve();
+
+        if ($ip === null) {
+            return;
+        }
+
+        $count = $this->getCount($ip) + 1;
+
+        set_transient($this->key($ip), $count, $this->windowMinutes() * MINUTE_IN_SECONDS);
+    }
+
+    public function onSuccess($login)
+    {
+        $ip = ClientIpResolver::resolve();
+
+        if ($ip === null) {
+            return;
+        }
+
+        delete_transient($this->key($ip));
+        delete_transient($this->strikesKey($ip));
+    }
+
+    protected function deny($username)
+    {
         (new ProtectionEventRecorder())->recordAggregated(self::BLOCK_EVENT_KEY, 'INFO', [
             'kind' => 'protection',
             'protection' => 'login_rate_limit',
@@ -66,28 +123,19 @@ class LoginRateLimit implements ExecuteHooks
         );
     }
 
-    public function onFailure($username)
+    protected function maxFailures()
     {
-        $ip = ClientIpResolver::resolve();
-
-        if ($ip === null) {
-            return;
-        }
-
-        $count = $this->getCount($ip) + 1;
-
-        set_transient($this->key($ip), $count, self::WINDOW_MINUTES * MINUTE_IN_SECONDS);
+        return self::MIN_FAILURES + $this->seed('failures') % (self::MAX_FAILURES - self::MIN_FAILURES + 1);
     }
 
-    public function onSuccess($login)
+    protected function windowMinutes()
     {
-        $ip = ClientIpResolver::resolve();
+        return self::MIN_WINDOW_MINUTES + $this->seed('window') % (self::MAX_WINDOW_MINUTES - self::MIN_WINDOW_MINUTES + 1);
+    }
 
-        if ($ip === null) {
-            return;
-        }
-
-        delete_transient($this->key($ip));
+    protected function seed($context)
+    {
+        return (int) hexdec(substr(md5(wp_salt('nonce') . $context), 0, 7));
     }
 
     protected function getCount($ip)
@@ -97,8 +145,25 @@ class LoginRateLimit implements ExecuteHooks
         return is_numeric($count) ? (int) $count : 0;
     }
 
+    protected function getStrikes($ip)
+    {
+        $strikes = get_transient($this->strikesKey($ip));
+
+        return is_numeric($strikes) ? (int) $strikes : 0;
+    }
+
     protected function key($ip)
     {
         return self::TRANSIENT_PREFIX . md5($ip);
+    }
+
+    protected function blockKey($ip)
+    {
+        return self::BLOCK_PREFIX . md5($ip);
+    }
+
+    protected function strikesKey($ip)
+    {
+        return self::STRIKES_PREFIX . md5($ip);
     }
 }

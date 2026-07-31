@@ -79,6 +79,33 @@ if (!class_exists('UmbrellaSiteChecksumDirectoryGenerator', false)):
             fwrite($this->siteChecksumDirectoryHandler, "<?php if(!defined('UMBRELLA_BACKUP_KEY')){  exit; } ?>" . PHP_EOL);
         }
 
+        /**
+         * Strip the base directory and normalize to a DIRECTORY_SEPARATOR-prefixed
+         * relative path. A trailing separator on baseDirectory would otherwise
+         * produce lines without a leading separator, which breaks the ancestor
+         * reconstruction in UmbrellaScanBackup::resumeScanDirectories (the resume
+         * then re-scans the whole tree on every batch and never converges).
+         */
+        protected function relativePath(string $path)
+        {
+            $base = rtrim($this->context->getBaseDirectory(), DIRECTORY_SEPARATOR);
+            if ($base !== '' && strpos($path, $base) === 0) {
+                $path = substr($path, strlen($base));
+            } else {
+                $path = str_replace($this->context->getBaseDirectory(), '', $path);
+            }
+
+            if ($path === '') {
+                return DIRECTORY_SEPARATOR;
+            }
+
+            if ($path[0] !== DIRECTORY_SEPARATOR) {
+                $path = DIRECTORY_SEPARATOR . $path;
+            }
+
+            return $path;
+        }
+
         public function addDirectory(string $path, string $checksumValue = '')
         {
             if (!$this->siteChecksumDirectoryHandler) {
@@ -86,10 +113,7 @@ if (!class_exists('UmbrellaSiteChecksumDirectoryGenerator', false)):
                 return;
             }
 
-            $path = str_replace($this->context->getBaseDirectory(), '', $path);
-            if (empty($path)) {
-                $path = '/';
-            }
+            $path = $this->relativePath($path);
 
             $lineDirectory = $path;
             if (!empty($checksumValue)) {
@@ -106,10 +130,7 @@ if (!class_exists('UmbrellaSiteChecksumDirectoryGenerator', false)):
                 return;
             }
 
-            $path = str_replace($this->context->getBaseDirectory(), '', $path);
-            if (empty($path)) {
-                $path = '/';
-            }
+            $path = $this->relativePath($path);
 
             $lineDirectory = $path . ';' . $size;
 

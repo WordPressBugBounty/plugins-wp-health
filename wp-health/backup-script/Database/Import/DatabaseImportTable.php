@@ -65,14 +65,29 @@ if (!class_exists('DatabaseImportTable', false)):
             }
 
             $shifts = 0;
-            $maxAttempts = count($state->files) * 2; // Allow some retries but prevent infinite loops
+            // Each file is visited roughly once (drop + recreate together); the FK-order
+            // recovery may re-queue a file a few times. Keep generous headroom so a
+            // normal run never trips the guard; exhausting it now triggers a resume
+            // rather than a silent partial import (see the guard inside the loop).
+            $maxAttempts = count($state->files) * 3 + 10;
             $totalAttempts = 0;
 
             while (($dump = $state->next()) !== null) {
                 // Prevent infinite loop: if we've attempted too many times, stop
                 if ($totalAttempts >= $maxAttempts) {
-                    $this->socket->sendLog('Maximum import attempts reached. Stopping to prevent infinite loop.', true);
-                    break;
+                    // With the drop-all-first design the not-yet-recreated tables are
+                    // already dropped. Falling through here returns the state to
+                    // importTables(), which reports success on a truncated database.
+                    if (count($successfulTables) === 0) {
+                        // No table completed this run: we are stuck (a table that keeps
+                        // erroring). Fail loudly instead of resume-looping forever.
+                        $this->socket->sendLog('Maximum import attempts reached with no progress; aborting import.', true);
+                        throw new UmbrellaException('Database import made no progress before exhausting the attempt budget', 'db_import_no_progress');
+                    }
+                    // Progress was made but the budget is spent: persist the cursor and
+                    // let the worker resume to finish the remaining tables.
+                    $this->socket->sendLog('Maximum import attempts reached; requesting resume to finish the remaining tables.', true);
+                    throw new UmbrellaDatabasePreventMaxExecutionTime($this->computeGlobalCursor($state));
                 }
 
                 // Time-limit guard (between tables): persist the cursor and let
@@ -205,6 +220,16 @@ if (!class_exists('DatabaseImportTable', false)):
                 }
             }
 
+            // Counts are per-run: a resumed import only reports the tables
+            // processed in this execution, so sum by requestId to get the
+            // whole restoration.
+            $this->socket->sendTelemetryCounter('restore.database.summary', [
+                'origin' => 'plugin',
+                'tablesImported' => count($successfulTables),
+                'tablesSkipped' => count($skippedTables),
+                'tablesError' => count($importErrors),
+            ]);
+
             // Add import statistics to the state
             if (method_exists($state, 'setImportStats')) {
                 $state->setImportStats([
@@ -256,13 +281,13 @@ if (!class_exists('DatabaseImportTable', false)):
                     $connection->execute($statements);
                     $shifts = 0;
 
-                    if (strncmp($statements, 'DROP TABLE IF EXISTS ', 21) === 0) {
-                        $state->pushNextToEnd();
-                        // We just dropped a table; switch to next file if available.
-                        // This way we will drop all tables before importing new data.
-                        // That helps with foreign key constraints.
-                        break;
-                    }
+                    // Drop-then-recreate each table in place, then move on. We do NOT
+                    // drop every table up front: FOREIGN_KEY_CHECKS is disabled for the
+                    // import so per-table ordering is safe, and dropping all tables
+                    // first meant an import interrupted mid-way left the whole tail of
+                    // tables dropped-but-never-recreated (silent data loss). Restoring
+                    // each table fully before the next bounds worst-case loss to the
+                    // single table in flight, which resume re-imports from its DROP.
                 } catch (UmbrellaException $e) {
                     // Super-powerful recovery switch, un-document it to secure your job.
                     switch ($e->getInternalError()) {
@@ -310,6 +335,15 @@ if (!class_exists('DatabaseImportTable', false)):
                                 usleep(100000 * pow($attempt, 2));
                                 try {
                                     $connection->close();
+                                    // Reconnecting resets session state; re-apply the import
+                                    // session settings so FK-bearing tables don't start
+                                    // erroring and burning the attempt budget.
+                                    try {
+                                        $connection->execute("SET SESSION sql_mode = 'NO_AUTO_VALUE_ON_ZERO'");
+                                        $connection->execute('SET SESSION FOREIGN_KEY_CHECKS = 0');
+                                    } catch (Exception $eReset) {
+                                        // best effort — the retry below re-establishes the connection anyway
+                                    }
                                     if ($realMaxPacket && (strlen($statements) * 1.2) > $realMaxPacket) {
                                         // We are certain that the packet size is too big.
                                         $connection->execute(sprintf('SET GLOBAL max_allowed_packet=%d', strlen($statements) + 1024 * 1024));

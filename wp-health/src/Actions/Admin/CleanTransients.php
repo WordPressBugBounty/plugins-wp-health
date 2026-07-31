@@ -1,7 +1,7 @@
 <?php
 namespace WPUmbrella\Actions\Admin;
 
-use WPUmbrella\Actions\Hardening\LoginGuard\FilterStorage;
+use WPUmbrella\Actions\Hardening\AttackerIps\FilterStorage;
 use WPUmbrella\Core\Hooks\ExecuteHooksBackend;
 
 class CleanTransients implements ExecuteHooksBackend

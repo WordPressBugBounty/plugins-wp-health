@@ -5,8 +5,8 @@ use WP_Error;
 use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
 use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
-use WPUmbrella\Actions\Hardening\LoginGuard\BloomFilter;
-use WPUmbrella\Actions\Hardening\LoginGuard\FilterStorage;
+use WPUmbrella\Actions\Hardening\AttackerIps\BloomFilter;
+use WPUmbrella\Actions\Hardening\AttackerIps\CommunityIpFilter;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
 
 if (!defined('ABSPATH')) {
@@ -19,21 +19,17 @@ class LoginIpBlocklist implements ExecuteHooks
 
     const KNOWN_GOOD_TTL = 2592000;
 
-    const FILTER_TTL = 604800;
-
-    const ORACLE_TIMEOUT_MS = 800;
-
     const BLOCK_EVENT_KEY = 'umbrella.protection.login_blocked';
 
     const BLOCK_BUCKET_KEY = 'wp_umbrella_login_block_bucket';
 
     const BLOCK_WINDOW = 1800;
 
-    protected $storage;
+    protected $filter;
 
-    public function __construct()
+    public function __construct(?CommunityIpFilter $filter = null)
     {
-        $this->storage = new FilterStorage();
+        $this->filter = $filter !== null ? $filter : new CommunityIpFilter();
     }
 
     public function hooks()
@@ -62,7 +58,7 @@ class LoginIpBlocklist implements ExecuteHooks
             return $user;
         }
 
-        if (!$this->isBlocked($ip)) {
+        if (!$this->filter->isBlocked($ip)) {
             return $user;
         }
 
@@ -93,82 +89,6 @@ class LoginIpBlocklist implements ExecuteHooks
         }
 
         set_transient($this->knownGoodKey($ip), 1, self::KNOWN_GOOD_TTL);
-    }
-
-    protected function isBlocked($ip)
-    {
-        $blob = $this->resolveFilter();
-
-        if ($blob === null) {
-            return false;
-        }
-
-        return BloomFilter::isMember($blob, $ip);
-    }
-
-    protected function resolveFilter()
-    {
-        $fetchedAt = $this->storage->getFetchedAt();
-        $blob = $this->storage->load();
-
-        if ($blob !== null && (time() - $fetchedAt) < self::FILTER_TTL) {
-            return $blob;
-        }
-
-        $fresh = $this->fetchFilter();
-
-        if ($fresh === null) {
-            return $blob;
-        }
-
-        return $fresh;
-    }
-
-    protected function fetchFilter()
-    {
-        $projectId = wp_umbrella_get_project_id();
-
-        if (empty($projectId)) {
-            return null;
-        }
-
-        $url = sprintf(
-            '%s/v1/projects/%s/login-guard/filter',
-            WP_UMBRELLA_NEW_API_URL,
-            rawurlencode($projectId)
-        );
-
-        $response = wp_remote_get($url, [
-            'headers' => [
-                'Authorization' => sprintf('Bearer %s', wp_umbrella_get_outbound_bearer()),
-                'X-Project' => site_url(),
-                'X-Project-Id' => $projectId,
-                'X-Secret-Token' => wp_umbrella_get_secret_token(),
-            ],
-            'timeout' => self::ORACLE_TIMEOUT_MS / 1000,
-        ]);
-
-        if (is_wp_error($response)) {
-            return null;
-        }
-
-        if ((int) wp_remote_retrieve_response_code($response) !== 200) {
-            return null;
-        }
-
-        $blob = wp_remote_retrieve_body($response);
-
-        if (!BloomFilter::isValidBlob($blob)) {
-            return null;
-        }
-
-        if (!$this->storage->store($blob)) {
-            return null;
-        }
-
-        $this->storage->markFetched();
-
-        return $blob;
     }
 
     protected function hasSuccessfulHistory($ip)

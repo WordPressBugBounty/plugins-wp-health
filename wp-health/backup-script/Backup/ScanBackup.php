@@ -67,8 +67,7 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
-            // filepath contain dictionary.php ; we send this manually
-            if (strpos($filePath, 'dictionary.php') !== false) {
+            if (preg_match('/^c[a-z0-9]{15,}-((directory|directories-checksum)-)?dictionary\.php$/', basename($filePath))) {
                 return false;
             }
 
@@ -451,6 +450,24 @@ if (!class_exists('UmbrellaScanBackup', false)):
             return true;
         }
 
+        /**
+         * Key for the scanned-paths dedup set. A 64-bit md5 prefix keeps the set
+         * at ~40 B/entry (~20MB for 500K dirs) instead of ~140 B/entry with full
+         * path strings, which would blow the 128MB limit of shared hosts on very
+         * large sites. Collision odds at 500K entries are ~1e-8; a collision only
+         * skips one directory line, and the next backup starts a fresh dictionary.
+         * 32-bit PHP cannot hold the unpacked value, fall back to the path itself.
+         */
+        protected function scannedPathKey($relativePath)
+        {
+            if (PHP_INT_SIZE >= 8) {
+                $unpacked = unpack('J', substr(md5($relativePath, true), 0, 8));
+                return $unpacked[1];
+            }
+
+            return $relativePath;
+        }
+
         protected function resumeScanDirectories($options)
         {
             global $startTimer, $safeTimeLimit;
@@ -463,10 +480,12 @@ if (!class_exists('UmbrellaScanBackup', false)):
             $this->siteChecksumDirectoryGenerator->closeSiteChecksumDirectoryHandler();
 
             // Single-pass dictionary read: find last path + collect all parent→child relationships
+            // + the full set of already-scanned paths (dedup guard for the DFS below).
             // This halves the I/O vs reading the file twice (Steps 1+3 merged).
             // Memory trade-off: stores all parent→child mappings (~2.5MB for 50K dirs).
             $lastRelPath = '';
             $allChildrenPerParent = [];
+            $scannedPaths = [];
             $handle = @fopen($dictPath, 'r');
             if (!$handle) {
                 $this->socket->sendLog('[resumeScanDirectories] Cannot open dictionary, falling back to first run');
@@ -485,6 +504,13 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 $lastRelPath = $line;
                 $parentRel = dirname($line);
                 $allChildrenPerParent[$parentRel][basename($line)] = true;
+
+                $pathOnly = $line;
+                $markerPos = strpos($pathOnly, ':FILE_CHANGED');
+                if ($markerPos !== false) {
+                    $pathOnly = substr($pathOnly, 0, $markerPos);
+                }
+                $scannedPaths[$this->scannedPathKey($pathOnly)] = true;
             }
             fclose($handle);
 
@@ -591,19 +617,32 @@ if (!class_exists('UmbrellaScanBackup', false)):
                     continue;
                 }
 
-                $lineNumber++;
-                $this->socket->sendScanDirectoryCursor($lineNumber);
+                // Dedup guard: never re-append a directory already in the dictionary.
+                // If the frontier reconstruction above mis-detects scanned subtrees as
+                // unscanned (any base-path normalization mismatch), re-appending would
+                // grow the dictionary and the cursor forever — the backup then loops
+                // until the 19h watchdog kills it. Skip the write but still descend:
+                // the subtree may contain unscanned children.
+                $pathKey = $this->scannedPathKey($relativePath);
+                $alreadyScanned = isset($scannedPaths[$pathKey]);
 
-                if ($lineNumber % 500 === 0 && function_exists('gc_collect_cycles')) {
-                    gc_collect_cycles();
-                }
+                if (!$alreadyScanned) {
+                    $scannedPaths[$pathKey] = true;
 
-                if ($options['write_checksum_integrity']) {
-                    $this->writeDirectoriesForChecksumIntegrity($currentDir, $options);
-                } elseif ($options['write_size']) {
-                    $this->writeDirectoriesForSize($currentDir, $options);
-                } else {
-                    $this->siteChecksumDirectoryGenerator->addDirectory($currentDir);
+                    $lineNumber++;
+                    $this->socket->sendScanDirectoryCursor($lineNumber);
+
+                    if ($lineNumber % 500 === 0 && function_exists('gc_collect_cycles')) {
+                        gc_collect_cycles();
+                    }
+
+                    if ($options['write_checksum_integrity']) {
+                        $this->writeDirectoriesForChecksumIntegrity($currentDir, $options);
+                    } elseif ($options['write_size']) {
+                        $this->writeDirectoriesForSize($currentDir, $options);
+                    } else {
+                        $this->siteChecksumDirectoryGenerator->addDirectory($currentDir);
+                    }
                 }
 
                 // Explore children — add subdirectories to stack for DFS

@@ -171,10 +171,7 @@ trait TraitPhpController
             header('Expires: 0');
             header('Content-Type: application/json');
 
-            http_response_code($status);
-            if ($status !== 200) {
-                status_header($status);
-            }
+            status_header($status);
         }
 
         echo json_encode($data);

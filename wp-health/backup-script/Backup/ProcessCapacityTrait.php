@@ -62,8 +62,19 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 				return false;
 			}
 
-			// filepath contain dictionary.php ; we sent this manually
-			if (strpos($filePath, 'dictionary.php') !== false) {
+			// Skip directory-marker entries. A plugin/theme uploaded from a Windows zip
+			// extracted on Linux leaves flat files whose name ends with a path separator
+			// (e.g. "gebp-...\lib\composer\installers\.github\"). When sending, the path
+			// is normalized backslash->slash (see UmbrellaWebSocket::send), turning these
+			// into a path ending in "/", which the mirror cannot open/write (ENOENT) and
+			// which aborts the whole file transfer. They carry no content (empty dir
+			// placeholders), so skip them.
+			$normalizedPath = str_replace('\\', DIRECTORY_SEPARATOR, $filePath);
+			if (substr($normalizedPath, -1) === DIRECTORY_SEPARATOR) {
+				return false;
+			}
+
+			if (preg_match('/^c[a-z0-9]{15,}-((directory|directories-checksum)-)?dictionary\.php$/', basename($filePath))) {
 				return false;
 			}
 

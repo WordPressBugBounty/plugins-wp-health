@@ -100,6 +100,7 @@ class ManagePlugin
     public function update($plugin, $options = [])
     {
         $tryAjax = isset($options['try_ajax']) ? $options['try_ajax'] : true;
+        $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : false;
 
         wp_umbrella_debug_log("ManagePlugin::update started for '{$plugin}'");
 

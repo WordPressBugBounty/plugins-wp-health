@@ -126,10 +126,6 @@ class Plugins
                     }
                 }
             }
-
-            Morphism::setMapper('WPUmbrella\DataTransferObject\Plugin', $schema);
-
-            return Morphism::map('WPUmbrella\DataTransferObject\Plugin', $data);
         } else {
             $needUpdates = get_plugin_updates();
 
@@ -142,11 +138,85 @@ class Plugins
                     }
                 }
             }
-
-            Morphism::setMapper('WPUmbrella\DataTransferObject\Plugin', $schema);
-
-            return Morphism::map('WPUmbrella\DataTransferObject\Plugin', $data);
         }
+
+        $data = $this->addBlockedUpdates($data, $current);
+
+        Morphism::setMapper('WPUmbrella\DataTransferObject\Plugin', $schema);
+
+        return Morphism::map('WPUmbrella\DataTransferObject\Plugin', $data);
+    }
+
+    /**
+     * @param array $data
+     * @param object|false $transient
+     * @return array
+     */
+    protected function addBlockedUpdates($data, $transient)
+    {
+        if (!is_object($transient) || empty($transient->no_update)) {
+            return $data;
+        }
+
+        $pluginsByKey = array_column($data, 'key');
+
+        foreach ($transient->no_update as $pluginPath => $entry) {
+            if (!is_object($entry) || empty($entry->new_version)) {
+                continue;
+            }
+
+            $index = array_search($pluginPath, $pluginsByKey);
+            if ($index === false || isset($data[$index]['update'])) {
+                continue;
+            }
+
+            $installedVersion = isset($data[$index]['Version']) ? $data[$index]['Version'] : '';
+            if (empty($installedVersion) || version_compare($entry->new_version, $installedVersion, '<=')) {
+                continue;
+            }
+
+            $reason = $this->getBlockedUpdateReason($entry);
+            if ($reason === null) {
+                continue;
+            }
+
+            $update = clone $entry;
+            $update->name = $data[$index]['Name'];
+            $update->old_version = $installedVersion;
+            $update->file = $pluginPath;
+            $update->is_blocked = true;
+            $update->blocked_reason = $reason;
+            unset($update->upgrade_notice);
+
+            $data[$index]['update'] = $update;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param object $entry
+     * @return string|null
+     */
+    protected function getBlockedUpdateReason($entry)
+    {
+        $requiresWordPress = isset($entry->requires) ? $entry->requires : '';
+        if (!empty($requiresWordPress)
+            && function_exists('is_wp_version_compatible')
+            && !is_wp_version_compatible($requiresWordPress)
+        ) {
+            return 'wordpress_version';
+        }
+
+        $requiresPhp = isset($entry->requires_php) ? $entry->requires_php : '';
+        if (!empty($requiresPhp)
+            && function_exists('is_php_version_compatible')
+            && !is_php_version_compatible($requiresPhp)
+        ) {
+            return 'php_version';
+        }
+
+        return null;
     }
 
     public function getPlugin($plugin, $options = [])
