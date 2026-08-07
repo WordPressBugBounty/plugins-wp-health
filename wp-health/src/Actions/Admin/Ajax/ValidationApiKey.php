@@ -186,18 +186,14 @@ class ValidationApiKey implements ExecuteHooksBackend
                 }
 
                 if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-                    $newOptions['allowed'] = false;
-                    $newOptions['api_key'] = '';
-                    $newOptions['project_id'] = '';
-                    $newOptions['secret_token'] = '';
-                    $this->optionService->setOptions($newOptions);
-
-                    $errorPayload = ['code' => $code];
-                    if ($criticalError !== null) {
-                        $errorPayload['critical_error'] = $criticalError;
-                    }
-
-                    wp_send_json_error($errorPayload);
+                    // No decodable answer means the call never completed: a
+                    // timeout, a DNS or TLS failure, an intermediate error page.
+                    // We cannot tell that from a refusal, and the credentials we
+                    // just wrote may still be needed by requests in flight on the
+                    // other side, so leave them alone.
+                    wp_send_json_error([
+                        'code' => 'api_unreachable',
+                    ]);
                     return;
                 }
 
@@ -264,9 +260,23 @@ class ValidationApiKey implements ExecuteHooksBackend
                 }
 
                 $response = wp_umbrella_get_service('Projects')->createProjectOnApplication($data, $apiKey);
+
+                // Same reasoning as the branch above: a transport failure decodes
+                // to null, exactly like a refusal would. Wiping here would revoke
+                // the secret_token we just published while the project creation
+                // may still be running on the other side.
+                if (!is_array($response)) {
+                    wp_send_json_error([
+                        'code' => 'api_unreachable',
+                        'user' => $owner,
+                        'api_key' => $apiKey,
+                    ]);
+                    return;
+                }
+
                 $projectId = isset($response['result']['id']) ? $response['result']['id'] : null;
 
-                if ($response['success'] === 'success' && $projectId !== null) {
+                if (isset($response['success']) && $response['success'] === 'success' && $projectId !== null) {
                     $newOptions['project_id'] = $projectId;
 
                     $result = isset($response['result']) && is_array($response['result']) ? $response['result'] : [];
@@ -304,7 +314,7 @@ class ValidationApiKey implements ExecuteHooksBackend
                 $this->optionService->setOptions($newOptions);
 
                 $errorPayload = [
-                    'code' => $response['code'],
+                    'code' => isset($response['code']) ? $response['code'] : 'failed_create_project',
                     'user' => $owner,
                     'api_key' => $apiKey,
                 ];

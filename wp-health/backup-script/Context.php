@@ -430,29 +430,60 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function setupChecksumDirectory()
         {
-            $this->checksumDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . self::CHECKSUM_SUFFIX;
+            $this->checksumDirectory = $this->setupScratchDirectory(self::CHECKSUM_SUFFIX);
         }
 
         public function setupRootDirectory()
         {
             // /umb_database
-            $rootDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . self::SUFFIX;
+            $this->rootDirectory = $this->setupScratchDirectory(self::SUFFIX);
+        }
+
+        protected function setupScratchDirectory($suffix)
+        {
+            $directory = $this->baseDirectory . DIRECTORY_SEPARATOR . $suffix;
             $filenameTest = 'test.txt';
 
             try {
-                $response = $this->testDirectoryCreation($rootDirectory, $filenameTest);
+                $response = $this->testDirectoryCreation($directory, $filenameTest);
                 if ($response['code'] === 'success') {
-                    $this->rootDirectory = $rootDirectory;
-                    return;
+                    return $directory;
                 }
-
-                // By default, we use the base directory
-                $this->rootDirectory = $this->baseDirectory . DIRECTORY_SEPARATOR . self::SUFFIX;
             } catch (Exception $e) {
-                if (file_exists($rootDirectory . DIRECTORY_SEPARATOR . $filenameTest)) {
-                    unlink($rootDirectory . DIRECTORY_SEPARATOR . $filenameTest);
+                if (file_exists($directory . DIRECTORY_SEPARATOR . $filenameTest)) {
+                    unlink($directory . DIRECTORY_SEPARATOR . $filenameTest);
                 }
             }
+
+            // The base directory is not writable (e.g. Pantheon read-only codebase):
+            // fall back next to the module, which lives in a writable path.
+            return __DIR__ . DIRECTORY_SEPARATOR . $suffix;
+        }
+
+        /**
+         * Relative path a streamed file is reported under to the mirror.
+         * Scratch directories may be relocated when the base directory is
+         * read-only; their files keep their logical root-level path so the
+         * mirror layout stays unchanged.
+         */
+        public function getStreamRelativePath($filePath)
+        {
+            $scratchDirectories = [
+                self::SUFFIX => $this->rootDirectory,
+                self::CHECKSUM_SUFFIX => $this->checksumDirectory,
+            ];
+
+            foreach ($scratchDirectories as $suffix => $directory) {
+                if (!$directory || $directory === $this->baseDirectory . DIRECTORY_SEPARATOR . $suffix) {
+                    continue;
+                }
+
+                if (strpos($filePath, $directory . DIRECTORY_SEPARATOR) === 0) {
+                    return $suffix . DIRECTORY_SEPARATOR . substr($filePath, strlen($directory) + 1);
+                }
+            }
+
+            return substr($filePath, strlen($this->baseDirectory) + 1);
         }
 
         public function createBackupDirectoryIfNotExists()

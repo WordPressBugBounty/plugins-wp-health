@@ -451,7 +451,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 return;
             }
 
-            $relativePath = substr($filePath, strlen($this->context->getBaseDirectory()) + 1);
+            $relativePath = $this->context->getStreamRelativePath($filePath);
 
             if (!UmbrellaUTF8::seemsUTF8($relativePath)) {
                 $relativePath = UmbrellaUTF8::encodeNonUTF8($relativePath);

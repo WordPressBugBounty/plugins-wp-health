@@ -65,12 +65,19 @@ if (!class_exists('ReadableRecursiveFilterIterator', false)) {
 				return false;
 			}
 
-			if ($current->isLink() && (
-					$current->getLinkTarget() === '.' ||
-					$current->getLinkTarget() === '..' ||
-					strpos($current->getRealPath(), $current->getLinkTarget()) !== false
-				)) {
-				return false;
+			if ($current->isLink()) {
+				$linkTarget = $current->getLinkTarget();
+				if ($linkTarget === '.' || $linkTarget === '..') {
+					return false;
+				}
+
+				// A loop only exists when the link resolves to itself or one of its
+				// ancestors. Substring-matching the raw target against the realpath
+				// rejected every absolute-target symlink (Pantheon uploads -> /files).
+				$realTarget = $current->getRealPath();
+				if ($realTarget !== false && strpos($current->getPathname() . DIRECTORY_SEPARATOR, rtrim($realTarget, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR) === 0) {
+					return false;
+				}
 			}
 
 			if (!$current->isLink() || empty($this->visitedPaths)) {

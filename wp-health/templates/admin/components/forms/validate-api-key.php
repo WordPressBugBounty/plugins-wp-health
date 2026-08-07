@@ -559,6 +559,14 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 								confirmButtonText: "Close",
 							})
 							break;
+						case "api_unreachable":
+							Swal.fire({
+								title: 'No answer from WP Umbrella',
+								text: 'Your site could not get an answer from WP Umbrella in time. Your settings have been kept, so simply try again in a moment. If it keeps happening, contact our support.',
+								icon: 'warning',
+								confirmButtonText: "Close",
+							})
+							break;
 						case "http_auth_required":
 							Swal.fire({
 								title: 'HTTP Auth credentials needed',

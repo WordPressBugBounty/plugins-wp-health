@@ -9,6 +9,8 @@ use WPUmbrella\Helpers\GodTransient;
 
 class ErrorHandler
 {
+    const DEDUPLICATION_WINDOW = 43200;
+
     public function init()
     {
         set_error_handler([$this, 'handler']);
@@ -51,27 +53,29 @@ class ErrorHandler
 
     public function errorAlreadyExist($params)
     {
-        $transient = get_transient(GodTransient::ERROR_ALREADY_SEND);
         $md5 = $this->serializeError($params);
+        $now = time();
 
-        if (!$transient) {
-            $transient = [];
-            $transient[] = $md5;
-            set_transient(GodTransient::ERROR_ALREADY_SEND, $transient, 43200);
-
-            return false;
-        }
-
+        $transient = get_transient(GodTransient::ERROR_ALREADY_SEND);
         if (!is_array($transient)) {
             $transient = [];
         }
 
-        if (in_array($md5, $transient)) {
+        $muted = isset($transient[$md5]) && $transient[$md5] > $now;
+
+        // Each entry carries its own expiry. The transient lifetime is refreshed on every
+        // write, so relying on it alone would mute a recurring error forever on a site that
+        // keeps producing new ones.
+        $transient = array_filter($transient, function ($expiresAt) use ($now) {
+            return is_int($expiresAt) && $expiresAt > $now;
+        });
+
+        if ($muted) {
             return true;
         }
 
-        $transient[] = $md5;
-        set_transient(GodTransient::ERROR_ALREADY_SEND, $transient, 43200);
+        $transient[$md5] = $now + self::DEDUPLICATION_WINDOW;
+        set_transient(GodTransient::ERROR_ALREADY_SEND, $transient, self::DEDUPLICATION_WINDOW);
 
         return false;
     }

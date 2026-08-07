@@ -37,6 +37,15 @@ class PluginUpgrader extends \Plugin_Upgrader
                     'plugin' => $plugin,
                     'type'   => 'plugin',
                     'action' => 'update',
+                    // WP 6.3+ moves the old plugin to upgrade-temp-backup before
+                    // clearing the destination and restores it when the install
+                    // fails, so a bad download no longer leaves the site without
+                    // the plugin. Older versions ignore the key.
+                    'temp_backup' => array(
+                        'slug' => dirname($plugin),
+                        'src'  => WP_PLUGIN_DIR,
+                        'dir'  => 'plugins',
+                    ),
                 ),
             ]);
         } finally {

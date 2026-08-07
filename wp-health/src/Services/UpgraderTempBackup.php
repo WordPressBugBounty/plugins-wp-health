@@ -47,17 +47,28 @@ class UpgraderTempBackup
         $destDirectory = $baseDirectory . DIRECTORY_SEPARATOR . $args['slug'];
         $trace = wp_umbrella_get_service('RequestTrace');
 
-        // Delete existing destination to prevent mixing old and new files.
-        // A corrupt mix of two versions is worse than a visible absence.
+        // Move the current version aside instead of deleting it: if the restore
+        // dies mid-way, the site still has a directory to put back. The aside
+        // copy lives in the temp backup tree, so the stale sweep cleans up any
+        // leftover and WordPress never scans it as an installed plugin.
+        $asideDirectory = $wp_filesystem->wp_content_dir() . $this->dirName . DIRECTORY_SEPARATOR . $args['dir'] . DIRECTORY_SEPARATOR . $args['slug'] . '-replaced';
+        $movedAside = false;
+
         if ($wp_filesystem->is_dir($destDirectory)) {
-            $trace->addTrace('rollback_delete_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
-            if (!$wp_filesystem->delete($destDirectory, true)) {
-                $trace->addTrace('rollback_delete_dest_failed', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+            if ($wp_filesystem->is_dir($asideDirectory)) {
+                $wp_filesystem->delete($asideDirectory, true);
+            }
+
+            $trace->addTrace('rollback_move_dest_aside', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+            $aside = move_dir($destDirectory, $asideDirectory, true);
+            if (is_wp_error($aside)) {
+                $trace->addTrace('rollback_move_dest_aside_failed', ['error' => $aside->get_error_message()]);
                 return [
-                    'code' => 'fs_temp_backup_delete_dest',
+                    'code' => 'fs_temp_backup_move_aside',
                     'success' => false
                 ];
             }
+            $movedAside = true;
         }
 
         // Use move_dir() for an atomic rename — same approach as WP core's restore_temp_backup().
@@ -66,10 +77,20 @@ class UpgraderTempBackup
         $result = move_dir($srcDirectory, $destDirectory, true);
         if (is_wp_error($result)) {
             $trace->addTrace('rollback_move_dir_failed', ['error' => $result->get_error_message()]);
+
+            if ($movedAside && !$wp_filesystem->is_dir($destDirectory)) {
+                $trace->addTrace('rollback_restore_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+                move_dir($asideDirectory, $destDirectory, true);
+            }
+
             return [
                 'code' => 'fs_temp_backup_move',
                 'success' => false
             ];
+        }
+
+        if ($movedAside) {
+            $wp_filesystem->delete($asideDirectory, true);
         }
 
         $trace->addTrace('rollback_move_dir_success');

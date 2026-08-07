@@ -161,7 +161,8 @@ class Plugins
         $pluginsByKey = array_column($data, 'key');
 
         foreach ($transient->no_update as $pluginPath => $entry) {
-            if (!is_object($entry) || empty($entry->new_version)) {
+            $newVersion = is_object($entry) && isset($entry->new_version) ? $entry->new_version : null;
+            if (!$this->isVersionString($newVersion)) {
                 continue;
             }
 
@@ -171,7 +172,11 @@ class Plugins
             }
 
             $installedVersion = isset($data[$index]['Version']) ? $data[$index]['Version'] : '';
-            if (empty($installedVersion) || version_compare($entry->new_version, $installedVersion, '<=')) {
+            if (!$this->isVersionString($installedVersion)) {
+                continue;
+            }
+
+            if (version_compare($newVersion, $installedVersion, '<=')) {
                 continue;
             }
 
@@ -195,13 +200,27 @@ class Plugins
     }
 
     /**
+     * The update_plugins transient is shared with every third-party updater, so
+     * an entry can hold anything: arrays, objects, null. Every value read from it
+     * goes through here before reaching version_compare() or the is_*_compatible()
+     * helpers, which fatal on a non-string in PHP 8.
+     *
+     * @param mixed $version
+     * @return bool
+     */
+    protected function isVersionString($version)
+    {
+        return is_string($version) && $version !== '';
+    }
+
+    /**
      * @param object $entry
      * @return string|null
      */
     protected function getBlockedUpdateReason($entry)
     {
         $requiresWordPress = isset($entry->requires) ? $entry->requires : '';
-        if (!empty($requiresWordPress)
+        if ($this->isVersionString($requiresWordPress)
             && function_exists('is_wp_version_compatible')
             && !is_wp_version_compatible($requiresWordPress)
         ) {
@@ -209,7 +228,7 @@ class Plugins
         }
 
         $requiresPhp = isset($entry->requires_php) ? $entry->requires_php : '';
-        if (!empty($requiresPhp)
+        if ($this->isVersionString($requiresPhp)
             && function_exists('is_php_version_compatible')
             && !is_php_version_compatible($requiresPhp)
         ) {

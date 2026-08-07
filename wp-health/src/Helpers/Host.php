@@ -32,4 +32,6 @@ abstract class Host
     const OTHER = 'other';
 
     const GRIDPANE = 'gridpane';
+
+    const PANTHEON = 'pantheon';
 }

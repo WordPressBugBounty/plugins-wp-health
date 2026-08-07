@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.26.1
+Stable tag: v2.26.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,14 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.26.2 (08-07-2026) =
+- Fixed: some sites stopped syncing with WP Umbrella and appeared as disconnected when another plugin reported its update information in an unexpected format.
+- Fixed: on sites where the uploads folder is a symbolic link, media files were missing from backups. Those sites are now backed up in full.
+- Added: backups now work on Pantheon, whose read-only file system previously prevented them from running.
+- Fixed: some plugins caused PHP fatal errors during our sync because our plugin loaded the admin screens too early.
+- Fixed: a recurring PHP error was reported once and then went unnoticed. Recurring errors are now reported again.
+- Improved: clearer message when your site cannot reach WP Umbrella while connecting it.
 
 = 2.26.1 (07-30-2026) =
 - Added: new security checks that detect suspicious administrator accounts and list their active application passwords.

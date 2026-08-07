@@ -49,6 +49,12 @@ class BackupFinderConfiguration
             case Host::WORDPRESSCOM:
                 $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR;
                 break;
+
+            case Host::PANTHEON:
+                // Pantheon: codebase is read-only, uploads is the only writable path.
+                // The module is then reached through the mu-plugin/routing strategies (included by WP).
+                $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
+                break;
         }
 
         if (empty($source)) {

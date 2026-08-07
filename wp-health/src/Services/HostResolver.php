@@ -64,6 +64,13 @@ class HostResolver
                 return Host::GRIDPANE;
             }
 
+            // Pantheon exposes $_ENV['PANTHEON_ENVIRONMENT'] on web requests (their
+            // own mu-plugin gates on it) and the PANTHEON_ENVIRONMENT constant on
+            // web + CLI (platform prepend) — check both.
+            if (isset($_ENV['PANTHEON_ENVIRONMENT']) || wp_umbrella_get_service('WordPressContext')->hasConstant('PANTHEON_ENVIRONMENT')) {
+                return Host::PANTHEON;
+            }
+
             $hostname = function_exists('gethostname') ? gethostname() : Host::OTHER;
 
             if (function_exists('apply_filters')) {

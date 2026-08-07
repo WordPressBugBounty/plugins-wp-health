@@ -166,20 +166,23 @@ class RequestSettings
         }
         $this->adminLoadedDone = true;
 
+        $context = wp_umbrella_get_service('WordPressContext');
+
+        add_filter('http_response', [$this, 'captureCacheUpdateCall'], WP_UMBRELLA_MAX_PRIORITY_HOOK, 3);
+        add_filter('pre_http_request', [$this, 'interceptCacheUpdateCall'], WP_UMBRELLA_MAX_PRIORITY_HOOK, 3);
+        require_once $context->getConstant('ABSPATH') . 'wp-admin/includes/admin.php';
+
+        // set_current_screen() fires the current_screen hook, which third parties use to
+        // register their settings. It has to run once the admin function library is loaded,
+        // or their calls to add_settings_section() and friends fatal on an undefined function.
         try {
             $GLOBALS['hook_suffix'] = '';
             if (class_exists('WP_Screen')) {
                 \WP_Screen::get('')->set_current_screen();
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // No black magic
         }
-
-        $context = wp_umbrella_get_service('WordPressContext');
-
-        add_filter('http_response', [$this, 'captureCacheUpdateCall'], WP_UMBRELLA_MAX_PRIORITY_HOOK, 3);
-        add_filter('pre_http_request', [$this, 'interceptCacheUpdateCall'], WP_UMBRELLA_MAX_PRIORITY_HOOK, 3);
-        require_once wp_umbrella_get_service('WordPressContext')->getConstant('ABSPATH') . 'wp-admin/includes/admin.php';
 
         global $wp_current_filter;
         $wp_current_filter[] = 'load-update-core.php';
@@ -200,7 +203,14 @@ class RequestSettings
 
         (new PremiumUpdateDetector())->cacheTransients();
 
-        set_current_screen();
+        // Same reason as above: this fires current_screen a second time, and a third party
+        // raising there would take the whole sync request down.
+        try {
+            set_current_screen();
+        } catch (\Throwable $e) {
+            // No black magic
+        }
+
         do_action('load-update-core.php');
 
         if (function_exists('wp_version_check')) {
