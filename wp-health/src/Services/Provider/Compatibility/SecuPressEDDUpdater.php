@@ -175,7 +175,7 @@ class SecuPressEDDUpdater
     {
         // If it is an https request and we are performing a package download, disable ssl verification
         if (strpos($url, 'https://') !== false && strpos($url, 'edd_action=package_download')) {
-            $args['sslverify'] = false;
+            $args['sslverify'] = wp_umbrella_should_verify_ssl();
         }
         return $args;
     }
@@ -217,20 +217,20 @@ class SecuPressEDDUpdater
             'beta' => !empty($data['beta']),
         ];
 
-        $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => false, 'body' => $api_params]);
+        $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
 
         if (!is_wp_error($request)) {
             $request = json_decode(wp_remote_retrieve_body($request));
         }
 
         if ($request && isset($request->sections)) {
-            $request->sections = maybe_unserialize($request->sections);
+            $request->sections = wp_umbrella_safe_unserialize($request->sections);
         } else {
             $request = false;
         }
 
         if ($request && isset($request->banners)) {
-            $request->banners = maybe_unserialize($request->banners);
+            $request->banners = wp_umbrella_safe_unserialize($request->banners);
         }
 
         if (!empty($request->sections)) {
@@ -278,14 +278,14 @@ class SecuPressEDDUpdater
                 'beta' => !empty($data['beta'])
             ];
 
-            $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => false, 'body' => $api_params]);
+            $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
 
             if (!is_wp_error($request)) {
                 $version_info = json_decode(wp_remote_retrieve_body($request));
             }
 
             if (!empty($version_info) && isset($version_info->sections)) {
-                $version_info->sections = maybe_unserialize($version_info->sections);
+                $version_info->sections = wp_umbrella_safe_unserialize($version_info->sections);
             } else {
                 $version_info = false;
             }
@@ -300,7 +300,7 @@ class SecuPressEDDUpdater
         }
 
         if (!empty($version_info) && isset($version_info->sections['changelog'])) {
-            echo '<div style="background:#fff;padding:10px;">' . $version_info->sections['changelog'] . '</div>';
+            echo '<div style="background:#fff;padding:10px;">' . wp_kses_post($version_info->sections['changelog']) . '</div>';
         }
 
         exit;

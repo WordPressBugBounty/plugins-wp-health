@@ -29,8 +29,9 @@ class Owner extends BaseClient
             curl_setopt($ch, CURLOPT_HEADER, 0);
             curl_setopt($ch, CURLOPT_HTTPGET, true);
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+            $verify = wp_umbrella_should_verify_ssl();
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verify ? 2 : 0);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verify ? 1 : 0);
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json', $authorization
             ]);
@@ -58,7 +59,7 @@ class Owner extends BaseClient
 
             $response = wp_remote_get(WP_UMBRELLA_NEW_API_URL . '/v1/external/me', [
                 'headers' => $this->getHeadersV2($apiKey),
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'timeout' => 40,
             ]);
         } catch (\Exception $e) {
@@ -84,7 +85,7 @@ class Owner extends BaseClient
         try {
             $response = wp_remote_get(WP_UMBRELLA_NEW_API_URL . '/v1/me', [
                 'headers' => $this->getHeadersV2($apiKey),
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'timeout' => 20,
             ]);
         } catch (\Exception $e) {

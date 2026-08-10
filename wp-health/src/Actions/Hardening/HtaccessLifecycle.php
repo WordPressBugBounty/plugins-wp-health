@@ -4,6 +4,7 @@ namespace WPUmbrella\Actions\Hardening;
 use WPUmbrella\Core\Hooks\ActivationHook;
 use WPUmbrella\Core\Hooks\DeactivationHook;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
+use WPUmbrella\Services\Security\HtaccessFile;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -13,11 +14,47 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
 {
     const PENDING_WRITE_OPTION = 'wp_umbrella_htaccess_pending_write';
     const BACKFILL_RETRY_LOCK = 'wp_umbrella_htaccess_uploads_backfill_lock';
+    const RECONCILE_RETRY_LOCK = 'wp_umbrella_htaccess_block_reconcile_lock';
 
     public function hooks()
     {
         add_action('init', [$this, 'maybeCompletePendingWrite']);
+        add_action('admin_init', [$this, 'maybeReconcileBlock']);
         add_action('admin_init', [$this, 'maybeEnsureUploadsBlock']);
+    }
+
+    /**
+     * The option is the source of truth and the file follows it. Covers a block
+     * left behind by an older version, and one the write never produced because
+     * the request died on its verification probes.
+     */
+    public function maybeReconcileBlock()
+    {
+        if (wp_doing_ajax() || !current_user_can('manage_options')) {
+            return;
+        }
+
+        if (!wp_umbrella_get_service('HardeningSettings')->isEnabled('htaccess_umbrella_block')) {
+            return;
+        }
+
+        $htaccess = wp_umbrella_get_service('HtaccessFile');
+
+        if ($htaccess->getBlockVersion() === HtaccessFile::BLOCK_VERSION) {
+            return;
+        }
+
+        if (get_transient(self::RECONCILE_RETRY_LOCK)) {
+            return;
+        }
+
+        set_transient(self::RECONCILE_RETRY_LOCK, 1, 12 * HOUR_IN_SECONDS);
+
+        $result = $htaccess->writeUmbrellaBlock();
+
+        if (isset($result['status']) && $result['status'] === 'ok') {
+            delete_transient(self::RECONCILE_RETRY_LOCK);
+        }
     }
 
     /**
@@ -91,6 +128,7 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
         wp_umbrella_get_service('HtaccessFile')->cleanUmbrellaBlock();
         delete_option(self::PENDING_WRITE_OPTION);
         delete_transient(self::BACKFILL_RETRY_LOCK);
+        delete_transient(self::RECONCILE_RETRY_LOCK);
     }
 
     protected function writeOrDisable()

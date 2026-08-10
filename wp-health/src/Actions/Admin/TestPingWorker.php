@@ -20,21 +20,16 @@ class TestPingWorker implements ExecuteHooksBackend
     {
         $redirect = admin_url('options-general.php?page=wp-umbrella-settings&support=1#wpu-test-ping');
 
+        if (!current_user_can('manage_options')) {
+            wp_safe_redirect($redirect);
+            exit;
+        }
+
         if (!isset($_POST['_wpnonce'])) {
             $this->storeResult([
                 'status' => 'error',
                 'reason' => 'missing_nonce',
                 'message' => __('Missing security nonce on the request. Reload the page and try again.', 'wp-health'),
-            ]);
-            wp_safe_redirect($redirect);
-            exit;
-        }
-
-        if (!current_user_can('manage_options')) {
-            $this->storeResult([
-                'status' => 'error',
-                'reason' => 'forbidden',
-                'message' => __('Your user is not allowed to run this action.', 'wp-health'),
             ]);
             wp_safe_redirect($redirect);
             exit;

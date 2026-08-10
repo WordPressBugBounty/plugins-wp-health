@@ -35,9 +35,11 @@ class Pages implements ExecuteHooksBackend
     {
         $dataWhiteLabel = wp_umbrella_get_service('WhiteLabel')->getData();
 
+        $pluginName = esc_html($dataWhiteLabel['plugin_name']);
+
         add_options_page(
-            $dataWhiteLabel['plugin_name'],
-            $dataWhiteLabel['plugin_name'],
+            $pluginName,
+            $pluginName,
             'manage_options',
             PagesHelper::SETTINGS,
             [$this, 'settings']

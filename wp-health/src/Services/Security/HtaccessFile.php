@@ -8,22 +8,77 @@ if (!defined('ABSPATH')) {
 class HtaccessFile
 {
     const MARKER = 'WP Umbrella';
-    const BLOCK_VERSION = 2;
+    const HEADERS_MARKER = 'WP Umbrella Headers';
+    const BLOCK_VERSION = 4;
     const UPLOADS_BLOCK_VERSION = 1;
     const SANDBOX_DIRNAME = 'wpu-htcheck';
     const CANARY_DIRNAME = 'wpu-canary';
     const UPLOADS_PROBE_TRANSIENT = 'wp_umbrella_uploads_php_probe';
     const CANARY_OUTPUT = 'wpu-canary-ok';
 
+    /**
+     * Every rule of the block is relative to the WordPress directory, and Apache
+     * resolves a RewriteRule pattern against the directory holding the file, so
+     * ABSPATH is the only place the block does what it claims. get_home_path()
+     * would answer the document root, which on a "WordPress in its own
+     * directory" install is neither the same directory nor reliably resolvable:
+     * it derives the path from SCRIPT_FILENAME, and a request routed by the root
+     * index.php makes it fall back to "/".
+     */
     public function getPath()
     {
-        if (!function_exists('get_home_path')) {
-            require_once ABSPATH . 'wp-admin/includes/file.php';
+        return rtrim(ABSPATH, '/\\') . '/.htaccess';
+    }
+
+    /**
+     * Apache inherits Header directives into subdirectories but not RewriteRule
+     * patterns, so the two halves of the block belong in two different files on
+     * a "WordPress in its own directory" install: the rules in ABSPATH, where
+     * they match, and the headers at the document root, which is the only
+     * .htaccess Apache reads for a front page served by the root index.php.
+     */
+    public function getHeadersPath()
+    {
+        return $this->getHomePath() . '/.htaccess';
+    }
+
+    public function usesSeparateHeadersFile()
+    {
+        return $this->getHeadersPath() !== $this->getPath();
+    }
+
+    /**
+     * Derived from ABSPATH rather than get_home_path(), which resolves through
+     * SCRIPT_FILENAME and answers "/" on the very layout this exists for.
+     */
+    protected function getHomePath()
+    {
+        $abspath = rtrim(ABSPATH, '/\\');
+        $home = $this->normalizeUrl(get_option('home'));
+        $siteurl = $this->normalizeUrl(get_option('siteurl'));
+
+        if ($home === '' || $siteurl === '' || strcasecmp($home, $siteurl) === 0) {
+            return $abspath;
         }
 
-        $home = function_exists('get_home_path') ? get_home_path() : ABSPATH;
+        if (stripos($siteurl, $home . '/') !== 0) {
+            return $abspath;
+        }
 
-        return rtrim($home, '/\\') . '/.htaccess';
+        $suffix = '/' . trim(substr($siteurl, strlen($home)), '/');
+
+        return substr($abspath, -strlen($suffix)) === $suffix
+            ? substr($abspath, 0, -strlen($suffix))
+            : $abspath;
+    }
+
+    protected function normalizeUrl($url)
+    {
+        if (!is_string($url)) {
+            return '';
+        }
+
+        return rtrim(preg_replace('#^https?://#i', '', $url), '/');
     }
 
     public function exists()
@@ -82,7 +137,40 @@ class HtaccessFile
         return $contents !== '' && strpos($contents, '# BEGIN ' . self::MARKER) !== false;
     }
 
+    /**
+     * The security headers ride along with the block because a full page cache
+     * answers before the plugins load, and a header added by PHP never reaches
+     * a visitor who is served a cached page. When the document root is a
+     * different directory they move to their own block over there instead.
+     */
     public function getUmbrellaBlockLines()
+    {
+        $lines = $this->getHardeningLines();
+
+        if (!$this->usesSeparateHeadersFile() && $this->securityHeadersEnabled()) {
+            $lines = array_merge($lines, $this->getSecurityHeaderLines());
+        }
+
+        return $lines;
+    }
+
+    protected function securityHeadersEnabled()
+    {
+        return wp_umbrella_get_service('HardeningSettings')->isEnabled('security_headers');
+    }
+
+    protected function getSecurityHeaderLines()
+    {
+        return [
+            '<IfModule mod_headers.c>',
+            'Header always set X-Frame-Options "SAMEORIGIN"',
+            'Header always set X-Content-Type-Options "nosniff"',
+            'Header always set Referrer-Policy "strict-origin-when-cross-origin"',
+            '</IfModule>',
+        ];
+    }
+
+    protected function getHardeningLines()
     {
         $extensions = '(php[0-9]?|phtml|sh)';
 
@@ -173,16 +261,19 @@ class HtaccessFile
             return false;
         }
 
-        $version = $this->getBlockVersion();
-
-        if ($version === 1) {
-            $canonical = $this->getLegacyBlockLines();
-        } elseif ($version === self::BLOCK_VERSION) {
-            $canonical = $this->getUmbrellaBlockLines();
-        } else {
-            return false;
+        if ($this->getBlockVersion() === 1) {
+            return $this->matchesLines($inner, $this->getLegacyBlockLines());
         }
 
+        // A block written before the headers moved into it is still one of ours.
+        // Reading the pending upgrade as tampering would raise a security alert
+        // on every hardened site the day this ships.
+        return $this->matchesLines($inner, $this->getUmbrellaBlockLines())
+            || $this->matchesLines($inner, $this->getHardeningLines());
+    }
+
+    protected function matchesLines($inner, array $canonical)
+    {
         return $this->normalizeLines($inner) === $this->normalizeLines(implode("\n", $canonical));
     }
 
@@ -261,6 +352,14 @@ class HtaccessFile
         $uploadsBlockExisted = $this->hasUploadsBlock();
         $uploads = $this->writeUploadsBlock(false);
 
+        // Written before the self-check so one round of probes covers all three
+        // files, and rolled back with them if the site stops answering.
+        $headersPath = $this->getHeadersPath();
+        $headersSnapshot = file_exists($headersPath) ? file_get_contents($headersPath) : null;
+        $headers = $this->securityHeadersEnabled()
+            ? $this->writeSecurityHeadersBlock()
+            : $this->cleanSecurityHeadersBlock();
+
         try {
             $selfCheck = $this->selfCheck();
         } catch (\Throwable $error) {
@@ -270,6 +369,10 @@ class HtaccessFile
         if ($selfCheck !== true) {
             $this->restore($path, $snapshot);
 
+            if ($this->usesSeparateHeadersFile()) {
+                $this->restore($headersPath, $headersSnapshot);
+            }
+
             if (!$uploadsBlockExisted && isset($uploads['status']) && $uploads['status'] === 'ok') {
                 $this->cleanUploadsBlock();
             }
@@ -277,7 +380,7 @@ class HtaccessFile
             return ['status' => 'error', 'reason' => 'self_check_failed'];
         }
 
-        return ['status' => 'ok', 'uploads' => $uploads];
+        return ['status' => 'ok', 'uploads' => $uploads, 'headers' => $headers];
     }
 
     public function writeUploadsBlock($verifyDirectives = true)
@@ -321,6 +424,66 @@ class HtaccessFile
         $written = insert_with_markers($path, self::MARKER, $lines);
 
         return $written ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
+    }
+
+    public function hasSecurityHeadersBlock()
+    {
+        $path = $this->getHeadersPath();
+
+        if (!file_exists($path) || !is_readable($path)) {
+            return false;
+        }
+
+        $contents = file_get_contents($path);
+
+        return is_string($contents) && strpos($contents, '# BEGIN ' . self::HEADERS_MARKER) !== false;
+    }
+
+    public function writeSecurityHeadersBlock()
+    {
+        if (!$this->usesSeparateHeadersFile()) {
+            return ['status' => 'not_applicable', 'reason' => 'same_file'];
+        }
+
+        $path = $this->getHeadersPath();
+
+        if (file_exists($path)) {
+            if (!is_writable($path)) {
+                return ['status' => 'error', 'reason' => 'not_writable'];
+            }
+        } elseif (!is_writable(dirname($path))) {
+            return ['status' => 'error', 'reason' => 'not_writable'];
+        }
+
+        if (!function_exists('insert_with_markers')) {
+            require_once ABSPATH . 'wp-admin/includes/misc.php';
+        }
+
+        $written = insert_with_markers($path, self::HEADERS_MARKER, $this->getSecurityHeaderLines());
+
+        return $written ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
+    }
+
+    public function cleanSecurityHeadersBlock()
+    {
+        if (!$this->usesSeparateHeadersFile()) {
+            return ['status' => 'noop', 'reason' => 'same_file'];
+        }
+
+        $path = $this->getHeadersPath();
+
+        if (!file_exists($path) || !$this->hasSecurityHeadersBlock()) {
+            return ['status' => 'noop', 'reason' => 'no_block'];
+        }
+
+        if (!is_writable($path)) {
+            return ['status' => 'error', 'reason' => 'not_writable'];
+        }
+
+        $stripped = $this->stripBlock(file_get_contents($path), self::HEADERS_MARKER);
+        $written = file_put_contents($path, $stripped);
+
+        return $written !== false ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
     }
 
     public function cleanUploadsBlock()
@@ -570,7 +733,7 @@ class HtaccessFile
         $response = wp_remote_get($url, [
             'timeout' => 10,
             'redirection' => 0,
-            'sslverify' => false,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
         ]);
 
         if (is_wp_error($response)) {
@@ -605,6 +768,7 @@ class HtaccessFile
         }
 
         $result['uploads'] = $this->cleanUploadsBlock();
+        $result['headers'] = $this->cleanSecurityHeadersBlock();
 
         return $result;
     }
@@ -630,10 +794,10 @@ class HtaccessFile
         return $written !== false ? ['status' => 'ok'] : ['status' => 'error', 'reason' => 'write_failed'];
     }
 
-    protected function stripBlock($contents)
+    protected function stripBlock($contents, $marker = self::MARKER)
     {
-        $begin = '# BEGIN ' . self::MARKER;
-        $end = '# END ' . self::MARKER;
+        $begin = '# BEGIN ' . $marker;
+        $end = '# END ' . $marker;
 
         $lines = preg_split('/\r\n|\r|\n/', $contents);
         $result = [];

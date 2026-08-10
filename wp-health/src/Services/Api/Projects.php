@@ -13,12 +13,11 @@ class Projects extends BaseClient
      */
     public function validateSecretToken($data, $token = null)
     {
-        add_filter('https_ssl_verify', '__return_false');
         try {
             $response = wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/projects/validation-secret-token', [
                 'headers' => $this->getHeadersV2($token),
                 'body' => json_encode($data),
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'timeout' => 50,
             ]));
         } catch (\Exception $e) {
@@ -35,12 +34,11 @@ class Projects extends BaseClient
      */
     public function createProjectOnApplication($data, $token = null)
     {
-        add_filter('https_ssl_verify', '__return_false');
         try {
             $response = wp_umbrella_handle_outbound_response(wp_remote_post(WP_UMBRELLA_NEW_API_URL . '/v1/external/projects', [
                 'headers' => $this->getHeadersV2($token),
                 'body' => json_encode($data),
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'timeout' => 50,
             ]));
         } catch (\Exception $e) {

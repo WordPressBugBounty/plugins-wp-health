@@ -5,6 +5,10 @@ use WPUmbrella\Helpers\Controller;
 
 class UmbrellaRequest
 {
+    const REST_PREFIX = '/wp-json/wp-umbrella';
+
+    const REST_NAMESPACE = '/wp-umbrella';
+
     protected $checkTypeQuery = null;
 
     protected $method = null;
@@ -79,9 +83,6 @@ class UmbrellaRequest
             $this->checkTypeQuery = 'get';
         }
 
-        // A signed one-click login carries no x-umbrella (the wp_token is gone
-        // from the browser). Select the bucket from the login signature param so
-        // getParam reads the same source the signature is verified against.
         if ($this->checkTypeQuery === null && isset($this->request['x-umb-login-sig'])) {
             $this->checkTypeQuery = 'post';
         }
@@ -129,6 +130,46 @@ class UmbrellaRequest
         }
 
         return  $value;
+    }
+
+    /**
+     * @return boolean
+     */
+    public function isLoginRoute()
+    {
+        if ($this->getAction() !== '/v1/login') {
+            return false;
+        }
+
+        $requestedRoute = $this->getRequestedRoute();
+
+        return $requestedRoute === null || $requestedRoute === '/v1/login';
+    }
+
+    /**
+     * Route asked for by the URL itself, or null when the request does not
+     * carry one.
+     *
+     * @return string|null
+     */
+    public function getRequestedRoute()
+    {
+        $restRoute = isset($this->query['rest_route']) ? (string) $this->query['rest_route'] : '';
+        if ($restRoute !== '' && strpos($restRoute, self::REST_NAMESPACE) === 0) {
+            return untrailingslashit(substr($restRoute, strlen(self::REST_NAMESPACE)));
+        }
+
+        $path = $this->getRequestPath();
+        if (!is_string($path)) {
+            return null;
+        }
+
+        $position = strpos($path, self::REST_PREFIX);
+        if ($position === false) {
+            return null;
+        }
+
+        return untrailingslashit(substr($path, $position + strlen(self::REST_PREFIX)));
     }
 
     public function getRequestFrom()

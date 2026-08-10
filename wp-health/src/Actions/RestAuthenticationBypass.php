@@ -5,8 +5,6 @@ use WPUmbrella\Core\Hooks\ExecuteHooks;
 
 class RestAuthenticationBypass implements ExecuteHooks
 {
-    const ROUTE_PREFIX = '/wp-json/wp-umbrella/';
-
     const REST_ROUTE_PREFIX = '/wp-umbrella/';
 
     public function hooks()
@@ -25,12 +23,25 @@ class RestAuthenticationBypass implements ExecuteHooks
 
     protected function isUmbrellaRoute()
     {
-        $uri = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '';
-        if ($uri !== '' && strpos($uri, self::ROUTE_PREFIX) !== false) {
-            return true;
+        $route = $this->getResolvedRoute();
+
+        return $route !== '' && strpos($route, self::REST_ROUTE_PREFIX) === 0;
+    }
+
+    /**
+     * @return string
+     */
+    protected function getResolvedRoute()
+    {
+        if (isset($GLOBALS['wp']) && !empty($GLOBALS['wp']->query_vars['rest_route'])) {
+            return '/' . ltrim((string) $GLOBALS['wp']->query_vars['rest_route'], '/');
         }
 
-        $restRoute = isset($_GET['rest_route']) ? (string) $_GET['rest_route'] : '';
-        return $restRoute !== '' && strpos($restRoute, self::REST_ROUTE_PREFIX) === 0;
+        $path = isset($_SERVER['PATH_INFO']) ? (string) $_SERVER['PATH_INFO'] : '';
+        if ($path !== '') {
+            return '/' . ltrim($path, '/');
+        }
+
+        return '';
     }
 }

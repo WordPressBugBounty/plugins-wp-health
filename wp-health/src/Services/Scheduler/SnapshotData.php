@@ -27,7 +27,7 @@ class SnapshotData implements Scheduler
                 [
                     'timeout' => 30,
                     'blocking' => false,
-                    'sslverify' => false,
+                    'sslverify' => wp_umbrella_should_verify_ssl(),
                     'user-agent' => 'WPUmbrella',
                     'body' => [
                         'action' => 'wp_umbrella_snapshot_data',

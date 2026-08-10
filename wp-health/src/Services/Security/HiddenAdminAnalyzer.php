@@ -14,6 +14,19 @@ class HiddenAdminAnalyzer
     const PROVENANCE_REASON_PASSWORD_HASH = 'password_hash';
     const PROVENANCE_REASON_MISSING_USER_META = 'missing_user_meta';
     const PROVENANCE_REASON_CAPABILITY_SERIALIZATION = 'capability_serialization';
+    const PROVENANCE_REASON_CREATED_WITH_UNLISTED_CODE = 'created_with_unlisted_code';
+    const PROVENANCE_REASON_LOGIN_MATCHES_SITE_HOST = 'login_matches_site_host';
+
+    const PROVENANCE_STRONG_REASONS = [
+        self::PROVENANCE_REASON_PASSWORD_HASH,
+        self::PROVENANCE_REASON_MISSING_USER_META,
+        self::PROVENANCE_REASON_CAPABILITY_SERIALIZATION,
+        self::PROVENANCE_REASON_CREATED_WITH_UNLISTED_CODE,
+    ];
+
+    const UNLISTED_CODE_WINDOW = 600;
+
+    const MIN_SITE_HOST_LABEL_LENGTH = 5;
 
     public function analyze()
     {
@@ -117,7 +130,7 @@ class HiddenAdminAnalyzer
 
         $users = $wpdb->get_results(
             $wpdb->prepare(
-                "SELECT ID, user_login, user_pass FROM {$wpdb->users} WHERE ID IN ($placeholders)",
+                "SELECT ID, user_login, user_pass, user_registered FROM {$wpdb->users} WHERE ID IN ($placeholders)",
                 $userIds
             )
         );
@@ -143,6 +156,8 @@ class HiddenAdminAnalyzer
         }
 
         $suspects = [];
+        $unlistedCodeTimes = $this->getUnlistedCodeTimes();
+        $siteHostLabel = $this->getSiteHostLabel();
 
         foreach ($users as $user) {
             $id = (int) $user->ID;
@@ -163,16 +178,124 @@ class HiddenAdminAnalyzer
                 $reasons[] = self::PROVENANCE_REASON_CAPABILITY_SERIALIZATION;
             }
 
+            if ($this->matchesUnlistedCodeWindow($user->user_registered, $unlistedCodeTimes)) {
+                $reasons[] = self::PROVENANCE_REASON_CREATED_WITH_UNLISTED_CODE;
+            }
+
+            if ($this->loginMatchesSiteHost($user->user_login, $siteHostLabel)) {
+                $reasons[] = self::PROVENANCE_REASON_LOGIN_MATCHES_SITE_HOST;
+            }
+
             if (!empty($reasons)) {
                 $suspects[] = [
                     'user_id' => $id,
                     'user_login' => $user->user_login,
                     'reasons' => $reasons,
+                    'confidence' => $this->confidence($reasons),
                 ];
             }
         }
 
         return $suspects;
+    }
+
+    /**
+     * @param string[] $reasons
+     * @return string
+     */
+    protected function confidence($reasons)
+    {
+        foreach ($reasons as $reason) {
+            if (in_array($reason, self::PROVENANCE_STRONG_REASONS, true)) {
+                return 'high';
+            }
+        }
+
+        return 'low';
+    }
+
+    /**
+     * @return int[]
+     */
+    protected function getUnlistedCodeTimes()
+    {
+        if (!function_exists('wp_umbrella_get_service')) {
+            return [];
+        }
+
+        try {
+            return wp_umbrella_get_service('UnlistedCodeAnalyzer')->getModificationTimes();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @param mixed $registered
+     * @param int[] $times
+     * @return bool
+     */
+    protected function matchesUnlistedCodeWindow($registered, $times)
+    {
+        if (empty($times) || !is_string($registered) || $registered === '') {
+            return false;
+        }
+
+        $timestamp = strtotime($registered . ' UTC');
+
+        if ($timestamp === false) {
+            return false;
+        }
+
+        foreach ($times as $time) {
+            if (abs($time - $timestamp) <= self::UNLISTED_CODE_WINDOW) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return string|null
+     */
+    protected function getSiteHostLabel()
+    {
+        $host = parse_url(home_url(), PHP_URL_HOST);
+
+        if (!is_string($host) || $host === '') {
+            return null;
+        }
+
+        $host = preg_replace('/^www\./i', '', strtolower($host));
+        $parts = explode('.', $host);
+        $label = preg_replace('/[^a-z0-9]/', '', $parts[0]);
+
+        if (!is_string($label) || strlen($label) < self::MIN_SITE_HOST_LABEL_LENGTH) {
+            return null;
+        }
+
+        return $label;
+    }
+
+    /**
+     * @param mixed       $login
+     * @param string|null $label
+     * @return bool
+     */
+    protected function loginMatchesSiteHost($login, $label)
+    {
+        if ($label === null || !is_string($login) || $login === '') {
+            return false;
+        }
+
+        $normalized = preg_replace('/[^a-z0-9]/', '', strtolower($login));
+
+        if (!is_string($normalized) || $normalized === '' || $normalized === $label) {
+            return false;
+        }
+
+        return strpos($normalized, $label) !== false;
     }
 
     /**

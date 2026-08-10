@@ -342,20 +342,20 @@ class ValidationApiKey implements ExecuteHooksBackend
 
         $args = [
             'timeout' => 5,
-            'sslverify' => false,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
             'redirection' => 0,
         ];
 
         $responseNoAuth = wp_remote_get($restUrl, $args);
 
         if (is_wp_error($responseNoAuth)) {
-            error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] no-auth probe failed: ' . $responseNoAuth->get_error_message());
+            wp_umbrella_debug_log('[probeHttpAuthRequirement] no-auth probe failed: ' . $responseNoAuth->get_error_message());
             return ['determined' => false];
         }
 
         $status = (int) wp_remote_retrieve_response_code($responseNoAuth);
         $wwwAuth = wp_remote_retrieve_header($responseNoAuth, 'www-authenticate');
-        error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] url=' . $restUrl . ' no-auth status=' . $status . ' www-authenticate=' . (is_array($wwwAuth) ? implode(',', $wwwAuth) : ($wwwAuth ?: '<none>')));
+        wp_umbrella_debug_log('[probeHttpAuthRequirement] url=' . $restUrl . ' no-auth status=' . $status . ' www-authenticate=' . (is_array($wwwAuth) ? implode(',', $wwwAuth) : ($wwwAuth ?: '<none>')));
 
         if ($status >= 200 && $status < 400) {
             return ['determined' => true, 'needed' => false];
@@ -381,12 +381,12 @@ class ValidationApiKey implements ExecuteHooksBackend
         $responseWithAuth = wp_remote_get($restUrl, $argsWithAuth);
 
         if (is_wp_error($responseWithAuth)) {
-            error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] with-auth probe failed: ' . $responseWithAuth->get_error_message());
+            wp_umbrella_debug_log('[probeHttpAuthRequirement] with-auth probe failed: ' . $responseWithAuth->get_error_message());
             return ['determined' => false];
         }
 
         $statusWithAuth = (int) wp_remote_retrieve_response_code($responseWithAuth);
-        error_log('[DEBUG-TOKEN] [probeHttpAuthRequirement] with-auth status=' . $statusWithAuth);
+        wp_umbrella_debug_log('[probeHttpAuthRequirement] with-auth status=' . $statusWithAuth);
 
         if ($statusWithAuth >= 200 && $statusWithAuth < 400) {
             return ['determined' => true, 'needed' => true, 'valid' => true];

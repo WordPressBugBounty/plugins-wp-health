@@ -5,6 +5,8 @@ use WPUmbrella\Core\Models\AbstractController;
 
 class UploadModule extends AbstractController
 {
+    const ALLOWED_FILENAMES = ['cloner.php', 'restore.php'];
+
     protected function withFile()
     {
         if ($_FILES['file']['error'] !== UPLOAD_ERR_OK) {
@@ -14,8 +16,14 @@ class UploadModule extends AbstractController
             ]);
         }
 
-        $filename = basename($_FILES['file']['name']);
-        $filename = sanitize_file_name($filename);
+        $filename = sanitize_file_name(basename($_FILES['file']['name']));
+
+        if (!in_array($filename, self::ALLOWED_FILENAMES, true)) {
+            return $this->returnResponse([
+                'success' => false,
+                'code' => 'invalid_filename',
+            ]);
+        }
 
         $destination = ABSPATH . $filename;
 
@@ -45,16 +53,23 @@ class UploadModule extends AbstractController
             ]);
         }
 
-        $data = $params['file'];
+        $filename = sanitize_file_name(basename((string) $params['filename']));
+
+        if (!in_array($filename, self::ALLOWED_FILENAMES, true)) {
+            return $this->returnResponse([
+                'success' => false,
+                'code' => 'invalid_filename',
+            ]);
+        }
 
         $str = base64_decode($params['file']);
 
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
 
-        $result = file_put_contents($source . $params['filename'], $str);
+        $result = file_put_contents($source . $filename, $str);
 
         if (function_exists('opcache_invalidate')) {
-            $result = opcache_invalidate($source . $params['filename'], true);
+            $result = opcache_invalidate($source . $filename, true);
             if (!$result) {
                 if (function_exists('opcache_reset')) {
                     opcache_reset();

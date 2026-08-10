@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: v2.26.2
+Stable tag: v2.27.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,16 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.27.0 (08-10-2026) =
+- Security: fixed a cross-site request forgery vulnerability.
+- Added: WP Umbrella now reports the code that runs on your site without ever showing up in your plugin list: must-use plugins, drop-ins, and plugin folders hidden from the plugins screen.
+- Added: files edited from the WordPress plugin editor are now recorded in your Activity Log.
+- Improved: suspicious administrator accounts are now reported with a confidence level, so a single weak signal no longer raises an alert.
+- Improved: the protection of your uploads folder is now verified on your live site, so sites served behind a reverse proxy no longer show protections that were not actually applied.
+- Fixed: on sites where WordPress is installed in a subfolder, the .htaccess hardening could not be turned on and wrongly reported the file as not writable.
+- Improved: the security headers are now set by your server, so they still apply on pages delivered by a cache plugin.
+- Improved: code quality improvements under the hood.
 
 = 2.26.2 (08-07-2026) =
 - Fixed: some sites stopped syncing with WP Umbrella and appeared as disconnected when another plugin reported its update information in an unexpected format.

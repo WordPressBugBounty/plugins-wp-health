@@ -73,7 +73,7 @@ class ReallySimpleSSLProUpdate
 
             $response = wp_remote_post(REALLY_SIMPLE_SSL_URL, [
                 'timeout' => 15,
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'body' => [
                     'edd_action' => 'get_version',
                     'license' => $licenseKey,

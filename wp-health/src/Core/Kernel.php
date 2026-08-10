@@ -212,8 +212,7 @@ abstract class Kernel
             }
         }
 
-        // One-click login signed via request params (browser form, no headers).
-        if ($action === '/v1/login' && $request->getParam('x-umb-login-sig')) {
+        if ($request->isLoginRoute() && $request->getParam('x-umb-login-sig')) {
             if ($verifier->verifyLogin(
                 $request->getParam('user_id'),
                 $request->getParam('x-umb-login-sig'),

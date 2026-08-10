@@ -991,32 +991,6 @@ abstract class Controllers
                     ]
                 ]
             ],
-            '/v1/restores/download' => [
-                'route' => '/restores/download',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Restore\V2\RestoreDownload::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ]
-                ]
-            ],
-            '/v1/restores/unzip' => [
-                'route' => '/restores/unzip',
-                'methods' => [
-                    [
-                        'method' => 'POST',
-                        'class' => \WPUmbrella\Controller\Restore\V2\RestoreUnzip::class,
-                        'options' => [
-                            'prevent_active' => true,
-                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
-                        ]
-                    ]
-                ]
-            ],
             '/v1/maintenance' => [
                 'route' => '/maintenance',
                 'methods' => [

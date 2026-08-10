@@ -5,6 +5,7 @@ namespace WPUmbrella\Actions\ActivityLog\Framework;
 use WPUmbrella\Actions\ActivityLog\Sensors\AiConnectorSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\CommentTermMenuSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\ContentSensor;
+use WPUmbrella\Actions\ActivityLog\Sensors\FileEditSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\PluginSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\ThemeCoreOptionSensor;
 use WPUmbrella\Actions\ActivityLog\Sensors\UserSensor;
@@ -112,6 +113,7 @@ class SensorBootstrap implements ExecuteHooks, ActivationHook, DeactivationHook
             new AiConnectorSensor($buffer),
             new XmlRpcSensor($buffer),
             new WooCommerceSensor($buffer),
+            new FileEditSensor($buffer),
         ];
     }
 

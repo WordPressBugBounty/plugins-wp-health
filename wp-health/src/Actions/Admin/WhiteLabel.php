@@ -77,8 +77,8 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
 						const cell = document.querySelector('input[value=\'wp-health/wp-health.php\']').closest('tr').querySelector('.plugin-title');
 
 						if(cell){
-							cell.querySelector('strong').innerHTML = "<?php echo $whiteLabelData['plugin_name']; ?>";
-							cell.querySelector('img').src = "<?php echo $whiteLabelData['logo']; ?>";
+							cell.querySelector('strong').textContent = <?php echo wp_json_encode($whiteLabelData['plugin_name']); ?>;
+							cell.querySelector('img').src = <?php echo wp_json_encode(esc_url_raw($whiteLabelData['logo'])); ?>;
 							cell.querySelector('a').innerHTML = '';
 						}
 

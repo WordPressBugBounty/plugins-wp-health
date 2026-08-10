@@ -182,7 +182,7 @@ class SecuPressProAdminUpdater extends SecuPressEDDUpdater
             'beta' => !empty($data['beta']),
         ];
 
-        $response = wp_remote_post($this->plugin_api_url, ['timeout' => 15, 'sslverify' => false, 'body' => $api_params]);
+        $response = wp_remote_post($this->plugin_api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
 
         if (is_wp_error($response)) {
             return false;
@@ -194,7 +194,7 @@ class SecuPressProAdminUpdater extends SecuPressEDDUpdater
             return false;
         }
 
-        $response = (object) array_map('maybe_unserialize', (array) $response);
+        $response = (object) array_map('wp_umbrella_safe_unserialize', (array) $response);
         $response->name = SECUPRESS_PLUGIN_NAME;
         $response->sections = array_filter((array) $response->sections);
 

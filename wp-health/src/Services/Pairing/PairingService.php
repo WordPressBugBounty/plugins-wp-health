@@ -137,7 +137,7 @@ class PairingService
                 'site_url' => site_url(),
                 'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
             ]),
-            'sslverify' => false,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
 
@@ -174,7 +174,7 @@ class PairingService
                 'project_id' => $bodyProjectId,
                 'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
             ]),
-            'sslverify' => false,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
 

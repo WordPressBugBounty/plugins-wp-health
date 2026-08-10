@@ -70,6 +70,10 @@ class HardeningSettings
             $settings[$key] = $this->castBoolean($params[$key]);
         }
 
+        // The block renders from the settings, so they have to be readable
+        // before it is written. A failed write reverts its own option below.
+        update_option(self::OPTION_KEY, $settings);
+
         $settings = $this->syncHtaccessUmbrellaBlock($previous, $settings);
 
         update_option(self::OPTION_KEY, $settings);
@@ -82,31 +86,42 @@ class HardeningSettings
         $before = isset($previous['htaccess_umbrella_block']) && $previous['htaccess_umbrella_block'];
         $after = isset($settings['htaccess_umbrella_block']) && $settings['htaccess_umbrella_block'];
 
-        if ($before === $after) {
+        // The block carries the security headers, so that option changing is
+        // enough to make the file stale even when the block itself stays on.
+        $headersChanged = $this->isSecurityHeadersEnabled($previous) !== $this->isSecurityHeadersEnabled($settings);
+
+        if ($before === $after && !($after && $headersChanged)) {
             return $settings;
         }
 
         $htaccess = wp_umbrella_get_service('HtaccessFile');
 
-        if ($after) {
-            $result = $htaccess->writeUmbrellaBlock();
+        if (!$after) {
+            $result = $htaccess->cleanUmbrellaBlock();
             $this->lastHtaccessResult = $result;
 
-            if (!isset($result['status']) || $result['status'] !== 'ok') {
-                $settings['htaccess_umbrella_block'] = false;
+            if (isset($result['status']) && $result['status'] === 'error') {
+                $settings['htaccess_umbrella_block'] = true;
             }
 
             return $settings;
         }
 
-        $result = $htaccess->cleanUmbrellaBlock();
+        $result = $htaccess->writeUmbrellaBlock();
         $this->lastHtaccessResult = $result;
 
-        if (isset($result['status']) && $result['status'] === 'error') {
-            $settings['htaccess_umbrella_block'] = true;
+        if (!isset($result['status']) || $result['status'] !== 'ok') {
+            // A rewrite that failed left the previous block in place, so only an
+            // activation gets reverted here.
+            $settings['htaccess_umbrella_block'] = $before;
         }
 
         return $settings;
+    }
+
+    protected function isSecurityHeadersEnabled($settings)
+    {
+        return isset($settings['security_headers']) && $settings['security_headers'];
     }
 
     public function getStates()

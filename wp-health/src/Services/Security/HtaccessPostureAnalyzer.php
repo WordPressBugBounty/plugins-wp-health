@@ -34,10 +34,13 @@ class HtaccessPostureAnalyzer
 
         $blockVersion = $htaccessFile->getBlockVersion();
         $blockIntact = $this->isBlockIntact($htaccessFile, $blockVersion);
+        $probe = wp_umbrella_get_service('StaticFileProtectionProbe');
 
         return [
             'exists' => $exists,
             'server' => $server,
+            'edge_server' => $probe->getEdgeServer(),
+            'static_files_protected' => $probe->getState(),
             'directives' => $directives,
             'uploads_php_execution' => $uploadsExecution,
             'uploads_block_present' => $htaccessFile->hasUploadsBlock(),

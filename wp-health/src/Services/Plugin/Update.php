@@ -731,7 +731,7 @@ class Update extends BaseManageUpdate
         $args = [
             'timeout' => 45,
             'cookies' => [],
-            'sslverify' => false,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
             'body' => [
                 'action' => 'wp_umbrella_update_admin_request',
                 'nonce' => $nonce,

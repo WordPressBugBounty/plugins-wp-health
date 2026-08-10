@@ -18,6 +18,10 @@ class Migration implements ExecuteHooks
 
     public function ensurePaired()
     {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
         $pairingService = wp_umbrella_get_service('PairingService');
 
         if (!$pairingService->shouldStartPairing()) {
@@ -59,6 +63,10 @@ class Migration implements ExecuteHooks
 
     public function upgrader()
     {
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
         $currentVersion = get_option('wphealth_version');
 
         if (version_compare($currentVersion, WP_UMBRELLA_VERSION, '<')) {

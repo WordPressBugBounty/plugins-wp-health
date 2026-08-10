@@ -80,6 +80,15 @@ class MoveBackupModule extends AbstractController
         $wp_filesystem->put_contents($outputFilePath, "<?php \n" . $outputContent, 0755);
     }
 
+    /**
+     * @param string $value
+     * @return string
+     */
+    protected function escapeForSingleQuotedString($value)
+    {
+        return str_replace(['\\', "'"], ['\\\\', "\\'"], (string) $value);
+    }
+
     protected function getWriteDiagnostics($destinationPath)
     {
         $directory = dirname($destinationPath);
@@ -119,6 +128,13 @@ class MoveBackupModule extends AbstractController
             ]);
         }
 
+        if (!preg_match('/^[A-Za-z0-9_-]{1,128}$/', $requestId)) {
+            return $this->returnResponse([
+                'success' => false,
+                'code' => 'invalid_request_id',
+            ]);
+        }
+
         try {
             // Initialize the WordPress Filesystem
             require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -139,17 +155,14 @@ class MoveBackupModule extends AbstractController
 
             $fileContent = str_replace("define('UMBRELLA_BACKUP_KEY', '[[UMBRELLA_BACKUP_KEY]]');", "define('UMBRELLA_BACKUP_KEY', '" . $requestId . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DEPLOYED_AT', '[[UMBRELLA_DEPLOYED_AT]]');", "define('UMBRELLA_DEPLOYED_AT', " . time() . ');', $fileContent);
-            $fileContent = str_replace("define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');", "define('UMBRELLA_DB_HOST', '" . $dbHost . "');", $fileContent);
-            $fileContent = str_replace("define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');", "define('UMBRELLA_DB_NAME', '" . DB_NAME . "');", $fileContent);
-            $fileContent = str_replace("define('UMBRELLA_DB_USER', '[[UMBRELLA_DB_USER]]');", "define('UMBRELLA_DB_USER', '" . DB_USER . "');", $fileContent);
+            $fileContent = str_replace("define('UMBRELLA_DB_HOST', '[[UMBRELLA_DB_HOST]]');", "define('UMBRELLA_DB_HOST', '" . $this->escapeForSingleQuotedString($dbHost) . "');", $fileContent);
+            $fileContent = str_replace("define('UMBRELLA_DB_NAME', '[[UMBRELLA_DB_NAME]]');", "define('UMBRELLA_DB_NAME', '" . $this->escapeForSingleQuotedString(DB_NAME) . "');", $fileContent);
+            $fileContent = str_replace("define('UMBRELLA_DB_USER', '[[UMBRELLA_DB_USER]]');", "define('UMBRELLA_DB_USER', '" . $this->escapeForSingleQuotedString(DB_USER) . "');", $fileContent);
             $fileContent = str_replace("define('UMBRELLA_DB_SSL', '[[UMBRELLA_DB_SSL]]');", "define('UMBRELLA_DB_SSL', " . (defined('DB_SSL') ? 'true' : 'false') . ');', $fileContent);
 
-            $password = DB_PASSWORD;
-            // Escape backslashes first, then single quotes (for single-quoted PHP strings)
-            $escapedPassword = str_replace(['\\', "'"], ['\\\\', "\\'"], $password);
             $fileContent = str_replace(
                 "define('UMBRELLA_DB_PASSWORD', '[[UMBRELLA_DB_PASSWORD]]');",
-                "define('UMBRELLA_DB_PASSWORD', '" . $escapedPassword . "');",
+                "define('UMBRELLA_DB_PASSWORD', '" . $this->escapeForSingleQuotedString(DB_PASSWORD) . "');",
                 $fileContent
             );
 

@@ -15,7 +15,17 @@ class Snapshot
             'warnings' => $wordpressData,
             'themes' => $themes,
             'database_optimization' => $databaseOptimization,
+            'unlisted_code' => $this->getUnlistedCode(),
         ];
+    }
+
+    protected function getUnlistedCode()
+    {
+        try {
+            return wp_umbrella_get_service('UnlistedCodeAnalyzer')->analyze();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function handle()

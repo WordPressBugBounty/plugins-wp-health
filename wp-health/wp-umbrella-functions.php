@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.26.2');
+    define('WP_UMBRELLA_VERSION', '2.27.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -284,11 +284,50 @@ function wp_umbrella_generate_random_string($length = 64)
 {
     $randomCharacters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+    $maxIndex = strlen($randomCharacters) - 1;
     $randomString = '';
-    for ($i = 0; $i < $length; $i++) {
-        $randomString .= $randomCharacters[rand(0, strlen($randomCharacters) - 1)];
+
+    try {
+        for ($i = 0; $i < $length; $i++) {
+            $randomString .= $randomCharacters[random_int(0, $maxIndex)];
+        }
+    } catch (\Exception $e) {
+        return wp_generate_password($length, false);
     }
+
     return $randomString;
+}
+
+/**
+ * maybe_unserialize() without object instantiation.
+ *
+ * @param mixed $value
+ * @return mixed
+ */
+function wp_umbrella_safe_unserialize($value)
+{
+    if (!is_string($value) || !is_serialized($value)) {
+        return $value;
+    }
+
+    return @unserialize(trim($value), ['allowed_classes' => false]);
+}
+
+/**
+ * Whether outbound requests must validate the TLS certificate.
+ *
+ * Define WP_UMBRELLA_SSL_VERIFY to true, or hook wp_umbrella_ssl_verify, to
+ * turn verification on for a site.
+ *
+ * @return boolean
+ */
+function wp_umbrella_should_verify_ssl()
+{
+    if (defined('WP_UMBRELLA_SSL_VERIFY')) {
+        return (bool) WP_UMBRELLA_SSL_VERIFY;
+    }
+
+    return (bool) apply_filters('wp_umbrella_ssl_verify', false);
 }
 
 /**

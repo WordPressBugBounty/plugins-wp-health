@@ -55,10 +55,9 @@ class Backup extends BaseClient
         $url = sprintf('%s/v1/projects/%s/backups/signed-url?filename=%s', WP_UMBRELLA_NEW_API_URL, $projectId, $filename);
 
         try {
-            add_filter('https_ssl_verify', '__return_false');
             $response = wp_umbrella_handle_outbound_response(wp_remote_get($url, [
                 'headers' => $this->getHeadersV2(),
-                'sslverify' => false,
+                'sslverify' => wp_umbrella_should_verify_ssl(),
                 'timeout' => 50,
             ]));
         } catch (\Exception $e) {
