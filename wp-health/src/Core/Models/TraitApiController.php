@@ -75,6 +75,10 @@ trait TraitApiController
         $permission = $this->getPermission();
 
         if (empty($permission)) {
+            return false;
+        }
+
+        if ($permission === Controller::PERMISSION_PUBLIC) {
             return true;
         }
 
@@ -91,7 +95,7 @@ trait TraitApiController
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($umbrellaRequest);
                 break;
             default:
-                return true;
+                return false;
         }
     }
 

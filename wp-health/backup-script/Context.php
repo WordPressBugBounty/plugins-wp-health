@@ -72,6 +72,7 @@ if (!class_exists('UmbrellaContext', false)):
             DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'supercache',
             DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'cache',
             DIRECTORY_SEPARATOR . 'umb_checksum',
+            DIRECTORY_SEPARATOR . 'umb_database',
             DIRECTORY_SEPARATOR . '.well-known',
             DIRECTORY_SEPARATOR . 'wp-snapshots',
             DIRECTORY_SEPARATOR . 'wp-content' . DIRECTORY_SEPARATOR . 'wpvivid_uploads',
@@ -98,8 +99,17 @@ if (!class_exists('UmbrellaContext', false)):
             '.DS_Store',
             'cloner.php',
             'cloner_error_log',
+            'cloner_error_log.php',
             'restore_error_log',
+            'restore_error_log.php',
             'error_log',
+            // Root-anchored: the restore script holds the destination's database
+            // password in clear, and a backup running while a restoration is
+            // deployed would carry it into the archive. The anchor keeps a
+            // customer's own restore.php, wherever it lives, in their backup.
+            '^restore.php',
+            '^restore_attempts',
+            '^cloner_attempts',
         ];
 
         const DEFAULT_FILE_SIZE_LIMIT = 500 * 1024 * 1024; // 500 Mo
@@ -135,6 +145,8 @@ if (!class_exists('UmbrellaContext', false)):
         protected $rootDirectory;
 
         protected $checksumDirectory;
+
+        protected $scratchToken;
 
         protected $checkupDirectories;
 
@@ -183,10 +195,43 @@ if (!class_exists('UmbrellaContext', false)):
             $this->intervalBetweenBatch = $params['interval_between_batch'] ?? 0;
             $this->maximumLinesByTableByBatch = $params['maximum_lines_by_table_by_batch'] ?? [];
 
+            $this->scratchToken = $this->buildScratchToken();
+
             $this->setExcludedFiles($params);
             $this->setExcludedDirectories($params);
             $this->setupRootDirectory();
             $this->setupChecksumDirectory();
+            $this->excludeScratchDirectories();
+        }
+
+        protected function buildScratchToken()
+        {
+            $seed = defined('UMBRELLA_BACKUP_KEY') ? UMBRELLA_BACKUP_KEY : '';
+            $token = substr(hash('sha256', $seed . '|' . $this->requestId), 0, 16);
+
+            if (class_exists('UmbrellaErrorHandler', false)) {
+                UmbrellaErrorHandler::redact((string) $this->requestId);
+                UmbrellaErrorHandler::redact($token);
+            }
+
+            return $token;
+        }
+
+        protected function scratchDirectoryName($suffix)
+        {
+            return $suffix . '-' . $this->scratchToken;
+        }
+
+        protected function excludeScratchDirectories()
+        {
+            $this->addExcludedDirectory(DIRECTORY_SEPARATOR . $this->scratchDirectoryName(self::SUFFIX));
+            $this->addExcludedDirectory(DIRECTORY_SEPARATOR . $this->scratchDirectoryName(self::CHECKSUM_SUFFIX));
+
+            // Any suffixed working directory, not only this run's: a restore or a
+            // previous backup that died before cleanup leaves one behind, and its
+            // dumps must never travel into the next backup.
+            $this->addExcludedDirectory(DIRECTORY_SEPARATOR . self::SUFFIX . '-*');
+            $this->addExcludedDirectory(DIRECTORY_SEPARATOR . self::CHECKSUM_SUFFIX . '-*');
         }
 
         public function getAction()
@@ -402,7 +447,7 @@ if (!class_exists('UmbrellaContext', false)):
 
         protected function testDirectoryCreation($directory, $filename)
         {
-            if (!file_exists($directory) && !mkdir($directory, 0777, true)) {
+            if (!file_exists($directory) && !@mkdir($directory, 0777, true)) {
                 return [
                     'code' => 'directory_creation_error',
                     'directory' => $directory
@@ -411,7 +456,7 @@ if (!class_exists('UmbrellaContext', false)):
 
             $filePath = $directory . DIRECTORY_SEPARATOR . $filename;
             if (!file_exists($filePath)) {
-                $result = file_put_contents($filePath, 'X');
+                $result = @file_put_contents($filePath, 'X');
                 if ($result === false) {
                     return [
                         'code' => 'file_creation_error',
@@ -435,13 +480,13 @@ if (!class_exists('UmbrellaContext', false)):
 
         public function setupRootDirectory()
         {
-            // /umb_database
             $this->rootDirectory = $this->setupScratchDirectory(self::SUFFIX);
         }
 
         protected function setupScratchDirectory($suffix)
         {
-            $directory = $this->baseDirectory . DIRECTORY_SEPARATOR . $suffix;
+            $name = $this->scratchDirectoryName($suffix);
+            $directory = $this->baseDirectory . DIRECTORY_SEPARATOR . $name;
             $filenameTest = 'test.txt';
 
             try {
@@ -451,20 +496,19 @@ if (!class_exists('UmbrellaContext', false)):
                 }
             } catch (Exception $e) {
                 if (file_exists($directory . DIRECTORY_SEPARATOR . $filenameTest)) {
-                    unlink($directory . DIRECTORY_SEPARATOR . $filenameTest);
+                    @unlink($directory . DIRECTORY_SEPARATOR . $filenameTest);
                 }
             }
 
             // The base directory is not writable (e.g. Pantheon read-only codebase):
             // fall back next to the module, which lives in a writable path.
-            return __DIR__ . DIRECTORY_SEPARATOR . $suffix;
+            return __DIR__ . DIRECTORY_SEPARATOR . $name;
         }
 
         /**
          * Relative path a streamed file is reported under to the mirror.
-         * Scratch directories may be relocated when the base directory is
-         * read-only; their files keep their logical root-level path so the
-         * mirror layout stays unchanged.
+         * Scratch directories live under their own local name; their files keep
+         * their logical root-level path so the mirror layout stays unchanged.
          */
         public function getStreamRelativePath($filePath)
         {
@@ -474,7 +518,7 @@ if (!class_exists('UmbrellaContext', false)):
             ];
 
             foreach ($scratchDirectories as $suffix => $directory) {
-                if (!$directory || $directory === $this->baseDirectory . DIRECTORY_SEPARATOR . $suffix) {
+                if (!$directory) {
                     continue;
                 }
 
@@ -518,6 +562,15 @@ if (!class_exists('UmbrellaContext', false)):
             $index = $directory . DIRECTORY_SEPARATOR . 'index.php';
             if (!file_exists($index)) {
                 @file_put_contents($index, '<?php // Silence is golden');
+            }
+
+            // Write web.config for IIS
+            $webConfig = $directory . DIRECTORY_SEPARATOR . 'web.config';
+            if (!file_exists($webConfig)) {
+                @file_put_contents(
+                    $webConfig,
+                    '<configuration><system.webServer><authorization><deny users="*" /></authorization></system.webServer></configuration>'
+                );
             }
         }
 

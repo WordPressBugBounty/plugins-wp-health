@@ -14,6 +14,9 @@ abstract class Controllers
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Api\PairChallengeController::class,
+                        'options' => [
+                            'permission' => Controller::PERMISSION_PUBLIC,
+                        ]
                     ],
                 ]
             ],

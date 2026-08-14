@@ -15,6 +15,10 @@ class FilterStorage
 
     const OPTION_FETCHED_AT = 'wp_umbrella_login_guard_filter_fetched_at';
 
+    const TRANSIENT_BACKOFF = 'wp_umbrella_login_guard_filter_backoff';
+
+    const BACKOFF_TTL = 900;
+
     const FILE_THRESHOLD = 262144;
 
     const INDEX_GUARD = "<?php // Silence is golden.";
@@ -80,10 +84,21 @@ class FilterStorage
         update_option(self::OPTION_FETCHED_AT, time(), false);
     }
 
+    public function isBackingOff()
+    {
+        return get_transient(self::TRANSIENT_BACKOFF) !== false;
+    }
+
+    public function markFailure()
+    {
+        set_transient(self::TRANSIENT_BACKOFF, 1, self::BACKOFF_TTL);
+    }
+
     public function clear()
     {
         delete_option(self::OPTION_FETCHED_AT);
         delete_option(self::OPTION_BLOB);
+        delete_transient(self::TRANSIENT_BACKOFF);
         $this->deleteFile();
     }
 

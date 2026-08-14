@@ -121,11 +121,15 @@ trait TraitPhpController
         $permission = $this->getPermission();
 
         if (empty($permission)) {
-            return true;
+            return false;
         }
 
         if (isset($this->options['prevent_active']) && $this->options['prevent_active']) {
             $this->preventNotActive();
+        }
+
+        if ($permission === Controller::PERMISSION_PUBLIC) {
+            return true;
         }
 
         $request = UmbrellaRequest::createFromGlobals();
@@ -141,10 +145,10 @@ trait TraitPhpController
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($request);
                 break;
             default:
-                return true;
+                return false;
         }
 
-        return true;
+        return false;
     }
 
     protected function preventNotActive()

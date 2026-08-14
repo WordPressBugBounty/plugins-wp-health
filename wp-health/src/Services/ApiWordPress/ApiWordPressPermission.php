@@ -20,6 +20,10 @@ class ApiWordPressPermission
             $secretTokenSave = wp_umbrella_get_service('Option')->getSecretTokenWithoutCache();
         }
 
+        if (!$secretTokenSave) {
+            return ['authorized' => false, 'code' => 'api_key_empty', 'message' => 'API Key is empty'];
+        }
+
         if (!hash_equals($secretTokenSave, $userSecretToken)) {
             return ['authorized' => false, 'code' => 'not_authorized', 'message' => 'API Key not authorize'];
         }

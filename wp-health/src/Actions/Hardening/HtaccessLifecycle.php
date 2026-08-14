@@ -147,7 +147,7 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
 
         $result = $htaccess->writeUmbrellaBlock();
 
-        if (!isset($result['status']) || $result['status'] !== 'ok') {
+        if (!$settings->blockWasApplied($result)) {
             $settings->updateSettings(['htaccess_umbrella_block' => false]);
         }
     }

@@ -5,7 +5,11 @@ if (!class_exists('UmbrellaErrorHandler', false)):
     {
         const MAX_SIZE_LOG_FILE = 5242880; // 5 Mo = 5 * 1024 * 1024 octets
 
+        const GUARD = "<?php if(!defined('UMBRELLA_BACKUP_KEY')){  exit; } ?>";
+
         private $logFile;
+
+        private static $redacted = [];
         private $reservedMemory;
         private static $lastError;
         private $requestID;
@@ -34,6 +38,19 @@ if (!class_exists('UmbrellaErrorHandler', false)):
         public function setSocket($socket)
         {
             $this->socket = $socket;
+        }
+
+        /**
+         * Registered as soon as a value exists, so it is covered even by errors
+         * raised before any handler instance is wired.
+         *
+         * @param string $value
+         */
+        public static function redact($value)
+        {
+            if (is_string($value) && strlen($value) > 0 && !in_array($value, self::$redacted, true)) {
+                self::$redacted[] = $value;
+            }
         }
 
         /**
@@ -131,6 +148,16 @@ if (!class_exists('UmbrellaErrorHandler', false)):
             if (flock($fp, LOCK_EX) === false) {
                 fclose($fp);
                 return;
+            }
+
+            clearstatcache(true, $this->logFile);
+
+            if (filesize($this->logFile) === 0) {
+                fwrite($fp, self::GUARD . PHP_EOL);
+            }
+
+            foreach (self::$redacted as $value) {
+                $message = str_replace($value, '***', $message);
             }
 
             $value = sprintf("[%s] %s\n", date('Y-m-d H:i:s'), $message);

@@ -16,7 +16,8 @@ class PrepareBackupData extends AbstractController
         // Clean up old backup files
         $files = [
             $source . 'cloner.php',
-            $source . 'cloner_error_log'
+            $source . 'cloner_error_log',
+            $source . 'cloner_error_log.php'
         ];
 
         // Find any dictionary files matching pattern
@@ -33,14 +34,12 @@ class PrepareBackupData extends AbstractController
         }
 
         // Clean up database directories
-        $directories = [
-            $source . 'umb_database',
-            $source . 'umb_checksum',
-            $source . 'wp-content' . DIRECTORY_SEPARATOR . 'umb_database',
-        ];
+        $patterns = wp_umbrella_get_service('BackupFinderConfiguration')->getScratchDirectoryPatterns();
 
-        foreach ($directories as $directory) {
-            DirectoryFunctions::destroyDir($directory);
+        foreach ($patterns as $pattern) {
+            foreach ((array) glob($pattern, GLOB_ONLYDIR) as $directory) {
+                DirectoryFunctions::destroyDir($directory);
+            }
         }
 
         return $this->returnResponse([

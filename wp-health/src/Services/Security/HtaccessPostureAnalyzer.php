@@ -64,7 +64,7 @@ class HtaccessPostureAnalyzer
         return $this->hasDenyPhpInUploads($customerContents);
     }
 
-    private function isBlockIntact($htaccessFile, $blockVersion)
+    protected function isBlockIntact($htaccessFile, $blockVersion)
     {
         if (is_multisite() && !is_main_site()) {
             return true;
@@ -76,10 +76,17 @@ class HtaccessPostureAnalyzer
             return $blockVersion === null;
         }
 
+        // A locked root file leaves the uploads block carrying the protection
+        // alone. Reading an absence we caused as tampering would raise a
+        // security alert on every site the partial write path serves.
+        if ($htaccessFile->isUploadsOnlyState()) {
+            return true;
+        }
+
         return $htaccessFile->isUmbrellaBlockCanonical();
     }
 
-    private function hasDenyPhpInUploads($contents)
+    protected function hasDenyPhpInUploads($contents)
     {
         if (stripos($contents, 'uploads') === false) {
             return false;
@@ -89,24 +96,24 @@ class HtaccessPostureAnalyzer
             && (bool) preg_match('/(Deny\s+from\s+all|Require\s+all\s+denied|SetHandler\s+None|RemoveHandler)/i', $contents);
     }
 
-    private function hasProtectWpConfig($contents)
+    protected function hasProtectWpConfig($contents)
     {
         return (bool) preg_match('/<Files[^>]*wp-config\.php/i', $contents)
             || (bool) preg_match('/wp-config\.php/i', $contents) && (bool) preg_match('/(Deny\s+from\s+all|Require\s+all\s+denied)/i', $contents);
     }
 
-    private function hasProtectHtaccess($contents)
+    protected function hasProtectHtaccess($contents)
     {
         return (bool) preg_match('/<Files[^>]*(\.ht[a-z]*|\^\.ht)/i', $contents)
             || (bool) preg_match('/<FilesMatch[^>]*\\\\.ht/i', $contents);
     }
 
-    private function hasDisableDirectoryBrowsing($contents)
+    protected function hasDisableDirectoryBrowsing($contents)
     {
         return (bool) preg_match('/Options\s+.*-Indexes/i', $contents);
     }
 
-    private function hasBlockXmlrpc($contents)
+    protected function hasBlockXmlrpc($contents)
     {
         if (stripos($contents, 'xmlrpc.php') === false) {
             return false;
@@ -115,7 +122,7 @@ class HtaccessPostureAnalyzer
         return (bool) preg_match('/(Deny\s+from\s+all|Require\s+all\s+denied|RewriteRule.*xmlrpc)/i', $contents);
     }
 
-    private function umbrellaBlockHash($contents)
+    protected function umbrellaBlockHash($contents)
     {
         if (preg_match('/# BEGIN WP Umbrella(.*?)# END WP Umbrella/s', $contents, $matches)) {
             return md5($matches[1]);
@@ -124,7 +131,7 @@ class HtaccessPostureAnalyzer
         return null;
     }
 
-    private function fingerprint($directives, $blockIntact)
+    protected function fingerprint($directives, $blockIntact)
     {
         $posture = [
             'directives' => $directives,

@@ -68,7 +68,7 @@ class RequestSettings
         $wpContext->setConstant('WP_BLOG_ADMIN', true);
     }
 
-    public function setupAdmin()
+    public function setupAdminUser()
     {
         if (!function_exists('get_current_screen')) {
             include_once ABSPATH . '/wp-admin/includes/class-wp-screen.php';
@@ -81,12 +81,22 @@ class RequestSettings
 
         $user = wp_umbrella_get_service('UsersProvider')->getUserAdminCanBy();
         if (!$user) {
+            return null;
+        }
+
+        wp_cookie_constants();
+        wp_set_current_user((int) $user->ID, $user->user_login);
+
+        return $user;
+    }
+
+    public function setupAdmin()
+    {
+        $user = $this->setupAdminUser();
+        if (!$user) {
             return false;
         }
 
-        // Authenticated user
-        wp_cookie_constants();
-        wp_set_current_user((int) $user->ID, $user->user_login);
         $this->setCookies($user);
     }
 

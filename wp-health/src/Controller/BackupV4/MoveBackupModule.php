@@ -37,6 +37,12 @@ class MoveBackupModule extends AbstractController
                 continue;
             }
 
+            // Test files sit next to the sources and pull in PHPUnit, which is not
+            // there once merged: the module would fatal on its first request.
+            if (strpos($file->getPathname(), DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR) !== false) {
+                continue;
+            }
+
             if (strtolower($file->getExtension()) == 'php') {
                 $sortedFiles[$file->getBasename()] = $file->getPathname();
             }

@@ -22,6 +22,12 @@ if (!class_exists('UmbrellaDirectoryExclusion', false)):
 				$excludedDir = substr($excludedDir, 1);
 			}
 
+			$prefixOnly = false;
+			if (substr($excludedDir, -1) === '*') {
+				$prefixOnly = true;
+				$excludedDir = substr($excludedDir, 0, -1);
+			}
+
 			$cleanDir = DIRECTORY_SEPARATOR . trim($excludedDir, DIRECTORY_SEPARATOR);
 			$cleanPath = DIRECTORY_SEPARATOR . trim($path, DIRECTORY_SEPARATOR);
 
@@ -32,6 +38,10 @@ if (!class_exists('UmbrellaDirectoryExclusion', false)):
 
 			if ($rootOnly && $pos !== 0) {
 				return false;
+			}
+
+			if ($prefixOnly) {
+				return true;
 			}
 
 			$afterMatch = $pos + strlen($cleanDir);

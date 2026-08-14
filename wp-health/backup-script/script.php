@@ -10,7 +10,11 @@ try {
         @opcache_invalidate(__FILE__, true);
 
         // Invalidate cache for umb_checksum and umb_database directories
-        $dirs = [__DIR__ . DIRECTORY_SEPARATOR . 'umb_checksum', __DIR__ . DIRECTORY_SEPARATOR . 'umb_database'];
+        $dirs = array_merge(
+            [__DIR__ . DIRECTORY_SEPARATOR . 'umb_checksum', __DIR__ . DIRECTORY_SEPARATOR . 'umb_database'],
+            (array) glob(__DIR__ . DIRECTORY_SEPARATOR . 'umb_checksum-*', GLOB_ONLYDIR),
+            (array) glob(__DIR__ . DIRECTORY_SEPARATOR . 'umb_database-*', GLOB_ONLYDIR)
+        );
         foreach ($dirs as $dir) {
             if (is_dir($dir)) {
                 $files = new RecursiveIteratorIterator(
@@ -52,6 +56,7 @@ if (!function_exists('removeScript')) {
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_attempts');
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_error_log');
+        @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_error_log.php');
     }
 }
 
@@ -76,11 +81,6 @@ if ($attempts >= 50) {
 }
 
 //[[REPLACE]]//
-
-if (defined('WPE_APIKEY')) {
-    $cookieValue = md5('wpe_auth_salty_dog|' . WPE_APIKEY);
-    setcookie('wpe-auth', $cookieValue, 0, '/');
-}
 
 if (function_exists('set_time_limit')) {
     set_time_limit(3600);
@@ -148,13 +148,6 @@ if (isset($_GET['action']) && is_string($_GET['action']) && strlen($_GET['action
     $action = $_GET['action'];
 }
 
-switch ($action) {
-    case '':
-    case 'check-communication':
-        $html->render('check-communication');
-        return;
-}
-
 if (!hash_equals(UMBRELLA_BACKUP_KEY, $providedKey)) {
     $written = @file_put_contents($attemptsFile, (string) ($attempts + 1), LOCK_EX);
     if ($written === false) {
@@ -172,6 +165,22 @@ if (file_exists($attemptsFile)) {
 }
 
 $key = $providedKey;
+
+// Below the key check, above the action switch: the routing strategies read this
+// cookie from the check-communication response to detect the host and seed their
+// jar, so it has to go out on that answer, and only for a caller that proved it
+// holds the key.
+if (defined('WPE_APIKEY')) {
+    $cookieValue = hash('sha256', 'wpe_auth_salty_dog|' . WPE_APIKEY);
+    setcookie('wpe-auth', $cookieValue, 0, '/');
+}
+
+switch ($action) {
+    case '':
+    case 'check-communication':
+        $html->render('check-communication');
+        return;
+}
 
 if (!isset($request['host']) || !isset($request['port'])) {
     $html->render('host-or-port-not-set');
@@ -235,7 +244,7 @@ if (!validHost($host)) {
     return;
 }
 
-$errorHandler = new UmbrellaErrorHandler(dirname(__FILE__) . '/cloner_error_log');
+$errorHandler = new UmbrellaErrorHandler(dirname(__FILE__) . '/cloner_error_log.php');
 $errorHandler->register();
 
 global $totalFilesSent;

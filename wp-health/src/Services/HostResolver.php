@@ -71,7 +71,11 @@ class HostResolver
                 return Host::PANTHEON;
             }
 
-            $hostname = function_exists('gethostname') ? gethostname() : Host::OTHER;
+            $hostname = $this->getServerHostname();
+
+            if ($hostname === null) {
+                $hostname = Host::OTHER;
+            }
 
             if (function_exists('apply_filters')) {
                 return apply_filters('wp_umbrella_current_host', $hostname);
@@ -81,6 +85,24 @@ class HostResolver
         } catch (\Exception $e) {
             return Host::OTHER;
         }
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getServerHostname()
+    {
+        if (!function_exists('gethostname')) {
+            return null;
+        }
+
+        $hostname = gethostname();
+
+        if (!is_string($hostname) || $hostname === '') {
+            return null;
+        }
+
+        return $hostname;
     }
 
     protected function isDreampress()

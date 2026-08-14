@@ -20,6 +20,7 @@ class CleanupModule extends AbstractController
         $files = [
             $source . 'cloner.php',
             $source . 'cloner_error_log',
+            $source . 'cloner_error_log.php',
             $source . 'cloner_attempts',
             $source . sprintf('%s-dictionnary.php', $params['requestId']),
             $source . sprintf('dictionnary.php', $params['requestId']),
@@ -33,14 +34,12 @@ class CleanupModule extends AbstractController
             @unlink($file);
         }
 
-        $directories = [
-            $source . 'umb_database',
-            $source . 'umb_checksum',
-            $source . 'wp-content' . DIRECTORY_SEPARATOR . 'umb_database',
-        ];
+        $patterns = wp_umbrella_get_service('BackupFinderConfiguration')->getScratchDirectoryPatterns();
 
-        foreach ($directories as $directory) {
-            DirectoryFunctions::destroyDir($directory);
+        foreach ($patterns as $pattern) {
+            foreach ((array) glob($pattern, GLOB_ONLYDIR) as $directory) {
+                DirectoryFunctions::destroyDir($directory);
+            }
         }
 
         // The restore writes the database outside WordPress: a persistent

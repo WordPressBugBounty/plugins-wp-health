@@ -68,6 +68,36 @@ class BackupFinderConfiguration
         return $source;
     }
 
+    /**
+     * Glob patterns matching every scratch directory the backup module can create,
+     * whatever base it fell back to.
+     *
+     * @return string[]
+     */
+    public function getScratchDirectoryPatterns()
+    {
+        $bases = array_unique([
+            $this->getRootBackupModule(),
+            $this->getDefaultSource(),
+        ]);
+
+        $patterns = [];
+
+        foreach ($bases as $base) {
+            $base = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+            $roots = [$base, $base . 'wp-content' . DIRECTORY_SEPARATOR];
+
+            foreach ($roots as $root) {
+                foreach (['umb_database', 'umb_checksum'] as $name) {
+                    $patterns[] = $root . $name;
+                    $patterns[] = $root . $name . '-*';
+                }
+            }
+        }
+
+        return $patterns;
+    }
+
     public function getDefaultSource()
     {
         $host = wp_umbrella_get_service('HostResolver')->getCurrentHost();

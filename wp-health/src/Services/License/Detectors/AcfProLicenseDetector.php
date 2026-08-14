@@ -29,7 +29,7 @@ class AcfProLicenseDetector extends AbstractLicenseDetector
         }
 
         // ACF stores license as base64 encoded serialized array
-        $licenseData = @unserialize(@base64_decode($licenseKey));
+        $licenseData = @unserialize(@base64_decode($licenseKey), ['allowed_classes' => false]);
 
         if (!is_array($licenseData)) {
             return $this->buildLicenseData($licenseKey, LicenseStatus::UNKNOWN);

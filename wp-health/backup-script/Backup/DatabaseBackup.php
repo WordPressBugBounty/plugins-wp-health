@@ -69,6 +69,16 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                             $this->socket->send($path);
                             @unlink($path);
                         }, $table['name']);
+
+                        if ($fileHandle->isInError()) {
+                            $this->socket->sendLog('File handle in error: ' . $table['name'], true);
+                            $this->socket->sendTelemetryCounter('backup.db.table.file_handle_error', [
+                                'requestId' => $this->context->getRequestId(),
+                                'origin' => 'plugin',
+                                'name' => $table['name'],
+                            ]);
+                            continue;
+                        }
                     } else {
                         $fileHandle = new UmbrellaFileHandle($tablePath, 'wb');
                         if ($fileHandle->isInError()) {

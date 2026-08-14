@@ -90,7 +90,11 @@ if (!trait_exists('UmbrellaProcessCapacityTrait', false)):
 				return false;
 			}
 
-			if (in_array(basename($filePath), $this->getContext()->getFilesExcluded())) {
+			if (UmbrellaFileExclusion::isExcluded(
+				$filePath,
+				$context->getBaseDirectory(),
+				$context->getFilesExcluded()
+			)) {
 				return false;
 			}
 

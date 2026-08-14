@@ -82,7 +82,11 @@ if (!class_exists('UmbrellaScanBackup', false)):
                 return false;
             }
 
-            if (in_array(basename($filePath), $this->context->getFilesExcluded())) {
+            if (UmbrellaFileExclusion::isExcluded(
+                $filePath,
+                $this->context->getBaseDirectory(),
+                $this->context->getFilesExcluded()
+            )) {
                 return false;
             }
 

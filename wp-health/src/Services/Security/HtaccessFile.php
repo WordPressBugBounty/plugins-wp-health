@@ -9,7 +9,7 @@ class HtaccessFile
 {
     const MARKER = 'WP Umbrella';
     const HEADERS_MARKER = 'WP Umbrella Headers';
-    const BLOCK_VERSION = 4;
+    const BLOCK_VERSION = 5;
     const UPLOADS_BLOCK_VERSION = 1;
     const SANDBOX_DIRNAME = 'wpu-htcheck';
     const CANARY_DIRNAME = 'wpu-canary';
@@ -190,8 +190,15 @@ class HtaccessFile
         $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [F,L]';
         $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [F,L]';
         $lines[] = '</IfModule>';
-        $lines[] = 'Options -Indexes';
 
+        // No "Options -Indexes" here. AllowOverride is evaluated when Apache
+        // parses the file, so a host that does not grant the Options class
+        // answers 500 and takes the other twenty-nine lines down with it, and
+        // no <IfModule> wrapper can guard a directive rejected before any
+        // module is consulted. It bought nothing either way: the posture
+        // analyzer strips our own block before looking for the directive, so
+        // disable_directory_browsing never counted it. The FilesMatch rules
+        // below already deny the files a listing would help an attacker find.
         $denied = $this->getDenyLines();
 
         $lines[] = '<FilesMatch "^(wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt|composer\.json|composer\.lock|package\.json)$">';
@@ -265,11 +272,20 @@ class HtaccessFile
             return $this->matchesLines($inner, $this->getLegacyBlockLines());
         }
 
-        // A block written before the headers moved into it is still one of ours.
-        // Reading the pending upgrade as tampering would raise a security alert
-        // on every hardened site the day this ships.
+        // A block written before the headers moved into it, or before v5
+        // dropped "Options -Indexes", is still one of ours. The reconcile pass
+        // rewrites it on the next admin request, and reading a pending upgrade
+        // as tampering would raise a security alert on every hardened site the
+        // day the block changes.
+        $inner = $this->withoutRetiredIndexesOption($inner);
+
         return $this->matchesLines($inner, $this->getUmbrellaBlockLines())
             || $this->matchesLines($inner, $this->getHardeningLines());
+    }
+
+    protected function withoutRetiredIndexesOption($inner)
+    {
+        return preg_replace('/^[ \t]*Options\s+-Indexes[ \t]*(\r\n|\r|\n)?/mi', '', $inner);
     }
 
     protected function matchesLines($inner, array $canonical)
@@ -318,15 +334,8 @@ class HtaccessFile
 
         $path = $this->getPath();
 
-        if (file_exists($path) && !is_writable($path)) {
-            return ['status' => 'error', 'reason' => 'not_writable'];
-        }
-
-        if (file_exists($path) === false) {
-            $dir = dirname($path);
-            if (!is_writable($dir)) {
-                return ['status' => 'error', 'reason' => 'not_writable'];
-            }
+        if (!$this->isRootWritable()) {
+            return $this->writeUploadsBlockAlone();
         }
 
         $lines = $this->getUmbrellaBlockLines();
@@ -363,10 +372,10 @@ class HtaccessFile
         try {
             $selfCheck = $this->selfCheck();
         } catch (\Throwable $error) {
-            $selfCheck = false;
+            $selfCheck = ['safe' => false, 'reason' => 'self_check_error'];
         }
 
-        if ($selfCheck !== true) {
+        if (!$selfCheck['safe']) {
             $this->restore($path, $snapshot);
 
             if ($this->usesSeparateHeadersFile()) {
@@ -377,10 +386,64 @@ class HtaccessFile
                 $this->cleanUploadsBlock();
             }
 
-            return ['status' => 'error', 'reason' => 'self_check_failed'];
+            return ['status' => 'error', 'reason' => $selfCheck['reason']];
         }
 
-        return ['status' => 'ok', 'uploads' => $uploads, 'headers' => $headers];
+        return [
+            'status' => 'ok',
+            'uploads' => $uploads,
+            'headers' => $headers,
+            'self_check' => $selfCheck['reason'],
+        ];
+    }
+
+    protected function isRootWritable()
+    {
+        $path = $this->getPath();
+
+        return file_exists($path) ? is_writable($path) : is_writable(dirname($path));
+    }
+
+    /**
+     * The root file is locked and the uploads block is carrying the protection
+     * on its own. The block is missing from the root because it cannot be
+     * written there, which is not the same thing as a block that was removed,
+     * and the posture scan has to tell the two apart before calling it
+     * tampering.
+     *
+     * An attacker able to chmod the root file could dress a removal up as this
+     * state, but they would have to leave our uploads block in place while
+     * holding write access to the file the block protects.
+     */
+    public function isUploadsOnlyState()
+    {
+        return !$this->hasUmbrellaBlock()
+            && $this->hasUploadsBlock()
+            && !$this->isRootWritable();
+    }
+
+    /**
+     * The rule carrying most of the value denies PHP under uploads, and it
+     * lives in a file WordPress writes into on every media upload. A locked
+     * root .htaccess used to cost the customer the entire feature, including
+     * the half that was still within reach.
+     */
+    protected function writeUploadsBlockAlone()
+    {
+        // Reconcile runs twice a day on a root file that will stay locked, and
+        // the write below costs two loopback requests. Presence is what the
+        // uploads backfill settles on too, so it is enough here.
+        if ($this->hasUploadsBlock()) {
+            return ['status' => 'partial', 'reason' => 'root_not_writable'];
+        }
+
+        $uploads = $this->writeUploadsBlock();
+
+        if (!isset($uploads['status']) || $uploads['status'] !== 'ok') {
+            return ['status' => 'error', 'reason' => 'not_writable', 'uploads' => $uploads];
+        }
+
+        return ['status' => 'partial', 'reason' => 'root_not_writable', 'uploads' => $uploads];
     }
 
     public function writeUploadsBlock($verifyDirectives = true)
@@ -562,25 +625,73 @@ class HtaccessFile
         }
     }
 
+    /**
+     * Two unrelated questions used to share one boolean. Whether the site still
+     * answers is the only one a rollback can rest on. Whether the uploads
+     * canary comes back refused says how far the rules reached, and a host that
+     * hides that from a loopback request has not broken anything.
+     *
+     * sandboxCheck() already proved Apache parses the ruleset, and its first
+     * probe already got a 200 out of this same loopback before a single byte
+     * was written. A home page that stops answering here is therefore a change
+     * we caused, not a host that never let us look in the first place.
+     *
+     * @return array{safe: bool, reason: string}
+     */
     protected function selfCheck()
+    {
+        $homeCode = $this->probeCode(home_url('/'));
+
+        if ($homeCode === null) {
+            return ['safe' => false, 'reason' => 'self_check_home_unreachable'];
+        }
+
+        if ($homeCode >= 400) {
+            return ['safe' => false, 'reason' => 'self_check_home_error'];
+        }
+
+        return ['safe' => true, 'reason' => $this->probeUploadsCanary()];
+    }
+
+    /**
+     * Reports how the uploads canary answered, never whether to keep the block.
+     * Each state names a host we used to serve blindly: a redirect means the
+     * URL we probed is not the one the block governs, a 200 means PHP is still
+     * served from uploads, and no answer at all means the loopback stopped
+     * talking to us halfway through.
+     */
+    protected function probeUploadsCanary()
     {
         $upload = wp_upload_dir();
 
         if (!is_array($upload) || empty($upload['basedir']) || empty($upload['baseurl']) || !empty($upload['error'])) {
-            return false;
+            return 'self_check_canary_unavailable';
         }
 
         $canary = $this->createCanary($upload);
 
         if ($canary === null) {
-            return false;
+            return 'self_check_canary_unwritable';
         }
 
         try {
-            $homeCode = $this->probeCode(home_url('/'));
+            $code = $this->probeCode($canary['url']);
 
-            return $this->probeCode($canary['url']) === 403
-                && $homeCode !== null && $homeCode < 400;
+            if ($code === null) {
+                return 'self_check_canary_unavailable';
+            }
+
+            if ($code === 403) {
+                return 'ok';
+            }
+
+            if ($code >= 300 && $code < 400) {
+                return 'self_check_canary_redirected';
+            }
+
+            // The body is not read here, so this says the file was served, not
+            // that PHP ran it. probeUploadsPhpExecution() settles that later.
+            return $code === 200 ? 'self_check_canary_served' : 'self_check_canary_unexpected';
         } finally {
             $this->deleteCanary($canary);
         }

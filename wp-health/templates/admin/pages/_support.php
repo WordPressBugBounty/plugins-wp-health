@@ -37,7 +37,7 @@ $hardeningOptions = [
     ],
     'block_user_enumeration' => [
         __('Block user enumeration', 'wp-health'),
-        __('Blocks author scans that try to list your usernames.', 'wp-health'),
+        __('Blocks author scans that try to list your usernames. Author archives redirect to the homepage for logged-out visitors.', 'wp-health'),
     ],
     'mask_login_errors' => [
         __('Mask login errors', 'wp-health'),

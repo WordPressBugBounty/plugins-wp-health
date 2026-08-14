@@ -110,13 +110,22 @@ class HardeningSettings
         $result = $htaccess->writeUmbrellaBlock();
         $this->lastHtaccessResult = $result;
 
-        if (!isset($result['status']) || $result['status'] !== 'ok') {
+        // "partial" means the root file was locked but the uploads block landed,
+        // so the protection that matters most is on and the option has to stay
+        // on with it.
+        if (!$this->blockWasApplied($result)) {
             // A rewrite that failed left the previous block in place, so only an
             // activation gets reverted here.
             $settings['htaccess_umbrella_block'] = $before;
         }
 
         return $settings;
+    }
+
+    public function blockWasApplied($result)
+    {
+        return isset($result['status'])
+            && ($result['status'] === 'ok' || $result['status'] === 'partial');
     }
 
     protected function isSecurityHeadersEnabled($settings)

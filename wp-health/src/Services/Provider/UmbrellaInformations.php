@@ -42,6 +42,7 @@ class UmbrellaInformations
             'multisite' => is_multisite(),
             'abspath' => ABSPATH,
             'hosting' => wp_umbrella_get_service('HostResolver')->getCurrentHost(),
+            'hostname' => wp_umbrella_get_service('HostResolver')->getServerHostname(),
             'version' => WP_UMBRELLA_VERSION,
             'god_version' => WP_UMBRELLA_GOD_HANDLER_VERSION,
             'curl_exist' => function_exists('curl_init'),

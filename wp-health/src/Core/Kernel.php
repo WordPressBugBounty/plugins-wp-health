@@ -555,13 +555,15 @@ abstract class Kernel
         }
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
-        wp_umbrella_get_service('RequestSettings')->setupAdmin();
+        wp_umbrella_get_service('RequestSettings')->setupAdminUser();
 
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_update_admin_request')) {
             wp_set_current_user(0);
             return;
         }
+
+        wp_umbrella_get_service('RequestSettings')->preventWPEngine();
 
         $previousPagenow = isset($GLOBALS['pagenow']) ? $GLOBALS['pagenow'] : null;
         $GLOBALS['pagenow'] = 'update-core.php';
@@ -590,7 +592,7 @@ abstract class Kernel
         $requireBackup = isset($_POST['require_backup']) ? (bool) $_POST['require_backup'] : false;
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
-        wp_umbrella_get_service('RequestSettings')->setupAdmin();
+        wp_umbrella_get_service('RequestSettings')->setupAdminUser();
 
         // Nonce and hash are required.
         if (empty($nonce)) {
@@ -611,6 +613,8 @@ abstract class Kernel
                 ]
             );
         }
+
+        wp_umbrella_get_service('RequestSettings')->preventWPEngine();
 
         if (empty($plugin)) {
             wp_send_json_error(

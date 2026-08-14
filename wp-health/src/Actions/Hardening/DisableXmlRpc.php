@@ -23,6 +23,8 @@ class DisableXmlRpc implements ExecuteHooks
             return;
         }
 
+        $this->closeEndpoint();
+
         add_filter('xmlrpc_enabled', [$this, 'disableAuthenticatedMethods']);
         add_filter('xmlrpc_methods', [$this, 'removePingbackMethods']);
 
@@ -31,13 +33,28 @@ class DisableXmlRpc implements ExecuteHooks
         }, 20);
     }
 
+    public function closeEndpoint()
+    {
+        if (!defined('XMLRPC_REQUEST') || !XMLRPC_REQUEST) {
+            return;
+        }
+
+        $this->recordBlock();
+
+        if (!headers_sent()) {
+            header('Content-Type: text/plain; charset=utf-8');
+            status_header(403);
+            nocache_headers();
+        }
+
+        echo 'XML-RPC services are disabled on this site.';
+
+        exit;
+    }
+
     public function disableAuthenticatedMethods($enabled)
     {
-        (new ProtectionEventRecorder())->recordAggregated(self::BLOCK_EVENT_KEY, 'INFO', [
-            'kind' => 'protection',
-            'protection' => 'disable_xmlrpc',
-            'outcome' => 'blocked',
-        ], self::BLOCK_BUCKET_KEY, self::BLOCK_WINDOW);
+        $this->recordBlock();
 
         return false;
     }
@@ -47,5 +64,14 @@ class DisableXmlRpc implements ExecuteHooks
         unset($methods['pingback.ping'], $methods['pingback.extensions.getPingbacks']);
 
         return $methods;
+    }
+
+    protected function recordBlock()
+    {
+        (new ProtectionEventRecorder())->recordAggregated(self::BLOCK_EVENT_KEY, 'INFO', [
+            'kind' => 'protection',
+            'protection' => 'disable_xmlrpc',
+            'outcome' => 'blocked',
+        ], self::BLOCK_BUCKET_KEY, self::BLOCK_WINDOW);
     }
 }

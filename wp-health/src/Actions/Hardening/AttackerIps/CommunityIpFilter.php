@@ -43,9 +43,15 @@ class CommunityIpFilter
             return $blob;
         }
 
+        if ($this->storage->isBackingOff()) {
+            return $blob;
+        }
+
         $fresh = $this->fetchFilter();
 
         if ($fresh === null) {
+            $this->storage->markFailure();
+
             return $blob;
         }
 

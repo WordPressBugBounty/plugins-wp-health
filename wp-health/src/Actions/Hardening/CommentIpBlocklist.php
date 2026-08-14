@@ -60,12 +60,17 @@ class CommentIpBlocklist implements ExecuteHooks
 
     protected function resolveIp($commentdata)
     {
+        $resolved = ClientIpResolver::resolve();
+        $hasResolved = is_string($resolved) && $resolved !== '';
+
+        if (ClientIpResolver::isBehindTrustedProxy() && $hasResolved) {
+            return $resolved;
+        }
+
         if (is_array($commentdata) && !empty($commentdata['comment_author_IP'])) {
             return (string) $commentdata['comment_author_IP'];
         }
 
-        $resolved = ClientIpResolver::resolve();
-
-        return is_string($resolved) && $resolved !== '' ? $resolved : null;
+        return $hasResolved ? $resolved : null;
     }
 }

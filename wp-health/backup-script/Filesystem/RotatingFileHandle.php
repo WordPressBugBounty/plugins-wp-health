@@ -37,6 +37,11 @@ if (!class_exists('UmbrellaRotatingFileHandle', false)):
             $this->currentSize = 0;
         }
 
+        public function isInError()
+        {
+            return $this->currentHandle === null || $this->currentHandle->isInError();
+        }
+
         protected function getCurrentPath()
         {
             if ($this->currentPart === 1) {
@@ -75,17 +80,32 @@ if (!class_exists('UmbrellaRotatingFileHandle', false)):
 
             $this->currentPart++;
             $this->openNextPart();
+
+            if ($this->isInError()) {
+                throw new UmbrellaException(
+                    sprintf('Cannot open next part: %s', $this->getCurrentPath()),
+                    'rotating_file_handle_error'
+                );
+            }
         }
 
         protected function promoteToDirectory()
         {
             $directory = dirname($this->basePath) . DIRECTORY_SEPARATOR . $this->subDirectoryName;
-            if (!file_exists($directory)) {
-                mkdir($directory, 0777, true);
+            if (!file_exists($directory) && !@mkdir($directory, 0777, true)) {
+                throw new UmbrellaException(
+                    sprintf('Cannot create part directory: %s', $this->subDirectoryName),
+                    'rotating_file_handle_error'
+                );
             }
 
             $newBasePath = $directory . DIRECTORY_SEPARATOR . basename($this->basePath);
-            rename($this->basePath, $newBasePath);
+            if (!@rename($this->basePath, $newBasePath)) {
+                throw new UmbrellaException(
+                    sprintf('Cannot promote part file: %s', basename($this->basePath)),
+                    'rotating_file_handle_error'
+                );
+            }
 
             $this->basePath = $newBasePath;
             $this->promoted = true;

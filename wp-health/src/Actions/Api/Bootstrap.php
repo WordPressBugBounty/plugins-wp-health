@@ -23,6 +23,12 @@ class Bootstrap implements ExecuteHooks
             }
 
             foreach ($item['methods'] as $key => $data) {
+                // A controller file emptied or truncated on disk must cost its own
+                // route, not every REST request the site serves.
+                if (!class_exists($data['class'])) {
+                    continue;
+                }
+
                 $options = isset($data['options']) ? $data['options'] : [];
                 $options['from'] = Controller::API;
                 $options['route'] = $item['route'];

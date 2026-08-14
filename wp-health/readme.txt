@@ -3,9 +3,9 @@
 Contributors: gmulti, truchot, wplio
 Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: v2.27.0
+Stable tag: v2.27.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,16 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.27.1 (08-14-2026) =
+- Improved: the "Disable XML-RPC" option now rejects every XML-RPC request, and the "Block user enumeration" option now also covers author archives, feeds and oEmbed responses.
+- Fixed: a hardening option could switch itself back off shortly after you enabled it, on a site that was working perfectly well. When your server only accepts part of the rules, the option now stays on and tells you it is partially applied.
+- Fixed: behind a CDN, comment protection was checking the address of the CDN instead of the visitor.
+- Improved: a backup now reports an error right away when the server refuses to write a database table, instead of carrying on.
+- Fixed: a restoration could finish without telling you that a database table had not been written.
+- Fixed: cloning a site to a destination hosted on WP Engine could fail to write files.
+- Improved: the hosting provider displayed for your site is now checked against your server name, so a site moved to another host no longer keeps its previous provider.
+- Improved: code quality improvements under the hood.
 
 = 2.27.0 (08-10-2026) =
 - Security: fixed a cross-site request forgery vulnerability.
