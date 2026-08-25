@@ -14,6 +14,8 @@ use WPUmbrella\Services\HostResolver;
 use WPUmbrella\Helpers\Host;
 use WPUmbrella\Helpers\Controller as ControllerHelper;
 use WPUmbrella\Services\Provider\Compatibility\DiviUpdater;
+use WPUmbrella\Actions\TwoFactor\ActivityLogEvents as TwoFactorActivityLogEvents;
+use WPUmbrella\Services\TwoFactor\TwoFactorPolicy;
 
 abstract class Kernel
 {
@@ -247,6 +249,24 @@ abstract class Kernel
         return isset($response['authorized']) && $response['authorized'];
     }
 
+    /**
+     * @param \WP_User|false $user
+     *
+     * @return void
+     */
+    protected static function recordTwoFactorBypass($user)
+    {
+        if (!is_object($user) || empty($user->ID)) {
+            return;
+        }
+
+        if (!(new TwoFactorPolicy())->appliesToUser($user)) {
+            return;
+        }
+
+        (new TwoFactorActivityLogEvents())->onBypassed($user);
+    }
+
     public static function maybeMagicLogin()
     {
         if (isset(self::$universalProcess['action']) && self::$universalProcess['action'] === '/v1/login') {
@@ -295,12 +315,14 @@ abstract class Kernel
 
             $user = get_userdata($userId);
 
+            self::recordTwoFactorBypass($user);
+
             wp_set_current_user((int) $user->ID, $user->user_login);
 
             // On Cloudways type installations, and the trigger by API requires this prevention.
             if (!defined('SECURE_AUTH_COOKIE')) {
                 wp_cookie_constants();
-                wp_umbrella_get_service('RequestSettings')->setCookies($user);
+                wp_umbrella_get_service('RequestSettings')->preventWPEngine();
             }
 
             wp_set_auth_cookie($user->ID);
@@ -522,8 +544,23 @@ abstract class Kernel
         add_action('wp_ajax_nopriv_' . \WPUmbrella\Controller\Plugin\DataSingle::NONCE_ACTION, [\WPUmbrella\Controller\Plugin\DataSingle::class, 'getPluginDataByAjaxRouting']);
     }
 
+    protected static function snapshotRequestIsSigned()
+    {
+        $timestamp = isset($_POST['timestamp']) ? $_POST['timestamp'] : '';
+        $signature = isset($_POST['signature']) ? $_POST['signature'] : '';
+
+        return wp_umbrella_verify_admin_request([
+            'action' => 'wp_umbrella_snapshot_data',
+            'timestamp' => (string) $timestamp,
+        ], $signature, $timestamp);
+    }
+
     public static function snapshot()
     {
+        if (!self::snapshotRequestIsSigned()) {
+            return;
+        }
+
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_snapshot_data')) {
             return;
@@ -551,6 +588,10 @@ abstract class Kernel
         }
 
         if (filter_input(INPUT_GET, 'force-check') !== '1') {
+            return;
+        }
+
+        if (!self::adminRequestIsSigned()) {
             return;
         }
 
@@ -584,12 +625,37 @@ abstract class Kernel
         wp_umbrella_debug_log('admin-ajax fallback: prepared force-check admin context (pagenow=update-core.php) before admin_init');
     }
 
+    protected static function adminRequestPlugin()
+    {
+        return isset($_POST['plugin']) ? (string) wp_unslash($_POST['plugin']) : '';
+    }
+
+    protected static function adminRequestIsSigned()
+    {
+        $timestamp = isset($_POST['timestamp']) ? $_POST['timestamp'] : '';
+        $signature = isset($_POST['signature']) ? $_POST['signature'] : '';
+
+        return wp_umbrella_verify_admin_request([
+            'action' => 'wp_umbrella_update_admin_request',
+            'plugin' => self::adminRequestPlugin(),
+            'timestamp' => (string) $timestamp,
+        ], $signature, $timestamp);
+    }
+
     public static function updateAdminRequest()
     {
         // Make sure required values are set.
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
-        $plugin = isset($_POST['plugin']) ? $_POST['plugin'] : '';
-        $requireBackup = isset($_POST['require_backup']) ? (bool) $_POST['require_backup'] : false;
+        $plugin = self::adminRequestPlugin();
+
+        if (!self::adminRequestIsSigned()) {
+            wp_send_json_error(
+                [
+                    'code' => 'invalid_params',
+                    'message' => __('Required parameters are missing', 'wp-health'),
+                ]
+            );
+        }
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdminUser();
@@ -640,7 +706,9 @@ abstract class Kernel
             $result = wp_umbrella_get_service('ManagePlugin')->bulkUpdate($plugins, [
                 'try_ajax' => false,
                 'only_ajax' => false,
-                'require_backup' => $requireBackup,
+                // The caller that opened this loopback owns the rollback, so the
+                // child must never take a second one.
+                'require_backup' => false,
                 'skip_lock' => true,
             ]);
 

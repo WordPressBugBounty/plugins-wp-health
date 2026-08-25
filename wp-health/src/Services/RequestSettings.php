@@ -18,29 +18,6 @@ class RequestSettings
      * In WP Engine hosting only requests from logged in users with auth cookies are given filesystem
      *  write access.
      */
-    public function setCookies($user)
-    {
-        $user_id = (int) $user->ID;
-
-        $cookies = [];
-        $secure = is_ssl();
-        $secure = apply_filters('secure_auth_cookie', $secure, $user_id);
-
-        if ($secure) {
-            $auth_cookie_name = SECURE_AUTH_COOKIE;
-            $scheme = 'secure_auth';
-        } else {
-            $auth_cookie_name = AUTH_COOKIE;
-            $scheme = 'auth';
-        }
-
-        $expiration = time() + (DAY_IN_SECONDS * 14);
-
-        $cookies[$auth_cookie_name] = wp_generate_auth_cookie($user_id, $expiration, $scheme);
-        $cookies[LOGGED_IN_COOKIE] = wp_generate_auth_cookie($user_id, $expiration, 'logged_in');
-        $this->preventWPEngine();
-    }
-
     public function preventWPEngine()
     {
         if (!defined('WPE_APIKEY')) {
@@ -97,7 +74,7 @@ class RequestSettings
             return false;
         }
 
-        $this->setCookies($user);
+        $this->preventWPEngine();
     }
 
     protected function preventOxygen()
@@ -243,10 +220,7 @@ class RequestSettings
                 'blocking' => false,
                 'sslverify' => false,
                 'user-agent' => 'WPUmbrella',
-                'body' => [
-                    'action' => 'wp_umbrella_snapshot_data',
-                    'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),
-                ]
+                'body' => wp_umbrella_snapshot_request_body(),
             ]
         );
     }

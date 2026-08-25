@@ -20,6 +20,10 @@ class LoginRateLimit implements ExecuteHooks
 
     const STRIKES_PREFIX = 'wp_umbrella_login_rl_strikes_';
 
+    const BLOCK_INDEX_KEY = 'wp_umbrella_login_rl_blocked';
+
+    const BLOCK_INDEX_MAX = 200;
+
     const MIN_FAILURES = 6;
 
     const MAX_FAILURES = 9;
@@ -46,7 +50,6 @@ class LoginRateLimit implements ExecuteHooks
 
         add_filter('authenticate', [$this, 'enforce'], 20, 2);
         add_action('wp_login_failed', [$this, 'onFailure'], 10, 1);
-        add_action('wp_login', [$this, 'onSuccess'], 10, 1);
 
         add_action('init', function () {
             (new SyncScheduler())->schedule();
@@ -78,6 +81,8 @@ class LoginRateLimit implements ExecuteHooks
 
         set_transient($this->blockKey($ip), 1, $duration);
 
+        $this->rememberBlock($ip, $duration);
+
         delete_transient($this->key($ip));
 
         return $this->deny($username);
@@ -94,18 +99,6 @@ class LoginRateLimit implements ExecuteHooks
         $count = $this->getCount($ip) + 1;
 
         set_transient($this->key($ip), $count, $this->windowMinutes() * MINUTE_IN_SECONDS);
-    }
-
-    public function onSuccess($login)
-    {
-        $ip = ClientIpResolver::resolve();
-
-        if ($ip === null) {
-            return;
-        }
-
-        delete_transient($this->key($ip));
-        delete_transient($this->strikesKey($ip));
     }
 
     protected function deny($username)
@@ -136,6 +129,32 @@ class LoginRateLimit implements ExecuteHooks
     protected function seed($context)
     {
         return (int) hexdec(substr(md5(wp_salt('nonce') . $context), 0, 7));
+    }
+
+    protected function rememberBlock($ip, $duration)
+    {
+        $index = get_option(self::BLOCK_INDEX_KEY, []);
+
+        if (!is_array($index)) {
+            $index = [];
+        }
+
+        $now = time();
+
+        foreach ($index as $hash => $expiresAt) {
+            if (!is_numeric($expiresAt) || (int) $expiresAt <= $now) {
+                unset($index[$hash]);
+            }
+        }
+
+        $index[md5($ip)] = $now + $duration;
+
+        if (count($index) > self::BLOCK_INDEX_MAX) {
+            asort($index);
+            $index = array_slice($index, -self::BLOCK_INDEX_MAX, null, true);
+        }
+
+        update_option(self::BLOCK_INDEX_KEY, $index, false);
     }
 
     protected function getCount($ip)

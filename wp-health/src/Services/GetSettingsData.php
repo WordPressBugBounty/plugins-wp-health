@@ -47,6 +47,7 @@ class GetSettingsData
             'api_key' => $options['api_key'] ?? null,
             'secret_token' => $options['secret_token'] ?? null,
             'request_token' => $options['request_token'] ?? null,
+            'public_key' => $options['public_key'] ?? null,
             'has_htpasswd' => apply_filters('wp_umbrella_has_htpasswd', $hasHtpasswd) ? true : false,
             'user' => $owner,
             'allow_tracking' => $allowTracking && !empty($allowTracking) ? true : false,

@@ -15,6 +15,7 @@ class HtaccessFile
     const CANARY_DIRNAME = 'wpu-canary';
     const UPLOADS_PROBE_TRANSIENT = 'wp_umbrella_uploads_php_probe';
     const CANARY_OUTPUT = 'wpu-canary-ok';
+    const CANARY_SOURCE = "<?php echo 'wpu' . '-canary-' . 'ok';";
 
     /**
      * Every rule of the block is relative to the WordPress directory, and Apache
@@ -323,6 +324,15 @@ class HtaccessFile
     }
 
     public function writeUmbrellaBlock()
+    {
+        $result = $this->doWriteUmbrellaBlock();
+
+        wp_umbrella_get_service('HardeningSettings')->recordBlockState($result);
+
+        return $result;
+    }
+
+    protected function doWriteUmbrellaBlock()
     {
         if (empty($_SERVER['SERVER_SOFTWARE'])) {
             return ['status' => 'not_applicable', 'reason' => 'no_server_context'];
@@ -698,7 +708,7 @@ class HtaccessFile
     }
 
     /**
-     * @return string blocked|executed|unknown
+     * @return string blocked|executed|served_raw|unknown
      */
     public function probeUploadsPhpExecution()
     {
@@ -760,9 +770,19 @@ class HtaccessFile
                 return 'unknown';
             }
 
-            return $response['code'] === 200 && strpos($response['body'], self::CANARY_OUTPUT) !== false
-                ? 'executed'
-                : 'blocked';
+            if ($response['code'] !== 200) {
+                return 'blocked';
+            }
+
+            if (strpos($response['body'], self::CANARY_OUTPUT) !== false) {
+                return 'executed';
+            }
+
+            if (strpos($response['body'], self::CANARY_SOURCE) !== false) {
+                return 'served_raw';
+            }
+
+            return 'unknown';
         } finally {
             $this->deleteCanary($canary);
         }
@@ -782,7 +802,7 @@ class HtaccessFile
         $path = $dir . '/' . $name . '.php';
         $controlPath = $dir . '/' . $name . '.txt';
 
-        $created = file_put_contents($path, "<?php echo 'wpu' . '-canary-' . 'ok';");
+        $created = file_put_contents($path, self::CANARY_SOURCE);
 
         if ($created === false) {
             return null;
@@ -877,6 +897,8 @@ class HtaccessFile
         if ($result['status'] === 'error') {
             return $result;
         }
+
+        wp_umbrella_get_service('HardeningSettings')->clearBlockState();
 
         $result['uploads'] = $this->cleanUploadsBlock();
         $result['headers'] = $this->cleanSecurityHeadersBlock();

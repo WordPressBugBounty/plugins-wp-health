@@ -217,6 +217,37 @@ class EventBuffer
     }
 
     /**
+     * Deletes the oldest rows, FIFO, without reading them back.
+     *
+     * @param int $limit
+     *
+     * @return int Number of rows deleted
+     */
+    public function deleteOldest($limit)
+    {
+        global $wpdb;
+
+        $limit = (int) $limit;
+
+        if ($limit <= 0) {
+            return 0;
+        }
+
+        SchemaInstaller::ensureTableExists();
+
+        $tableName = SchemaInstaller::getTableName();
+
+        $deleted = $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$tableName} ORDER BY occurred_at ASC, id ASC LIMIT %d",
+                $limit
+            )
+        );
+
+        return $deleted === false ? 0 : (int) $deleted;
+    }
+
+    /**
      * Removes every row from the buffer. Used by the support page maintenance
      * action when the operator wants to drop all pending events without
      * waiting for the sync to drain them.

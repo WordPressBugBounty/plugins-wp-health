@@ -106,12 +106,26 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
             return $plugins;
         }
 
-        $plugins[WP_UMBRELLA_BNAME]['Name'] = $whiteLabelData['plugin_name'];
-        $plugins[WP_UMBRELLA_BNAME]['Title'] = $whiteLabelData['plugin_name'];
-        $plugins[WP_UMBRELLA_BNAME]['Description'] = $whiteLabelData['plugin_description'];
-        $plugins[WP_UMBRELLA_BNAME]['AuthorURI'] = $whiteLabelData['plugin_author_url'];
-        $plugins[WP_UMBRELLA_BNAME]['Author'] = $whiteLabelData['plugin_author'];
-        $plugins[WP_UMBRELLA_BNAME]['AuthorName'] = $whiteLabelData['plugin_author'];
+        // get_plugins() runs before this filter, so the header markup policy of
+        // the core has to be applied again on the values we substitute.
+        $tagsInLinks = [
+            'abbr' => ['title' => true],
+            'acronym' => ['title' => true],
+            'code' => true,
+            'em' => true,
+            'strong' => true,
+        ];
+        $tags = array_merge($tagsInLinks, ['a' => ['href' => true, 'title' => true]]);
+
+        $name = wp_kses((string) $whiteLabelData['plugin_name'], $tagsInLinks);
+        $author = wp_kses((string) $whiteLabelData['plugin_author'], $tags);
+
+        $plugins[WP_UMBRELLA_BNAME]['Name'] = $name;
+        $plugins[WP_UMBRELLA_BNAME]['Title'] = $name;
+        $plugins[WP_UMBRELLA_BNAME]['Description'] = wp_kses((string) $whiteLabelData['plugin_description'], $tags);
+        $plugins[WP_UMBRELLA_BNAME]['AuthorURI'] = esc_url($whiteLabelData['plugin_author_url']);
+        $plugins[WP_UMBRELLA_BNAME]['Author'] = $author;
+        $plugins[WP_UMBRELLA_BNAME]['AuthorName'] = $author;
         $plugins[WP_UMBRELLA_BNAME]['PluginURI'] = '';
 
         return $plugins;

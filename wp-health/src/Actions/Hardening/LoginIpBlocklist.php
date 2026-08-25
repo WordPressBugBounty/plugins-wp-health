@@ -39,7 +39,7 @@ class LoginIpBlocklist implements ExecuteHooks
         }
 
         add_filter('authenticate', [$this, 'enforce'], 25, 3);
-        add_action('wp_login', [$this, 'onSuccess'], 10, 1);
+        add_action('wp_login', [$this, 'onSuccess'], 10, 2);
 
         add_action('init', function () {
             (new SyncScheduler())->schedule();
@@ -54,7 +54,7 @@ class LoginIpBlocklist implements ExecuteHooks
             return $user;
         }
 
-        if ($this->hasSuccessfulHistory($ip)) {
+        if ($this->hasSuccessfulHistory($ip, $this->normalizeIdentity($username))) {
             return $user;
         }
 
@@ -80,7 +80,13 @@ class LoginIpBlocklist implements ExecuteHooks
         ], self::BLOCK_BUCKET_KEY, self::BLOCK_WINDOW);
     }
 
-    public function onSuccess($login)
+    /**
+     * @param string        $login
+     * @param \WP_User|null $user
+     *
+     * @return void
+     */
+    public function onSuccess($login, $user = null)
     {
         $ip = BloomFilter::canonicalizeIp(ClientIpResolver::resolve());
 
@@ -88,16 +94,48 @@ class LoginIpBlocklist implements ExecuteHooks
             return;
         }
 
-        set_transient($this->knownGoodKey($ip), 1, self::KNOWN_GOOD_TTL);
+        foreach ($this->identitiesOf($login, $user) as $identity) {
+            set_transient($this->knownGoodKey($ip, $identity), 1, self::KNOWN_GOOD_TTL);
+        }
     }
 
-    protected function hasSuccessfulHistory($ip)
+    /**
+     * @param string        $login
+     * @param \WP_User|null $user
+     *
+     * @return array
+     */
+    protected function identitiesOf($login, $user)
     {
-        return (bool) get_transient($this->knownGoodKey($ip));
+        $identities = [];
+
+        if (is_string($login)) {
+            $identities[] = $this->normalizeIdentity($login);
+        }
+
+        if (is_object($user) && isset($user->user_email) && is_string($user->user_email)) {
+            $identities[] = $this->normalizeIdentity($user->user_email);
+        }
+
+        return array_unique(array_filter($identities));
     }
 
-    protected function knownGoodKey($ip)
+    protected function normalizeIdentity($identity)
     {
-        return self::KNOWN_GOOD_PREFIX . md5($ip);
+        return is_string($identity) ? strtolower(trim($identity)) : '';
+    }
+
+    protected function hasSuccessfulHistory($ip, $identity)
+    {
+        if ($identity === '') {
+            return false;
+        }
+
+        return (bool) get_transient($this->knownGoodKey($ip, $identity));
+    }
+
+    protected function knownGoodKey($ip, $identity)
+    {
+        return self::KNOWN_GOOD_PREFIX . md5($ip . '|' . $identity);
     }
 }

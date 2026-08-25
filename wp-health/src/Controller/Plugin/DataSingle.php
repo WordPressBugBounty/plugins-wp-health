@@ -13,6 +13,25 @@ class DataSingle extends AbstractController
 
     public static function getPluginDataByAjaxRouting($plugin)
     {
+        $timestamp = isset($_POST['timestamp']) ? $_POST['timestamp'] : '';
+        $signature = isset($_POST['signature']) ? $_POST['signature'] : '';
+        $requested = isset($_POST['plugin']) ? (string) wp_unslash($_POST['plugin']) : '';
+
+        $signed = wp_umbrella_verify_admin_request([
+            'action' => self::NONCE_ACTION,
+            'plugin' => $requested,
+            'timestamp' => (string) $timestamp,
+        ], $signature, $timestamp);
+
+        if (!$signed) {
+            wp_send_json_error(
+                [
+                    'code' => 'invalid_params',
+                    'message' => __('Required parameters are missing', 'wp-health'),
+                ]
+            );
+        }
+
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdminUser();
 
@@ -28,9 +47,7 @@ class DataSingle extends AbstractController
 
         wp_umbrella_get_service('RequestSettings')->preventWPEngine();
 
-        $plugin = isset($_POST['plugin']) ? $_POST['plugin'] : '';
-
-        if (empty($plugin)) {
+        if (empty($requested)) {
             wp_send_json_error(
                 [
                     'code' => 'invalid_params',
@@ -39,7 +56,7 @@ class DataSingle extends AbstractController
             );
         }
 
-        $plugin = wp_umbrella_get_service('PluginsProvider')->getPlugin($plugin);
+        $plugin = wp_umbrella_get_service('PluginsProvider')->getPlugin($requested);
 
         wp_send_json($plugin);
     }
@@ -49,6 +66,13 @@ class DataSingle extends AbstractController
         // Create nonce.
         $nonce = wp_create_nonce(self::NONCE_ACTION);
 
+        $timestamp = (string) time();
+        $signature = wp_umbrella_sign_admin_request([
+            'action' => self::NONCE_ACTION,
+            'plugin' => $plugin,
+            'timestamp' => $timestamp,
+        ]);
+
         $args = [
             'timeout' => 45,
             'cookies' => [],
@@ -57,6 +81,8 @@ class DataSingle extends AbstractController
                 'action' => self::NONCE_ACTION,
                 'nonce' => $nonce,
                 'plugin' => $plugin,
+                'timestamp' => $timestamp,
+                'signature' => $signature,
             ],
         ];
 

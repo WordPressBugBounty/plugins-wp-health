@@ -3,6 +3,9 @@ namespace WPUmbrella\Services\DatabaseOptimization;
 
 class ExpiredTransient
 {
+    /** Rows handled per call. Successive runs converge. */
+    const BATCH_LIMIT = 5000;
+
     public function getData()
     {
         global $wpdb;
@@ -43,17 +46,21 @@ class ExpiredTransient
                 $wpdb->prepare(
                     "SELECT option_name FROM $wpdb->options
 					WHERE option_name LIKE %s
-					AND option_value < %d",
+					AND option_value < %d
+					LIMIT %d",
                     $wpdb->esc_like('_transient_timeout_') . '%',
-                    $time
+                    $time,
+                    self::BATCH_LIMIT
                 )
             );
         } catch (\Exception $e) {
             $query = $wpdb->get_col(
                 $wpdb->prepare(
                     "SELECT option_name FROM $wpdb->options
-					WHERE option_name LIKE %s",
-                    $wpdb->esc_like('_transient_') . '%'
+					WHERE option_name LIKE %s
+					LIMIT %d",
+                    $wpdb->esc_like('_transient_') . '%',
+                    self::BATCH_LIMIT
                 )
             );
         }

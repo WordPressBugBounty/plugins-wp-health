@@ -9,6 +9,12 @@ class HardeningSettings
 {
     const OPTION_KEY = 'wp_umbrella_hardening_settings';
 
+    const BLOCK_STATE_OPTION_KEY = 'wp_umbrella_hardening_htaccess_state';
+
+    const NETWORK_TWO_FACTOR_OPTION_KEY = 'wp_umbrella_hardening_require_2fa_admin';
+
+    const TWO_FACTOR_KEY = 'require_2fa_admin';
+
     protected $lastHtaccessResult = null;
 
     public function getLastHtaccessResult()
@@ -29,6 +35,7 @@ class HardeningSettings
             'disable_file_mods' => false,
             'disable_xmlrpc' => false,
             'htaccess_umbrella_block' => false,
+            'require_2fa_admin' => false,
         ];
     }
 
@@ -47,7 +54,17 @@ class HardeningSettings
             $settings[$key] = $this->castBoolean($settings[$key]);
         }
 
-        return array_intersect_key($settings, $defaults);
+        $settings = array_intersect_key($settings, $defaults);
+
+        if ($this->isNetwork()) {
+            $networkValue = get_site_option(self::NETWORK_TWO_FACTOR_OPTION_KEY, null);
+
+            if ($networkValue !== null) {
+                $settings[self::TWO_FACTOR_KEY] = $this->castBoolean($networkValue);
+            }
+        }
+
+        return $settings;
     }
 
     public function isEnabled($key)
@@ -55,6 +72,32 @@ class HardeningSettings
         $settings = $this->getSettings();
 
         return isset($settings[$key]) && $settings[$key];
+    }
+
+    /**
+     * Settings stored network wide rather than per site.
+     *
+     * @return array
+     */
+    public function getNetworkScopedKeys()
+    {
+        if (!$this->isNetwork()) {
+            return [];
+        }
+
+        return [self::TWO_FACTOR_KEY];
+    }
+
+    /**
+     * @return bool
+     */
+    public function currentUserCanEditNetworkScopedKeys()
+    {
+        if (!$this->isNetwork()) {
+            return true;
+        }
+
+        return current_user_can('manage_network_options');
     }
 
     public function updateSettings($params)
@@ -74,11 +117,34 @@ class HardeningSettings
         // before it is written. A failed write reverts its own option below.
         update_option(self::OPTION_KEY, $settings);
 
+        if ($this->isNetwork() && isset($params[self::TWO_FACTOR_KEY])) {
+            update_site_option(self::NETWORK_TWO_FACTOR_OPTION_KEY, $settings[self::TWO_FACTOR_KEY] ? 1 : 0);
+        }
+
         $settings = $this->syncHtaccessUmbrellaBlock($previous, $settings);
 
         update_option(self::OPTION_KEY, $settings);
 
+        $this->announceTwoFactorPolicyChange($previous, $settings);
+
         return $settings;
+    }
+
+    protected function announceTwoFactorPolicyChange($previous, $settings)
+    {
+        $before = isset($previous[self::TWO_FACTOR_KEY]) && $previous[self::TWO_FACTOR_KEY];
+        $after = isset($settings[self::TWO_FACTOR_KEY]) && $settings[self::TWO_FACTOR_KEY];
+
+        if ($before === $after) {
+            return;
+        }
+
+        do_action('wp_umbrella_two_factor_policy_changed', $after);
+    }
+
+    protected function isNetwork()
+    {
+        return function_exists('is_multisite') && is_multisite();
     }
 
     protected function syncHtaccessUmbrellaBlock($previous, $settings)
@@ -128,6 +194,45 @@ class HardeningSettings
             && ($result['status'] === 'ok' || $result['status'] === 'partial');
     }
 
+    /**
+     * @return array|null
+     */
+    public function getBlockState()
+    {
+        $state = get_option(self::BLOCK_STATE_OPTION_KEY, null);
+
+        if (!is_array($state) || !isset($state['status'])) {
+            return null;
+        }
+
+        return $state;
+    }
+
+    public function recordBlockState($result)
+    {
+        if (!$this->blockWasApplied($result)) {
+            return;
+        }
+
+        $version = null;
+
+        if ($result['status'] === 'ok') {
+            $version = wp_umbrella_get_service('HtaccessFile')->getBlockVersion();
+        }
+
+        update_option(self::BLOCK_STATE_OPTION_KEY, [
+            'status' => $result['status'],
+            'version' => $version,
+            'self_check' => isset($result['self_check']) ? $result['self_check'] : null,
+            'updated_at' => time(),
+        ], false);
+    }
+
+    public function clearBlockState()
+    {
+        delete_option(self::BLOCK_STATE_OPTION_KEY);
+    }
+
     protected function isSecurityHeadersEnabled($settings)
     {
         return isset($settings['security_headers']) && $settings['security_headers'];
@@ -139,7 +244,25 @@ class HardeningSettings
 
         $settings['file_editor_disabled'] = defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT;
 
+        $state = $this->getBlockState();
+
+        $settings['htaccess_umbrella_block_state'] = $this->blockStateLabel($settings, $state);
+        $settings['htaccess_umbrella_block_self_check'] = isset($state['self_check']) ? $state['self_check'] : null;
+
         return $settings;
+    }
+
+    protected function blockStateLabel($settings, $state)
+    {
+        if (empty($settings['htaccess_umbrella_block'])) {
+            return 'off';
+        }
+
+        if ($state === null) {
+            return 'on';
+        }
+
+        return $state['status'] === 'partial' ? 'partial' : 'on';
     }
 
     protected function castBoolean($value)

@@ -9,7 +9,9 @@ class RegenerateSecretToken extends AbstractController
     {
         $secretToken = wp_umbrella_generate_random_string(128);
 
-        if (!wp_umbrella_is_new_hash()) {
+        $wasNewHash = wp_umbrella_is_new_hash();
+
+        if (!$wasNewHash) {
             wp_umbrella_init_new_hash();
         }
 
@@ -31,17 +33,18 @@ class RegenerateSecretToken extends AbstractController
             'save' => true
         ], wp_umbrella_get_api_key());
 
-        if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-            $options['secret_token'] = $oldSecretToken;
-            wp_umbrella_get_service('Option')->setOptions($options);
-            return $this->returnResponse([
-                'code' => 'error'
-            ]);
-        }
+        $isSecretTokenValidated = is_array($responseValidateSecret)
+            && isset($responseValidateSecret['success'])
+            && $responseValidateSecret['success'];
 
-        if (!$responseValidateSecret['success']) {
+        if (!$isSecretTokenValidated) {
             $options['secret_token'] = $oldSecretToken;
             wp_umbrella_get_service('Option')->setOptions($options);
+
+            if (!$wasNewHash) {
+                wp_umbrella_rollback_new_hash();
+            }
+
             return $this->returnResponse([
                 'code' => 'error'
             ]);

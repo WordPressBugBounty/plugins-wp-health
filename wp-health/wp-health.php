@@ -8,7 +8,7 @@ Text Domain: wp-health
 Domain Path: /languages/
 Requires at least: 5.8
 Requires PHP: 7.4
-Version: 2.27.1
+Version: 2.27.2
 License: GPLv2
 */
 
@@ -51,4 +51,7 @@ if (defined('WP_CLI') && WP_CLI && class_exists('\\WPUmbrella\\CLI\\PairCommand'
 }
 if (defined('WP_CLI') && WP_CLI && class_exists('\\WPUmbrella\\CLI\\AttachByApiKeyCommand')) {
     \WP_CLI::add_command('wp-umbrella attach', \WPUmbrella\CLI\AttachByApiKeyCommand::class);
+}
+if (defined('WP_CLI') && WP_CLI && class_exists('\\WPUmbrella\\CLI\\TwoFactorResetCommand')) {
+    \WP_CLI::add_command('wp-umbrella 2fa-reset', \WPUmbrella\CLI\TwoFactorResetCommand::class);
 }

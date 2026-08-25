@@ -728,6 +728,13 @@ class Update extends BaseManageUpdate
         // Create nonce.
         $nonce = wp_create_nonce('wp_umbrella_update_admin_request');
 
+        $timestamp = (string) time();
+        $signature = wp_umbrella_sign_admin_request([
+            'action' => 'wp_umbrella_update_admin_request',
+            'plugin' => $plugin,
+            'timestamp' => $timestamp,
+        ]);
+
         $args = [
             'timeout' => 45,
             'cookies' => [],
@@ -736,6 +743,8 @@ class Update extends BaseManageUpdate
                 'action' => 'wp_umbrella_update_admin_request',
                 'nonce' => $nonce,
                 'plugin' => $plugin,
+                'timestamp' => $timestamp,
+                'signature' => $signature,
             ],
         ];
 

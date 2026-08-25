@@ -20,7 +20,7 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 		<div class="module-wp-health">
 			<?php
 
-                if (empty($data['api_key']) && empty($data['secret_token'])) {
+                if (empty($data['api_key']) && empty($data['secret_token']) && empty($data['public_key'])) {
                     include_once __DIR__ . '/../components/no-configuration.php';
                 } else {
                     include_once __DIR__ . '/../components/connected.php';

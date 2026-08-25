@@ -24,6 +24,12 @@ class RedirectRouter implements ExecuteHooks
         '/xmlrpc.php',
     ];
 
+    /** Matches the source_pattern column width. */
+    protected const MAX_PATH_LENGTH = 2048;
+
+    /** Rules evaluated per request. */
+    protected const MAX_REDIRECTS = 1000;
+
     public function hooks()
     {
         add_action('init', [$this, 'handleRedirect'], 12);
@@ -41,7 +47,7 @@ class RedirectRouter implements ExecuteHooks
 
         $currentPath = wp_parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-        if (empty($currentPath)) {
+        if (empty($currentPath) || strlen($currentPath) > self::MAX_PATH_LENGTH) {
             return;
         }
 
@@ -106,7 +112,10 @@ class RedirectRouter implements ExecuteHooks
         }
 
         $results = $wpdb->get_results(
-            "SELECT source_pattern, destination_url, redirect_type, match_type FROM {$tableName}"
+            $wpdb->prepare(
+                "SELECT source_pattern, destination_url, redirect_type, match_type FROM {$tableName} LIMIT %d",
+                self::MAX_REDIRECTS
+            )
         );
 
         $this->redirectsCache = $results ?: [];

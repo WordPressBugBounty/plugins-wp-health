@@ -20,6 +20,7 @@ class PluginSchema implements SchemaInterface
                 'require_php_version' => 'RequiresPHP',
                 'title' => 'Title',
                 'changelog' => 'changelog',
+                'changelog_truncated' => 'changelog_truncated',
                 'need_update' => (object) [
                     'path' => 'update',
                     'fn' => function ($data) {
@@ -40,6 +41,7 @@ class PluginSchema implements SchemaInterface
                             'requires' => \property_exists($data, 'requires') ? $data->requires : '',
                             'requires_php' => \property_exists($data, 'requires_php') ? $data->requires_php : '',
                             'compatibility' => \property_exists($data, 'compatibility') ? $data->compatibility : '',
+                            'upgrade_notice' => \property_exists($data, 'upgrade_notice') && \is_string($data->upgrade_notice) ? $data->upgrade_notice : '',
                             'is_blocked' => \property_exists($data, 'is_blocked') ? (bool) $data->is_blocked : false,
                             'blocked_reason' => \property_exists($data, 'blocked_reason') ? $data->blocked_reason : '',
                         ];

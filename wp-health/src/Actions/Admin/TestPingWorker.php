@@ -45,8 +45,21 @@ class TestPingWorker implements ExecuteHooksBackend
             exit;
         }
 
+        $keyState = wp_umbrella_get_key_state();
+        $isSignedSystem = in_array($keyState, ['dual', 'new'], true) && !empty(wp_umbrella_get_public_key());
+
         $bearer = wp_umbrella_get_outbound_bearer();
         if (empty($bearer)) {
+            if ($isSignedSystem) {
+                $this->storeResult([
+                    'status' => 'ok',
+                    'reason' => 'signed',
+                    'message' => __('This site is connected through signed communication. WP Umbrella reaches the site directly, so there is no outbound token to ping.', 'wp-health'),
+                ]);
+                wp_safe_redirect($redirect);
+                exit;
+            }
+
             $this->storeResult([
                 'status' => 'error',
                 'reason' => 'not_connected',

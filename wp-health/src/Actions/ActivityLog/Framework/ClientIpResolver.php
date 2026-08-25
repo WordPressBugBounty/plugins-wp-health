@@ -6,11 +6,9 @@ defined('ABSPATH') or die('Cheatin&#8217; uh?');
 
 class ClientIpResolver
 {
-    protected static $proxyHeaders = [
-        'HTTP_CF_CONNECTING_IP',
-        'HTTP_X_FORWARDED_FOR',
-        'HTTP_X_REAL_IP',
-    ];
+    const TRUST_CLOUDFLARE = 'cloudflare';
+
+    const TRUST_FILTERED = 'filtered';
 
     protected static $cloudflareRanges = [
         '173.245.48.0/20',
@@ -65,43 +63,84 @@ class ClientIpResolver
     public static function resolve()
     {
         $remoteAddr = isset($_SERVER['REMOTE_ADDR']) ? self::sanitizeIp($_SERVER['REMOTE_ADDR']) : null;
+        $trust = self::trustLevel($remoteAddr);
 
-        if (self::isTrustedProxy($remoteAddr)) {
-            foreach (self::$proxyHeaders as $header) {
-                if (empty($_SERVER[$header])) {
-                    continue;
-                }
+        if ($trust === null) {
+            return $remoteAddr;
+        }
 
-                $ip = self::extractFirstIp($_SERVER[$header]);
+        if ($trust === self::TRUST_CLOUDFLARE && !empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+            $ip = self::extractFirstIp($_SERVER['HTTP_CF_CONNECTING_IP']);
 
-                if ($ip !== null) {
-                    return $ip;
-                }
+            if ($ip !== null) {
+                return $ip;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ip = self::extractForwardedFor($_SERVER['HTTP_X_FORWARDED_FOR']);
+
+            if ($ip !== null) {
+                return $ip;
+            }
+        }
+
+        if (!empty($_SERVER['HTTP_X_REAL_IP'])) {
+            $ip = self::extractFirstIp($_SERVER['HTTP_X_REAL_IP']);
+
+            if ($ip !== null) {
+                return $ip;
             }
         }
 
         return $remoteAddr;
     }
 
-    protected static function isTrustedProxy($remoteAddr)
+    protected static function trustLevel($remoteAddr)
     {
         if ($remoteAddr === null) {
-            return false;
+            return null;
+        }
+
+        if (self::matches($remoteAddr, self::$cloudflareRanges)) {
+            return self::TRUST_CLOUDFLARE;
         }
 
         $trusted = apply_filters('wp_umbrella_trusted_proxies', self::$cloudflareRanges);
 
-        if (!is_array($trusted)) {
-            return false;
+        if (is_array($trusted) && self::matches($remoteAddr, $trusted)) {
+            return self::TRUST_FILTERED;
         }
 
-        foreach ($trusted as $range) {
-            if (self::ipInRange($remoteAddr, $range)) {
-                return true;
+        return null;
+    }
+
+    protected static function isTrustedProxy($remoteAddr)
+    {
+        return self::trustLevel($remoteAddr) !== null;
+    }
+
+    protected static function extractForwardedFor($value)
+    {
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $parts = array_reverse(explode(',', $value));
+
+        foreach ($parts as $part) {
+            $ip = self::sanitizeIp(trim($part));
+
+            if ($ip === null) {
+                return null;
+            }
+
+            if (!self::isTrustedProxy($ip)) {
+                return $ip;
             }
         }
 
-        return false;
+        return null;
     }
 
     protected static function ipInRange($ip, $range)

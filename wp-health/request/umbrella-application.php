@@ -113,7 +113,9 @@ try {
     ]);
     Kernel::buildContainer();
 
-	if (!defined('WP_UMBRELLA_IS_ADMIN')) {
+	$request = UmbrellaRequest::createFromGlobals();
+
+	if (!defined('WP_UMBRELLA_IS_ADMIN') && Kernel::canExecute($request)) {
 		wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
 		wp_umbrella_get_service('RequestSettings')->setupAdmin();
 	}
@@ -124,8 +126,6 @@ try {
     ]);
     return;
 }
-
-$request = UmbrellaRequest::createFromGlobals();
 
 $controllers = Controllers::getControllers();
 $isAlreadyExecuted = false;

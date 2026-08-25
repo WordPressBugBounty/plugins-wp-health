@@ -13,10 +13,23 @@ defined('ABSPATH') or die('Cheatin&#8217; uh?');
  * - security.xmlrpc.abuse   (MEDIUM)
  *
  * The request IP is the offender, so no offenderIp metadata is needed.
+ *
+ * Occurrences are tallied in memory and written as one buffered row per method
+ * at the end of the request, carrying the count.
  */
 class XmlRpcSensor extends AbstractSensor
 {
     const ABUSE_METHODS = ['system.multicall', 'pingback.ping'];
+
+    /**
+     * @var array<string, int>
+     */
+    protected $counts = [];
+
+    /**
+     * @var bool
+     */
+    protected $flushScheduled = false;
 
     /**
      * @return void
@@ -37,8 +50,30 @@ class XmlRpcSensor extends AbstractSensor
             return;
         }
 
-        $this->recordEvent('security.xmlrpc.abuse', 'MEDIUM', [
-            'method' => $method,
-        ]);
+        if (!isset($this->counts[$method])) {
+            $this->counts[$method] = 0;
+        }
+
+        $this->counts[$method]++;
+
+        if (!$this->flushScheduled) {
+            add_action('shutdown', [$this, 'flush'], 10, 0);
+            $this->flushScheduled = true;
+        }
+    }
+
+    /**
+     * @return void
+     */
+    public function flush()
+    {
+        foreach ($this->counts as $method => $count) {
+            $this->recordEvent('security.xmlrpc.abuse', 'MEDIUM', [
+                'method' => $method,
+                'attempts' => (string) $count,
+            ]);
+        }
+
+        $this->counts = [];
     }
 }

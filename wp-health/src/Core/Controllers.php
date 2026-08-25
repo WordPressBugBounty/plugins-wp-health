@@ -371,6 +371,19 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/hardening/reset-blocks' => [
+                'route' => '/hardening/reset-blocks',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Options\HardeningResetBlocks::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/security/analysis' => [
                 'route' => '/security/analysis',
                 'methods' => [

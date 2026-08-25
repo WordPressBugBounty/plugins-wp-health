@@ -37,6 +37,8 @@ class Login extends AbstractController
             ], 401);
         }
 
+        $this->recordTwoFactorBypass($user);
+
         wp_set_current_user((int) $user->ID, $user->user_login);
         wp_set_auth_cookie((int) $user->ID);
 
@@ -59,5 +61,16 @@ class Login extends AbstractController
 		</html>
 		<?php
 		exit;
+    }
+
+    protected function recordTwoFactorBypass($user)
+    {
+        $policy = new \WPUmbrella\Services\TwoFactor\TwoFactorPolicy();
+
+        if (!$policy->appliesToUser($user)) {
+            return;
+        }
+
+        do_action('wp_umbrella_two_factor_bypassed', $user);
     }
 }

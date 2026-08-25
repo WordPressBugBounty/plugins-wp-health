@@ -9,6 +9,13 @@ class Plugins
 {
     const NAME_SERVICE = 'PluginsProvider';
 
+    /**
+     * A changelog is the whole history of a plugin, not the pending release.
+     * WooCommerce Subscriptions alone answers with 319 KB, which then crosses
+     * the admin-ajax loopback, our API and the dashboard to render one modal.
+     */
+    const CHANGELOG_MAX_LENGTH = 30000;
+
     protected $schema;
 
     public function __construct()
@@ -120,7 +127,6 @@ class Plugins
                         $current->response[$pluginPath]->name = $pluginData['Name'];
                         $current->response[$pluginPath]->old_version = $pluginData['Version'];
                         $current->response[$pluginPath]->file = $pluginPath;
-                        unset($current->response[$pluginPath]->upgrade_notice);
 
                         $data[$index]['update'] = $current->response[$pluginPath];
                     }
@@ -191,7 +197,6 @@ class Plugins
             $update->file = $pluginPath;
             $update->is_blocked = true;
             $update->blocked_reason = $reason;
-            unset($update->upgrade_notice);
 
             $data[$index]['update'] = $update;
         }
@@ -266,16 +271,25 @@ class Plugins
         $needUpdates = [];
         $needUpdates = get_plugin_updates();
 
+        $update = null;
         if (!empty($needUpdates) && is_array($needUpdates)) {
             if (isset($needUpdates[$plugin])) {
-                $data['update'] = $needUpdates[$plugin]->update;
+                $update = $needUpdates[$plugin]->update;
+                $data['update'] = $update;
             }
         }
 
-        $informations = $this->getPluginChangelog($plugin);
+        $informations = $this->getPluginChangelog($plugin, [
+            'update_slug' => is_object($update) && isset($update->slug) ? $update->slug : null,
+        ]);
 
-        if ($informations && isset($informations->sections['changelog'])) {
-            $data['changelog'] = $informations->sections['changelog'];
+        $changelog = $this->getChangelogFromInformation($informations);
+
+        if ($changelog !== null) {
+            $truncated = $this->truncateChangelog($changelog);
+
+            $data['changelog'] = $truncated['changelog'];
+            $data['changelog_truncated'] = $truncated['truncated'];
         }
 
         $schema = $this->schema->getSchema([
@@ -321,9 +335,14 @@ class Plugins
         return json_decode(wp_remote_retrieve_body($response), true);
     }
 
-    public function getPluginChangelog($slug)
+    /**
+     * @param string $plugin Plugin file, eg. woocommerce-subscriptions/woocommerce-subscriptions.php
+     * @param array $options
+     * @return object|null
+     */
+    public function getPluginChangelog($plugin, $options = [])
     {
-        if (empty($slug)) {
+        if (empty($plugin)) {
             return null;
         }
 
@@ -331,27 +350,7 @@ class Plugins
             require_once \ABSPATH . 'wp-admin/includes/plugin-install.php';
         }
 
-        $slugExplode = explode('/', $slug);
-
-        if (isset($slugExplode[0])) {
-            $api = \plugins_api('plugin_information', [
-                'slug' => $slugExplode[0],
-                'fields' => [
-                    'sections' => true,
-                    'changelog' => true,
-                ]
-            ]);
-
-            if ($api && isset($api->errors)) {
-                $api = \plugins_api('plugin_information', [
-                    'slug' => $slug,
-                    'fields' => [
-                        'sections' => true,
-                        'changelog' => true,
-                    ]
-                ]);
-            }
-        } else {
+        foreach ($this->getPluginInformationSlugs($plugin, $options) as $slug) {
             $api = \plugins_api('plugin_information', [
                 'slug' => $slug,
                 'fields' => [
@@ -359,12 +358,130 @@ class Plugins
                     'changelog' => true,
                 ]
             ]);
+
+            if (!is_wp_error($api) && $this->getChangelogFromInformation($api) !== null) {
+                return $api;
+            }
         }
 
-        if (is_wp_error($api)) {
-            return apply_filters('wp_umbrella_plugin_information', null, $slug);
+        return apply_filters('wp_umbrella_plugin_information', null, $plugin);
+    }
+
+    /**
+     * plugins_api() is filtered by every third-party updater on the site, so
+     * "sections" comes back as an array, as an object, or not at all. Reading
+     * it with an array offset fatals in PHP 8 when an updater hands us an
+     * object, and isset() does not protect against that.
+     *
+     * @param mixed $informations
+     * @return string|null
+     */
+    protected function getChangelogFromInformation($informations)
+    {
+        if (!is_object($informations) || !isset($informations->sections)) {
+            return null;
         }
 
-        return $api;
+        $sections = $informations->sections;
+
+        if (is_object($sections)) {
+            $sections = get_object_vars($sections);
+        }
+
+        if (!is_array($sections)) {
+            return null;
+        }
+
+        if (empty($sections['changelog']) || !is_string($sections['changelog'])) {
+            return null;
+        }
+
+        return $sections['changelog'];
+    }
+
+    /**
+     * Keep the most recent releases and drop the tail of the history, cutting
+     * on a version heading so the markup stays whole. A reader comparing what
+     * they run against what they would install never needs the rest.
+     *
+     * @param string $changelog
+     * @return array{changelog: string, truncated: bool}
+     */
+    protected function truncateChangelog($changelog)
+    {
+        if (!is_string($changelog) || strlen($changelog) <= self::CHANGELOG_MAX_LENGTH) {
+            return [
+                'changelog' => is_string($changelog) ? $changelog : '',
+                'truncated' => false,
+            ];
+        }
+
+        $blocks = preg_split('/(?=<h[1-4][\s>])/i', $changelog);
+
+        if (is_array($blocks) && count($blocks) > 1) {
+            $kept = '';
+
+            foreach ($blocks as $block) {
+                if ($kept !== '' && strlen($kept) + strlen($block) > self::CHANGELOG_MAX_LENGTH) {
+                    break;
+                }
+
+                $kept .= $block;
+            }
+
+            if ($kept !== '' && strlen($kept) < strlen($changelog)) {
+                return [
+                    'changelog' => $kept,
+                    'truncated' => true,
+                ];
+            }
+        }
+
+        // No version heading to cut on, or a first release longer than the cap.
+        // Fall back to a hard cut moved back to the last tag boundary, so the
+        // markup is never split in the middle of a tag.
+        $cut = substr($changelog, 0, self::CHANGELOG_MAX_LENGTH);
+        $lastTag = strrpos($cut, '<');
+
+        if ($lastTag !== false && $lastTag > 0) {
+            $cut = substr($cut, 0, $lastTag);
+        }
+
+        return [
+            'changelog' => $cut,
+            'truncated' => true,
+        ];
+    }
+
+    /**
+     * The slug plugins_api() answers to is not always the plugin directory.
+     * A plugin distributed outside wordpress.org registers its own plugins_api
+     * filter and only recognises the slug its updater wrote in the
+     * update_plugins transient: woocommerce.com extensions, for instance, are
+     * known as "woocommerce-com-<slug>" and ignore the directory name. That
+     * transient slug is what wp-admin uses to build its "View details" link,
+     * so it comes first here.
+     *
+     * @param string $plugin
+     * @param array $options
+     * @return array
+     */
+    protected function getPluginInformationSlugs($plugin, $options = [])
+    {
+        $slugs = [];
+
+        $updateSlug = isset($options['update_slug']) ? $options['update_slug'] : null;
+        if (is_string($updateSlug) && $updateSlug !== '') {
+            $slugs[] = $updateSlug;
+        }
+
+        $slugExplode = explode('/', $plugin);
+        if (isset($slugExplode[0]) && $slugExplode[0] !== '') {
+            $slugs[] = $slugExplode[0];
+        }
+
+        $slugs[] = $plugin;
+
+        return array_unique($slugs);
     }
 }

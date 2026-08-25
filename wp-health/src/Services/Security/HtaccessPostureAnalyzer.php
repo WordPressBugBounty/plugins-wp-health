@@ -57,7 +57,7 @@ class HtaccessPostureAnalyzer
             return true;
         }
 
-        if ($uploadsExecution === 'executed') {
+        if ($uploadsExecution === 'executed' || $uploadsExecution === 'served_raw') {
             return false;
         }
 
@@ -70,17 +70,26 @@ class HtaccessPostureAnalyzer
             return true;
         }
 
-        $enabled = wp_umbrella_get_service('HardeningSettings')->isEnabled('htaccess_umbrella_block');
+        $settings = wp_umbrella_get_service('HardeningSettings');
 
-        if (!$enabled) {
+        if (!$settings->isEnabled('htaccess_umbrella_block')) {
             return $blockVersion === null;
         }
 
-        // A locked root file leaves the uploads block carrying the protection
-        // alone. Reading an absence we caused as tampering would raise a
-        // security alert on every site the partial write path serves.
+        $state = $settings->getBlockState();
+
         if ($htaccessFile->isUploadsOnlyState()) {
-            return true;
+            if ($state === null) {
+                $settings->recordBlockState(['status' => 'partial']);
+
+                return true;
+            }
+
+            return $state['status'] === 'partial';
+        }
+
+        if ($blockVersion === 1 && isset($state['version']) && (int) $state['version'] > 1) {
+            return false;
         }
 
         return $htaccessFile->isUmbrellaBlockCanonical();

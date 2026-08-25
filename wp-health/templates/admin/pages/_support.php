@@ -24,12 +24,16 @@ $keyState = wp_umbrella_get_key_state();
 $publicKey = wp_umbrella_get_public_key();
 $keyId = wp_umbrella_get_key_id();
 $isSignedSystem = in_array($keyState, ['dual', 'new'], true) && !empty($publicKey);
+$isConnected = $hasRequestToken || $isSignedSystem;
 
 $activityLogIntervalMinutes = (int) ceil(SyncScheduler::resolveInterval() / 60);
 $activityLogIntervalMin = (int) ceil(SyncScheduler::MIN_INTERVAL_SECONDS / 60);
 $activityLogIntervalMax = (int) floor(SyncScheduler::MAX_INTERVAL_SECONDS / 60);
 
-$hardeningStates = wp_umbrella_get_service('HardeningSettings')->getStates();
+$hardeningService = wp_umbrella_get_service('HardeningSettings');
+$hardeningStates = $hardeningService->getStates();
+$hardeningNetworkKeys = $hardeningService->getNetworkScopedKeys();
+$hardeningCanEditNetworkKeys = $hardeningService->currentUserCanEditNetworkScopedKeys();
 $hardeningOptions = [
     'hide_wp_version' => [
         __('Hide WordPress version', 'wp-health'),
@@ -66,6 +70,10 @@ $hardeningOptions = [
     'disable_xmlrpc' => [
         __('Disable XML-RPC', 'wp-health'),
         __('Turns off XML-RPC and pingbacks. Leave disabled unless this site uses the WordPress mobile app or Jetpack.', 'wp-health'),
+    ],
+    'require_2fa_admin' => [
+        __('Require two-factor authentication for administrators', 'wp-health'),
+        __('Every administrator must set up an authenticator app before reaching wp-admin, then enter a code at each login. While this is on, administrators cannot log in through XML-RPC or with an application password, since neither can ask for a code. Unchecking this box and saving turns the requirement off for every administrator on this site.', 'wp-health'),
     ],
 ];
 
@@ -228,18 +236,46 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 			<table class="form-table" role="presentation">
 				<tbody>
 				<?php foreach ($hardeningOptions as $hardeningKey => $hardeningMeta) : ?>
-					<?php $hardeningEnabled = !empty($hardeningStates[$hardeningKey]); ?>
+					<?php $hardeningEnabled = !empty($hardeningStates[$hardeningKey]); $hardeningLocked = !$hardeningCanEditNetworkKeys && in_array($hardeningKey, $hardeningNetworkKeys, true); ?>
 					<tr>
 						<th scope="row"><label for="hardening_<?php echo esc_attr($hardeningKey); ?>"><?php echo esc_html($hardeningMeta[0]); ?></label></th>
 						<td>
 							<label>
-								<input name="hardening[<?php echo esc_attr($hardeningKey); ?>]" type="checkbox" id="hardening_<?php echo esc_attr($hardeningKey); ?>" value="1" <?php checked($hardeningEnabled, true); ?>>
+								<input type="hidden" name="hardening_keys[]" value="<?php echo esc_attr($hardeningKey); ?>" />
+								<input name="hardening[<?php echo esc_attr($hardeningKey); ?>]" type="checkbox" id="hardening_<?php echo esc_attr($hardeningKey); ?>" value="1" <?php checked($hardeningEnabled, true); ?> <?php disabled($hardeningLocked, true); ?>>
 								<span style="display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;<?php echo $hardeningEnabled ? 'background:#edf7ed;color:#1e6b23;' : 'background:#f0f0f1;color:#646970;'; ?>"><?php echo $hardeningEnabled ? esc_html__('Enabled', 'wp-health') : esc_html__('Disabled', 'wp-health'); ?></span>
 							</label>
 							<p class="description"><?php echo esc_html($hardeningMeta[1]); ?></p>
+							<?php if ($hardeningLocked) : ?><p class="description"><?php echo esc_html__('This setting applies to the whole network, so only a network administrator can change it.', 'wp-health'); ?></p><?php endif; ?>
 						</td>
 					</tr>
 				<?php endforeach; ?>
+					<tr>
+						<th scope="row"><?php echo esc_html__('Two-factor status', 'wp-health'); ?></th>
+						<td>
+							<?php
+                                $twoFactorGuard = new WPUmbrella\Services\TwoFactor\CompatibilityGuard();
+                            $twoFactorConflict = $twoFactorGuard->getConflictingPlugin();
+                            $twoFactorEnforceable = $twoFactorGuard->isEnforceable();
+							?>
+							<span style="display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;<?php echo $twoFactorEnforceable ? 'background:#edf7ed;color:#1e6b23;' : 'background:#fcf0f1;color:#8a1f11;'; ?>"><?php echo $twoFactorEnforceable ? esc_html__('Can be enforced', 'wp-health') : esc_html__('Cannot be enforced', 'wp-health'); ?></span>
+							<p class="description">
+								<?php if ($twoFactorConflict !== null) : ?>
+									<?php
+                                        printf(
+                                            /* translators: %s: name of the conflicting plugin. */
+                                            esc_html__('%s already handles two-factor authentication on this site, so WP Umbrella stays out of the login form.', 'wp-health'),
+                                            esc_html($twoFactorConflict)
+                                        );
+									?>
+								<?php elseif (!$twoFactorEnforceable) : ?>
+									<?php echo esc_html__('The WP_UMBRELLA_DISABLE_2FA constant is set in wp-config.php, which turns the requirement off whatever the option above says.', 'wp-health'); ?>
+								<?php else : ?>
+									<?php echo esc_html__('Read-only diagnostic: nothing on this site prevents WP Umbrella from enforcing two-factor authentication.', 'wp-health'); ?>
+								<?php endif; ?>
+							</p>
+						</td>
+					</tr>
 					<tr>
 						<th scope="row"><?php echo esc_html__('File editor constant', 'wp-health'); ?></th>
 						<td>
@@ -341,7 +377,9 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
                     $httpCode = (int) ($lastPing['http_code'] ?? 0);
                     $durationMs = (int) ($lastPing['duration_ms'] ?? 0);
 
-                    if ($isOk) {
+                    if ($reason === 'signed') {
+                        $title = __('Connected (signed communication)', 'wp-health');
+                    } elseif ($isOk) {
                         $title = sprintf(__('OK — HTTP %1$d in %2$d ms', 'wp-health'), $httpCode, $durationMs);
                     } elseif ($reason === 'not_connected') {
                         $title = __('Not connected', 'wp-health');
@@ -388,11 +426,11 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 	<!-- Maintenance -->
 	<div class="wpu-support-section">
 		<h2><?php echo esc_html__('Maintenance', 'wp-health'); ?></h2>
-		<div class="wpu-support-action" id="wpu-repair" data-paired="<?php echo $hasRequestToken ? '1' : '0'; ?>" data-has-api-key="<?php echo $hasApiKey ? '1' : '0'; ?>">
+		<div class="wpu-support-action" id="wpu-repair" data-paired="<?php echo $isConnected ? '1' : '0'; ?>" data-has-api-key="<?php echo $hasApiKey ? '1' : '0'; ?>">
 			<div class="wpu-support-action-info">
 				<strong><?php echo esc_html__('Reconnect to WP Umbrella', 'wp-health'); ?></strong>
 				<p class="description wpu-repair-message">
-					<?php if ($hasRequestToken) : ?>
+					<?php if ($isConnected) : ?>
 						<?php echo esc_html__('This site is connected to WP Umbrella.', 'wp-health'); ?>
 					<?php elseif ($hasApiKey) : ?>
 						<?php echo esc_html__('This site has a valid API key but is not yet connected. Click to retry the connection.', 'wp-health'); ?>
@@ -402,8 +440,8 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 				</p>
 			</div>
 			<div class="wpu-support-action-btn">
-				<button type="button" class="button button-secondary wpu-repair-btn" data-nonce="<?php echo esc_attr(wp_create_nonce('wp_umbrella_repair_ajax')); ?>" <?php disabled(true, !$hasApiKey || $hasRequestToken); ?>>
-					<span class="wpu-repair-btn-label"><?php echo esc_html($hasRequestToken ? __('Connected', 'wp-health') : __('Reconnect', 'wp-health')); ?></span>
+				<button type="button" class="button button-secondary wpu-repair-btn" data-nonce="<?php echo esc_attr(wp_create_nonce('wp_umbrella_repair_ajax')); ?>" <?php disabled(true, !$hasApiKey || $isConnected); ?>>
+					<span class="wpu-repair-btn-label"><?php echo esc_html($isConnected ? __('Connected', 'wp-health') : __('Reconnect', 'wp-health')); ?></span>
 					<span class="spinner wpu-repair-spinner" style="float:none;display:none;margin:0 0 0 6px;visibility:visible;"></span>
 				</button>
 			</div>

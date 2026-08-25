@@ -33,10 +33,19 @@ class HardeningOptions implements ExecuteHooksBackend
 
         $hardening = wp_umbrella_get_service('HardeningSettings');
         $submitted = isset($_POST['hardening']) && is_array($_POST['hardening']) ? $_POST['hardening'] : [];
+        $rendered = isset($_POST['hardening_keys']) && is_array($_POST['hardening_keys'])
+            ? array_map('strval', $_POST['hardening_keys'])
+            : [];
+
+        $editable = array_intersect(array_keys($hardening->getDefaultSettings()), $rendered);
+
+        if (!$hardening->currentUserCanEditNetworkScopedKeys()) {
+            $editable = array_diff($editable, $hardening->getNetworkScopedKeys());
+        }
 
         $params = [];
 
-        foreach (array_keys($hardening->getDefaultSettings()) as $key) {
+        foreach ($editable as $key) {
             $params[$key] = isset($submitted[$key]) && $submitted[$key] === '1';
         }
 

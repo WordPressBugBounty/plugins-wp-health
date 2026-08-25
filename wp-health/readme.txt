@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: v2.27.1
+Stable tag: v2.27.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,17 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.27.2 (08-25-2026) =
+- Security: hardening across the login protections, the two-factor requirement and the plugin's internal requests.
+- Changed: the login protections now follow the account that logged in rather than the address it came from. You can clear a block from WP Umbrella.
+- Improved: expired transients are cleaned in batches, and a burst of XML-RPC calls is recorded as a single activity log entry.
+- New: two-factor authentication for administrators, free and built in. Turn it on from WP Umbrella or from the plugin settings: each administrator scans a QR code at their next login, then enters a six-digit code. Ten single-use recovery codes are issued during setup and can be regenerated from the WordPress profile.
+- New: an administrator can reset someone else's second factor from that user's profile screen, or on the command line with: wp wp-umbrella 2fa-reset jane@example.com
+- Note: while the requirement is on, administrators can no longer log in through XML-RPC or with an application password, since neither can ask for a code. One-click access keeps working, turn off 1-Click Access if you want the code to be the only way in. If another two-factor plugin is active, WP Umbrella stands down and says so.
+- New: clear the blocked IP addresses your site is holding, straight from WP Umbrella.
+- Fixed: the changelog of a premium plugin bought on WooCommerce.com is now found, instead of being reported as never published.
+- Improved: a changelog opens on the most recent releases rather than the plugin's entire history, and a short release note is shown when there is no full changelog.
 
 = 2.27.1 (08-14-2026) =
 - Improved: the "Disable XML-RPC" option now rejects every XML-RPC request, and the "Block user enumeration" option now also covers author archives, feeds and oEmbed responses.

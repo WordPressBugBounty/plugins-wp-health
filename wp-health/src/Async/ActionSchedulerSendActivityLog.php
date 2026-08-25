@@ -19,6 +19,7 @@ use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 
 define('WP_UMBRELLA_ACTIVITY_LOG_BATCH_SIZE', 300);
 define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_ROWS', 10000);
+define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_TRIM_BATCH', 5000);
 define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_AGE_DAYS', 7);
 define('WP_UMBRELLA_ACTIVITY_LOG_MAX_ITERATIONS_PER_RUN', 5);
 define('WP_UMBRELLA_ACTIVITY_LOG_MAX_DURATION_SECONDS_PER_RUN', 20);
@@ -272,25 +273,18 @@ function wp_umbrella_activity_log_enforce_buffer_count_cap(EventBuffer $buffer)
         return;
     }
 
-    $excess = $count - $cap;
-    $rowsToDrop = $buffer->drain($excess);
+    // Bounded per run. Successive runs converge.
+    $excess = min($count - $cap, WP_UMBRELLA_ACTIVITY_LOG_BUFFER_TRIM_BATCH);
 
-    $ids = [];
-    foreach ($rowsToDrop as $row) {
-        if (isset($row['id'])) {
-            $ids[] = (int) $row['id'];
-        }
-    }
+    $dropped = $buffer->deleteOldest($excess);
 
-    if (empty($ids)) {
+    if ($dropped === 0) {
         return;
     }
-
-    $buffer->delete($ids);
 
     ActivityLogLogger::warning('Activity log buffer cap exceeded, oldest rows dropped', [
         'cap' => $cap,
         'previousCount' => $count,
-        'dropped' => count($ids),
+        'dropped' => $dropped,
     ]);
 }

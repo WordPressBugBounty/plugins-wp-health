@@ -13,6 +13,7 @@ class Plugin
     public $require_php_version;
     public $title;
     public $changelog;
+    public $changelog_truncated;
     public $license;
     public $need_update;
 
@@ -22,6 +23,7 @@ class Plugin
             'name' => $this->name,
             'slug' => $this->slug,
             'changelog' => $this->changelog,
+            'changelog_truncated' => $this->changelog_truncated,
             'is_active' => $this->is_active,
             'key' => $this->key,
             'version' => $this->version,

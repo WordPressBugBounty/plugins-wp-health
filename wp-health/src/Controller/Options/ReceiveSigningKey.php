@@ -2,6 +2,7 @@
 namespace WPUmbrella\Controller\Options;
 
 use WPUmbrella\Core\Models\AbstractController;
+use WPUmbrella\Core\UmbrellaRequest;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -23,11 +24,11 @@ class ReceiveSigningKey extends AbstractController
         $currentState = isset($options['key_state']) ? $options['key_state'] : null;
         $existingPublicKey = isset($options['public_key']) ? $options['public_key'] : '';
 
-        if ($currentState === 'new'
-            && is_string($existingPublicKey)
+        $replacesExistingKey = is_string($existingPublicKey)
             && $existingPublicKey !== ''
-            && $existingPublicKey !== $signingKey['public_key']
-        ) {
+            && $existingPublicKey !== $signingKey['public_key'];
+
+        if ($replacesExistingKey && ($currentState === 'new' || !$this->isSignedByStoredKey())) {
             return $this->returnResponse(['success' => false, 'code' => 'key_locked'], 409);
         }
 
@@ -47,5 +48,11 @@ class ReceiveSigningKey extends AbstractController
     public function executeGet($params)
     {
         return $this->executePost($params);
+    }
+
+    protected function isSignedByStoredKey()
+    {
+        return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')
+            ->isSignatureAuthorized(UmbrellaRequest::createFromGlobals());
     }
 }

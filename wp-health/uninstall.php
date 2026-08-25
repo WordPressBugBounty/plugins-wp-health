@@ -38,7 +38,32 @@ try {
     delete_option('wp_umbrella_blc_scan_interval');
 
     delete_option('wp_umbrella_hardening_settings');
+    delete_option('wp_umbrella_hardening_htaccess_state');
     delete_option('wp_umbrella_htaccess_pending_write');
+
+    delete_option('wp_umbrella_two_factor_key');
+
+    if (is_multisite()) {
+        delete_site_option('wp_umbrella_hardening_require_2fa_admin');
+    }
+
+    $wpdb->query(
+        $wpdb->prepare(
+            "DELETE FROM {$wpdb->usermeta} WHERE meta_key IN (%s, %s, %s, %s)",
+            'wp_umbrella_2fa_secret',
+            'wp_umbrella_2fa_enrolled_at',
+            'wp_umbrella_2fa_recovery_code',
+            'wp_umbrella_2fa_last_counter'
+        )
+    );
+
+    $wpUmbrellaUploads = wp_upload_dir(null, false);
+    if (is_array($wpUmbrellaUploads) && !empty($wpUmbrellaUploads['basedir'])) {
+        $wpUmbrellaKeyFile = $wpUmbrellaUploads['basedir'] . '/wp-umbrella/two-factor-key.php';
+        if (file_exists($wpUmbrellaKeyFile)) {
+            @unlink($wpUmbrellaKeyFile);
+        }
+    }
 
     wp_clear_scheduled_hook('wp_umbrella_snapshot_data_run_queue');
 

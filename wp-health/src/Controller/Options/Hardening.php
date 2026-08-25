@@ -2,6 +2,7 @@
 namespace WPUmbrella\Controller\Options;
 
 use WPUmbrella\Core\Models\AbstractController;
+use WPUmbrella\Services\TwoFactor\CompatibilityGuard;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -17,6 +18,7 @@ class Hardening extends AbstractController
             'success' => true,
             'settings' => $states,
             'web_server' => wp_umbrella_get_service('WebServer')->getType(),
+            'two_factor' => $this->getTwoFactorState(),
         ]);
     }
 
@@ -30,6 +32,18 @@ class Hardening extends AbstractController
             'settings' => $settings,
             'web_server' => wp_umbrella_get_service('WebServer')->getType(),
             'htaccess_result' => $service->getLastHtaccessResult(),
+            'two_factor' => $this->getTwoFactorState(),
         ]);
+    }
+
+    protected function getTwoFactorState()
+    {
+        $guard = new CompatibilityGuard();
+
+        return [
+            'enforceable' => $guard->isEnforceable(),
+            'blocking_reason' => $guard->getBlockingReason(),
+            'conflicting_plugin' => $guard->getConflictingPlugin(),
+        ];
     }
 }

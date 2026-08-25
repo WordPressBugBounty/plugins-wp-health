@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.27.1');
+    define('WP_UMBRELLA_VERSION', '2.27.2');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -63,6 +63,7 @@ function wp_umbrella_init_defined()
     define('WP_UMBRELLA_TEMPLATES_ADMIN', WP_UMBRELLA_TEMPLATES . '/admin');
     define('WP_UMBRELLA_TEMPLATES_ADMIN_NOTICES', WP_UMBRELLA_TEMPLATES_ADMIN . '/notices');
     define('WP_UMBRELLA_TEMPLATES_ADMIN_PAGES', WP_UMBRELLA_TEMPLATES_ADMIN . '/pages');
+    define('WP_UMBRELLA_TEMPLATES_TWO_FACTOR', WP_UMBRELLA_TEMPLATES . '/two-factor');
 }
 
 /**
@@ -213,6 +214,59 @@ function wp_umbrella_clear_request_token()
     $option->setOptions($options);
 }
 
+/**
+ * @param array $fields
+ * @return string
+ */
+function wp_umbrella_sign_admin_request(array $fields)
+{
+    $fields = array_map('strval', $fields);
+    ksort($fields);
+
+    return hash_hmac('sha256', wp_json_encode($fields), wp_salt('nonce'));
+}
+
+/**
+ * @param array $fields
+ * @param mixed $signature
+ * @param mixed $timestamp
+ * @return boolean
+ */
+function wp_umbrella_verify_admin_request(array $fields, $signature, $timestamp)
+{
+    if (!is_string($signature) || $signature === '') {
+        return false;
+    }
+
+    if (!ctype_digit((string) $timestamp)) {
+        return false;
+    }
+
+    if (abs(time() - (int) $timestamp) > 300) {
+        return false;
+    }
+
+    return hash_equals(wp_umbrella_sign_admin_request($fields), $signature);
+}
+
+/**
+ * @return array
+ */
+function wp_umbrella_snapshot_request_body()
+{
+    $timestamp = (string) time();
+
+    return [
+        'action' => 'wp_umbrella_snapshot_data',
+        'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),
+        'timestamp' => $timestamp,
+        'signature' => wp_umbrella_sign_admin_request([
+            'action' => 'wp_umbrella_snapshot_data',
+            'timestamp' => $timestamp,
+        ]),
+    ];
+}
+
 function wp_umbrella_request_token_from_response($response)
 {
     if (!is_array($response) || !isset($response['request_token'])) {
@@ -350,6 +404,11 @@ function wp_umbrella_is_new_hash()
 function wp_umbrella_init_new_hash()
 {
     return update_option('_wp_umbrella_is_new_hash', true, false);
+}
+
+function wp_umbrella_rollback_new_hash()
+{
+    return update_option('_wp_umbrella_is_new_hash', false, false);
 }
 
 /**

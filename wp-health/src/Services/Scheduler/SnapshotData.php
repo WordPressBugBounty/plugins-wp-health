@@ -29,10 +29,7 @@ class SnapshotData implements Scheduler
                     'blocking' => false,
                     'sslverify' => wp_umbrella_should_verify_ssl(),
                     'user-agent' => 'WPUmbrella',
-                    'body' => [
-                        'action' => 'wp_umbrella_snapshot_data',
-                        'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),
-                    ]
+                    'body' => wp_umbrella_snapshot_request_body(),
                 ]
             );
         } catch (\Exception $e) {

@@ -5,7 +5,7 @@ use WPUmbrella\Core\Constants\SignedRequest;
 
 class SignedRequestVerifier
 {
-    const NONCE_TRANSIENT_PREFIX = 'wpu_srn_';
+    const NONCE_OPTION_PREFIX = 'wpu_srn_';
 
     const LOGIN_CANONICAL_PREFIX = 'wpu-login-v1';
 
@@ -217,14 +217,38 @@ class SignedRequestVerifier
 
     protected function consumeNonce($nonce)
     {
-        $key = self::NONCE_TRANSIENT_PREFIX . md5($nonce);
+        global $wpdb;
 
-        if (get_transient($key) !== false) {
+        $key = self::NONCE_OPTION_PREFIX . md5($nonce);
+        $expiresAt = time() + SignedRequest::FRESHNESS_WINDOW_SECONDS + 60;
+
+        $claimed = $wpdb->query(
+            $wpdb->prepare(
+                "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')",
+                $key,
+                (string) $expiresAt
+            )
+        );
+
+        if ($claimed !== 1) {
             return false;
         }
 
-        set_transient($key, 1, SignedRequest::FRESHNESS_WINDOW_SECONDS + 60);
+        $this->purgeConsumedNonces();
 
         return true;
+    }
+
+    protected function purgeConsumedNonces()
+    {
+        global $wpdb;
+
+        $wpdb->query(
+            $wpdb->prepare(
+                "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s AND option_value < %d",
+                $wpdb->esc_like(self::NONCE_OPTION_PREFIX) . '%',
+                time()
+            )
+        );
     }
 }

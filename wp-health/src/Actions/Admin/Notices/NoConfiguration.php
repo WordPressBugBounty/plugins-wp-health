@@ -9,10 +9,26 @@ class NoConfiguration implements ExecuteHooksBackend
 {
     public function hooks()
     {
-        if (empty(wp_umbrella_get_api_key()) && empty(wp_umbrella_get_request_token())) {
+        if (!$this->isPaired()) {
             add_action('admin_notices', [$this, 'admin_notice']);
         }
 	}
+
+    /**
+     * @return bool
+     */
+    protected function isPaired()
+    {
+        if (!empty(wp_umbrella_get_api_key())) {
+            return true;
+        }
+
+        if (!empty(wp_umbrella_get_request_token())) {
+            return true;
+        }
+
+        return !empty(wp_umbrella_get_public_key());
+    }
 
 	public function admin_notice(){
 
