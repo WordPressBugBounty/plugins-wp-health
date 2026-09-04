@@ -82,6 +82,8 @@ class Migration implements ExecuteHooks
                 'secure' => false
             ]);
 
+            $previousSecretToken = isset($options['secret_token']) ? $options['secret_token'] : '';
+
             $options['secret_token'] = $secretToken;
 
             wp_umbrella_get_service('Option')->setOptions($options);
@@ -93,7 +95,7 @@ class Migration implements ExecuteHooks
             ], $apiKey);
 
             if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-                unset($options['secret_token']);
+                $options['secret_token'] = $previousSecretToken;
                 wp_umbrella_get_service('Option')->setOptions($options);
                 return;
             }

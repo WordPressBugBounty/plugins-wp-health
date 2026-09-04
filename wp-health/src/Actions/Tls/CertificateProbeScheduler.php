@@ -1,28 +1,23 @@
 <?php
-namespace WPUmbrella\Actions;
+namespace WPUmbrella\Actions\Tls;
 
 use WPUmbrella\Core\Hooks\DeactivationHook;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
 
-/**
- * Keeps the recurring job that ships the captured PHP errors scheduled.
- *
- * Runs on every request, admin or not: a site whose owner never opens
- * wp-admin still has to report its errors.
- */
-class TrackingError implements ExecuteHooks, DeactivationHook
+class CertificateProbeScheduler implements ExecuteHooks, DeactivationHook
 {
-    const ACTION_HOOK = 'wp_umbrella_send_errors';
+    const ACTION_HOOK = 'wp_umbrella_tls_probe';
 
-    const GROUP = 'umbrella_errors';
+    const GROUP = 'umbrella_tls';
 
-    const INTERVAL_SECONDS = 900;
+    const INTERVAL_SECONDS = 604800;
+
+    const MAX_START_DELAY_SECONDS = 21600;
 
     public function hooks()
     {
-        // Action Scheduler only initializes its data store on init priority 1,
-        // so any as_*_action() call before that emits doing_it_wrong notices.
         add_action('init', [$this, 'schedule'], 20);
+        add_action(self::ACTION_HOOK, [$this, 'execute']);
     }
 
     public function schedule()
@@ -31,25 +26,28 @@ class TrackingError implements ExecuteHooks, DeactivationHook
             return;
         }
 
-        if (!get_option('wp_health_allow_tracking')) {
-            $this->unschedule();
-
-            return;
-        }
-
         if (false !== as_next_scheduled_action(self::ACTION_HOOK, [], self::GROUP)) {
             return;
         }
 
-        // Spread the fleet over the minute instead of having every install
-        // hit the API on the same second.
         as_schedule_recurring_action(
-            time() + mt_rand(0, 60),
+            time() + mt_rand(0, self::MAX_START_DELAY_SECONDS),
             self::INTERVAL_SECONDS,
             self::ACTION_HOOK,
             [],
             self::GROUP
         );
+    }
+
+    public function execute()
+    {
+        $probe = wp_umbrella_get_service('CertificateProbe');
+
+        if (!$probe) {
+            return;
+        }
+
+        $probe->run();
     }
 
     public function unschedule()

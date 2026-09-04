@@ -1,9 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Provider;
 
-use WPUmbrella\Core\Schemas\PluginSchema;
+use WPUmbrella\DataTransferObject\Plugin;
 use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
-use Morphism\Morphism;
 
 class Plugins
 {
@@ -15,18 +14,6 @@ class Plugins
      * the admin-ajax loopback, our API and the dashboard to render one modal.
      */
     const CHANGELOG_MAX_LENGTH = 30000;
-
-    protected $schema;
-
-    public function __construct()
-    {
-        $this->createDefaultSchema();
-    }
-
-    protected function createDefaultSchema()
-    {
-        $this->schema = new PluginSchema();
-    }
 
     protected function checkSecupressUpdates($transient)
     {
@@ -98,9 +85,6 @@ class Plugins
             $data[$i]['active'] = is_plugin_active($key);
             ++$i;
         }
-        $schema = $this->schema->getSchema([
-            'light' => $light
-        ]);
 
         $current = wp_umbrella_get_service('WordPressContext')->getTransient('update_plugins');
 
@@ -148,9 +132,12 @@ class Plugins
 
         $data = $this->addBlockedUpdates($data, $current);
 
-        Morphism::setMapper('WPUmbrella\DataTransferObject\Plugin', $schema);
+        $plugins = [];
+        foreach ($data as $item) {
+            $plugins[] = $this->hydrate($item, $light);
+        }
 
-        return Morphism::map('WPUmbrella\DataTransferObject\Plugin', $data);
+        return $plugins;
     }
 
     /**
@@ -292,13 +279,76 @@ class Plugins
             $data['changelog_truncated'] = $truncated['truncated'];
         }
 
-        $schema = $this->schema->getSchema([
-            'light' => false
-        ]);
+        return $this->hydrate($data, false);
+    }
 
-        Morphism::setMapper('WPUmbrella\DataTransferObject\Plugin', $schema);
+    /**
+     * A key the plugin headers do not carry reads as false, which is what the
+     * API has always received for it. The light payload stops at the headers
+     * and leaves the update fields untouched.
+     *
+     * @param array $data
+     * @param bool $light
+     * @return Plugin
+     */
+    protected function hydrate(array $data, $light)
+    {
+        $plugin = new Plugin();
+        $plugin->name = $this->readField($data, 'Name');
+        $plugin->slug = $this->readField($data, 'slug');
+        $plugin->is_active = $this->readField($data, 'active');
+        $plugin->key = $this->readField($data, 'key');
+        $plugin->version = $this->readField($data, 'Version');
+        $plugin->require_wp_version = $this->readField($data, 'RequiresWP');
+        $plugin->require_php_version = $this->readField($data, 'RequiresPHP');
+        $plugin->title = $this->readField($data, 'Title');
+        $plugin->changelog = $this->readField($data, 'changelog');
 
-        return Morphism::map('WPUmbrella\DataTransferObject\Plugin', $data);
+        if ($light) {
+            return $plugin;
+        }
+
+        $plugin->changelog_truncated = $this->readField($data, 'changelog_truncated');
+        $plugin->need_update = $this->hydrateUpdate($this->readField($data, 'update'));
+
+        return $plugin;
+    }
+
+    /**
+     * @param array $data
+     * @param string $field
+     * @return mixed
+     */
+    protected function readField(array $data, $field)
+    {
+        return array_key_exists($field, $data) ? $data[$field] : false;
+    }
+
+    /**
+     * @param mixed $update
+     * @return array|false
+     */
+    protected function hydrateUpdate($update)
+    {
+        if (!$update || !\is_object($update)) {
+            return false;
+        }
+
+        return [
+            'id' => \property_exists($update, 'id') ? $update->id : '',
+            'slug' => \property_exists($update, 'slug') ? $update->slug : '',
+            'plugin' => \property_exists($update, 'plugin') ? $update->plugin : '',
+            'new_version' => \property_exists($update, 'new_version') ? $update->new_version : '',
+            'url' => \property_exists($update, 'url') ? $update->url : '',
+            'package' => \property_exists($update, 'package') ? $update->package : '',
+            'tested' => \property_exists($update, 'tested') ? $update->tested : '',
+            'requires' => \property_exists($update, 'requires') ? $update->requires : '',
+            'requires_php' => \property_exists($update, 'requires_php') ? $update->requires_php : '',
+            'compatibility' => \property_exists($update, 'compatibility') ? $update->compatibility : '',
+            'upgrade_notice' => \property_exists($update, 'upgrade_notice') && \is_string($update->upgrade_notice) ? $update->upgrade_notice : '',
+            'is_blocked' => \property_exists($update, 'is_blocked') ? (bool) $update->is_blocked : false,
+            'blocked_reason' => \property_exists($update, 'blocked_reason') ? $update->blocked_reason : '',
+        ];
     }
 
     /**

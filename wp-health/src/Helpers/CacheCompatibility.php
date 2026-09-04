@@ -14,6 +14,7 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\WPRocket",
             "\WPUmbrella\Thirds\Cache\Kinsta",
             "\WPUmbrella\Thirds\Cache\Flywheel",
+            "\WPUmbrella\Thirds\Cache\WPEngine",
             "\WPUmbrella\Thirds\Cache\WPServer",
             "\WPUmbrella\Thirds\Cache\Breeze",
             "\WPUmbrella\Thirds\Cache\GlobalNginx",

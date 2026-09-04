@@ -30,6 +30,10 @@ class AutoInstallByConstant implements ExecuteHooks, ActivationHook
             'allowed' => true,
             'api_key' => WP_UMBRELLA_API_KEY,
             'project_id' => '',
+            'secret_token' => '',
+            'public_key' => '',
+            'key_id' => '',
+            'key_state' => '',
         ]);
 
         $paired = wp_umbrella_get_service('PairingService')->runPairing();

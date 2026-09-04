@@ -77,10 +77,10 @@ abstract class AbstractSensor
                 ? get_current_blog_id()
                 : null,
             'wpUserId' => $userContext['wpUserId'],
-            'wpUsername' => $userContext['wpUsername'],
-            'wpUserRoles' => $userContext['wpUserRoles'],
+            'wpUsername' => PayloadLimits::truncateString($userContext['wpUsername']),
+            'wpUserRoles' => PayloadLimits::truncateArray($userContext['wpUserRoles']),
             'occurredAt' => self::nowWithMilliseconds(),
-            'context' => $context,
+            'context' => PayloadLimits::truncateArray($context),
         ];
 
         $this->buffer->insert([

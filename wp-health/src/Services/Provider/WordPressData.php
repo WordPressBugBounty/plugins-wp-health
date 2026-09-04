@@ -5,8 +5,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Morphism\Morphism;
-
 class WordPressData
 {
     const NAME_SERVICE = 'WordPressDataProvider';

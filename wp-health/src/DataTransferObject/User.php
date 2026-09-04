@@ -14,7 +14,6 @@ class User
     public $user_email;
     public $user_url;
     public $user_registered;
-    public $user_activation_key;
     public $user_status;
     public $display_name;
     public $caps;

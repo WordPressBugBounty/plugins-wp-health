@@ -7,6 +7,7 @@ use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
 use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
+use WPUmbrella\Services\Hardening\TransientCounter;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -41,6 +42,16 @@ class LoginRateLimit implements ExecuteHooks
     const BLOCK_BUCKET_KEY = 'wp_umbrella_login_rl_block_bucket';
 
     const BLOCK_WINDOW = 1800;
+
+    /**
+     * @var TransientCounter
+     */
+    protected $counter;
+
+    public function __construct()
+    {
+        $this->counter = new TransientCounter();
+    }
 
     public function hooks()
     {
@@ -96,9 +107,7 @@ class LoginRateLimit implements ExecuteHooks
             return;
         }
 
-        $count = $this->getCount($ip) + 1;
-
-        set_transient($this->key($ip), $count, $this->windowMinutes() * MINUTE_IN_SECONDS);
+        $this->counter->increment($this->key($ip), $this->windowMinutes() * MINUTE_IN_SECONDS);
     }
 
     protected function deny($username)
@@ -159,9 +168,7 @@ class LoginRateLimit implements ExecuteHooks
 
     protected function getCount($ip)
     {
-        $count = get_transient($this->key($ip));
-
-        return is_numeric($count) ? (int) $count : 0;
+        return $this->counter->get($this->key($ip));
     }
 
     protected function getStrikes($ip)

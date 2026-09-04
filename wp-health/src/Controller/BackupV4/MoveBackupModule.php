@@ -2,6 +2,7 @@
 namespace WPUmbrella\Controller\BackupV4;
 
 use WPUmbrella\Core\Models\AbstractController;
+use WPUmbrella\Helpers\Opcache;
 
 class MoveBackupModule extends AbstractController
 {
@@ -179,13 +180,8 @@ class MoveBackupModule extends AbstractController
 
             $result = $wp_filesystem->put_contents($destinationPath, $fileContent);
 
-            if (function_exists('opcache_invalidate')) {
-                $resultOpcache = @opcache_invalidate($destinationPath, true);
-                if (!$resultOpcache) {
-                    if (function_exists('opcache_reset')) {
-                        @opcache_reset();
-                    }
-                }
+            if (!Opcache::invalidate($destinationPath)) {
+                Opcache::reset();
             }
 
             if (!$result) {

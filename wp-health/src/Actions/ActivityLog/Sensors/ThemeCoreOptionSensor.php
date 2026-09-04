@@ -3,6 +3,7 @@
 namespace WPUmbrella\Actions\ActivityLog\Sensors;
 
 use WPUmbrella\Actions\ActivityLog\Framework\AbstractSensor;
+use WPUmbrella\Actions\ActivityLog\Framework\PayloadLimits;
 use WPUmbrella\Actions\ActivityLog\Framework\RoleMapDiff;
 
 defined('ABSPATH') or die('Cheatin&#8217; uh?');
@@ -392,7 +393,8 @@ class ThemeCoreOptionSensor extends AbstractSensor
     /**
      * Coerces an option value into a short string for inclusion in the
      * payload. Non scalar values are JSON encoded; everything is truncated
-     * to a safe length to avoid bloating the buffer.
+     * to the shared payload string bound, with a trailing marker so a cut
+     * value reads as cut in the dashboard.
      *
      * @param mixed $value
      *
@@ -407,10 +409,15 @@ class ThemeCoreOptionSensor extends AbstractSensor
             $string = $encoded === false ? '' : (string) $encoded;
         }
 
-        if (strlen($string) > 500) {
-            return substr($string, 0, 500) . '...';
+        if (strlen($string) <= PayloadLimits::MAX_STRING_BYTES) {
+            return $string;
         }
 
-        return $string;
+        $marker = '...';
+
+        return (string) PayloadLimits::truncateString(
+            $string,
+            PayloadLimits::MAX_STRING_BYTES - strlen($marker)
+        ) . $marker;
     }
 }

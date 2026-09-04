@@ -306,6 +306,24 @@ class UmbrellaRequest
         return parse_url($requestUri, PHP_URL_PATH);
     }
 
+    public function getRequestQuery()
+    {
+        $requestUri = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : null;
+
+        if ($requestUri === null) {
+            return '';
+        }
+
+        $query = parse_url($requestUri, PHP_URL_QUERY);
+
+        return is_string($query) ? $query : '';
+    }
+
+    public function getActionHeader()
+    {
+        return isset($this->headers['x-action']) ? (string) $this->headers['x-action'] : '';
+    }
+
     public function getRawBody()
     {
         $body = file_get_contents('php://input');

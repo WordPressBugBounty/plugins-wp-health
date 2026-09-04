@@ -2,7 +2,6 @@
 namespace WPUmbrella\Services\Provider;
 
 use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
-use Morphism\Morphism;
 
 class Themes
 {

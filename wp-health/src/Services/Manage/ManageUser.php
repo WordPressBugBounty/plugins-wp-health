@@ -31,6 +31,12 @@ class ManageUser
             ];
         }
 
+        $refusal = $this->networkRefusal($userId);
+
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
         if ($this->isLastAdministrator($user)) {
             return [
                 'status' => 'error',
@@ -39,6 +45,10 @@ class ManageUser
         }
 
         update_user_meta($userId, self::META_KEY, 1);
+
+        if (class_exists('WP_Session_Tokens')) {
+            \WP_Session_Tokens::get_instance($userId)->destroy_all();
+        }
 
         return [
             'status' => 'success',
@@ -57,6 +67,12 @@ class ManageUser
                 'status' => 'error',
                 'code' => 'user_not_exist',
             ];
+        }
+
+        $refusal = $this->networkRefusal($userId);
+
+        if ($refusal !== null) {
+            return $refusal;
         }
 
         delete_user_meta($userId, self::META_KEY);
@@ -126,6 +142,29 @@ class ManageUser
             'code' => 'success',
             'deleted' => $deleted,
         ];
+    }
+
+    protected function networkRefusal($userId)
+    {
+        if (!is_multisite()) {
+            return null;
+        }
+
+        if (!is_user_member_of_blog($userId, get_current_blog_id())) {
+            return [
+                'status' => 'error',
+                'code' => 'user_not_member',
+            ];
+        }
+
+        if (is_super_admin($userId) && !is_main_site()) {
+            return [
+                'status' => 'error',
+                'code' => 'not_authorized',
+            ];
+        }
+
+        return null;
     }
 
     protected function isLastAdministrator($user)

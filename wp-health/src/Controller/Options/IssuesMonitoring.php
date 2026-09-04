@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Controller\Options;
 
+use WPUmbrella\Actions\Admin\PrepareErrorHandler;
 use WPUmbrella\Core\Models\AbstractController;
 
 class IssuesMonitoring extends AbstractController
@@ -9,7 +10,7 @@ class IssuesMonitoring extends AbstractController
     {
         $enable = isset($params['enable']) && $params['enable'] === 'true' ? true : false;
 
-        update_option('wp_health_allow_tracking', $enable);
+        (new PrepareErrorHandler())->updateTracking($enable);
 
         return $this->returnResponse(['success' => true]);
     }

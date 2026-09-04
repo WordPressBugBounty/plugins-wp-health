@@ -24,7 +24,9 @@ $keyState = wp_umbrella_get_key_state();
 $publicKey = wp_umbrella_get_public_key();
 $keyId = wp_umbrella_get_key_id();
 $isSignedSystem = in_array($keyState, ['dual', 'new'], true) && !empty($publicKey);
-$isConnected = $hasRequestToken || $isSignedSystem;
+$hasProjectId = !empty($options['project_id']);
+$isConnected = $hasProjectId && ($hasRequestToken || $isSignedSystem);
+$canRepair = $hasApiKey && !$hasRequestToken && !$isConnected;
 
 $activityLogIntervalMinutes = (int) ceil(SyncScheduler::resolveInterval() / 60);
 $activityLogIntervalMin = (int) ceil(SyncScheduler::MIN_INTERVAL_SECONDS / 60);
@@ -33,7 +35,7 @@ $activityLogIntervalMax = (int) floor(SyncScheduler::MAX_INTERVAL_SECONDS / 60);
 $hardeningService = wp_umbrella_get_service('HardeningSettings');
 $hardeningStates = $hardeningService->getStates();
 $hardeningNetworkKeys = $hardeningService->getNetworkScopedKeys();
-$hardeningCanEditNetworkKeys = $hardeningService->currentUserCanEditNetworkScopedKeys();
+$hardeningCanEditNetworkKeys = $hardeningService->canEditNetworkScopedKeys();
 $hardeningOptions = [
     'hide_wp_version' => [
         __('Hide WordPress version', 'wp-health'),
@@ -148,6 +150,12 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 
 <div class="wrap wpu-support-page">
 	<h1><?php echo esc_html__('WP Umbrella — Support', 'wp-health'); ?></h1>
+
+	<?php if (isset($_GET['credentials']) && $_GET['credentials'] === 'locked') : ?>
+	<div class="notice notice-warning">
+		<p><?php echo esc_html__('The connection fields were not saved. On a WordPress network, only a network administrator can change the Secret Token, the Project ID and the Request Token of a site. Every other setting on this page was saved.', 'wp-health'); ?></p>
+	</div>
+	<?php endif; ?>
 
 	<div class="wpu-support-wrap">
 
@@ -432,15 +440,17 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 				<p class="description wpu-repair-message">
 					<?php if ($isConnected) : ?>
 						<?php echo esc_html__('This site is connected to WP Umbrella.', 'wp-health'); ?>
-					<?php elseif ($hasApiKey) : ?>
+					<?php elseif ($canRepair) : ?>
 						<?php echo esc_html__('This site has a valid API key but is not yet connected. Click to retry the connection.', 'wp-health'); ?>
+					<?php elseif ($hasApiKey) : ?>
+						<?php echo esc_html__('This site is not connected to WP Umbrella. Regenerate the connection credentials below to reconnect it.', 'wp-health'); ?>
 					<?php else : ?>
 						<?php echo esc_html__('This site has no API key configured. Reinstall WP Umbrella from your account dashboard.', 'wp-health'); ?>
 					<?php endif; ?>
 				</p>
 			</div>
 			<div class="wpu-support-action-btn">
-				<button type="button" class="button button-secondary wpu-repair-btn" data-nonce="<?php echo esc_attr(wp_create_nonce('wp_umbrella_repair_ajax')); ?>" <?php disabled(true, !$hasApiKey || $isConnected); ?>>
+				<button type="button" class="button button-secondary wpu-repair-btn" data-nonce="<?php echo esc_attr(wp_create_nonce('wp_umbrella_repair_ajax')); ?>" <?php disabled(true, !$canRepair); ?>>
 					<span class="wpu-repair-btn-label"><?php echo esc_html($isConnected ? __('Connected', 'wp-health') : __('Reconnect', 'wp-health')); ?></span>
 					<span class="spinner wpu-repair-spinner" style="float:none;display:none;margin:0 0 0 6px;visibility:visible;"></span>
 				</button>

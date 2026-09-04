@@ -44,10 +44,10 @@ class EventBuffer
             return;
         }
 
-        $encoded = wp_json_encode($payload);
+        $encoded = self::encodePayload($payload);
 
-        if ($encoded === false) {
-            ActivityLogLogger::warning('Event rejected: payload not JSON encodable', [
+        if ($encoded === null) {
+            ActivityLogLogger::warning('Event rejected: payload not storable', [
                 'eventKey' => $eventKey,
             ]);
             return;
@@ -83,6 +83,36 @@ class EventBuffer
     }
 
     /**
+     * JSON encodes a payload within the row size bound. Retries once with the
+     * context replaced by a marker, then gives up.
+     *
+     * @param mixed $payload
+     *
+     * @return string|null
+     */
+    protected static function encodePayload($payload)
+    {
+        $encoded = wp_json_encode($payload);
+
+        if ($encoded !== false && strlen($encoded) <= PayloadLimits::MAX_PAYLOAD_BYTES) {
+            return $encoded;
+        }
+
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $payload['context'] = ['truncated' => 'true'];
+        $encoded = wp_json_encode($payload);
+
+        if ($encoded === false || strlen($encoded) > PayloadLimits::MAX_PAYLOAD_BYTES) {
+            return null;
+        }
+
+        return $encoded;
+    }
+
+    /**
      * Returns the current UTC timestamp formatted as Y-m-d H:i:s.v.
      *
      * The MySQL session timezone is unknown and may differ between hosts, so
@@ -106,30 +136,42 @@ class EventBuffer
     }
 
     /**
-     * Returns up to $batchSize events in FIFO order (oldest first).
+     * Returns up to $batchSize events in FIFO order (oldest first), stopping
+     * earlier when the accumulated payload size reaches $maxBytes. At least
+     * one row is always returned when the buffer is not empty.
      *
      * Each row is returned with payload already decoded.
      *
-     * @param int $batchSize
+     * @param int      $batchSize
+     * @param int|null $maxBytes
      *
      * @return array
      */
-    public function drain($batchSize)
+    public function drain($batchSize, $maxBytes = null)
     {
         global $wpdb;
 
         SchemaInstaller::ensureTableExists();
 
         $batchSize = max(1, (int) $batchSize);
+        $maxBytes = $maxBytes === null ? PayloadLimits::MAX_BATCH_BYTES : max(1, (int) $maxBytes);
         $tableName = SchemaInstaller::getTableName();
+
+        $ids = $this->selectIdsWithinBudget($batchSize, $maxBytes);
+
+        if (empty($ids)) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
         $rows = $wpdb->get_results(
             $wpdb->prepare(
                 "SELECT id, event_key, severity, channel, occurred_at, payload, created_at
                  FROM {$tableName}
-                 ORDER BY occurred_at ASC, id ASC
-                 LIMIT %d",
-                $batchSize
+                 WHERE id IN ({$placeholders})
+                 ORDER BY occurred_at ASC, id ASC",
+                $ids
             ),
             ARRAY_A
         );
@@ -143,6 +185,53 @@ class EventBuffer
         }
 
         return $rows;
+    }
+
+    /**
+     * Reads the ids of the oldest rows without loading their payloads, and
+     * keeps only those that fit in the byte budget.
+     *
+     * @param int $batchSize
+     * @param int $maxBytes
+     *
+     * @return array
+     */
+    protected function selectIdsWithinBudget($batchSize, $maxBytes)
+    {
+        global $wpdb;
+
+        $tableName = SchemaInstaller::getTableName();
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, LENGTH(payload) AS payload_bytes
+                 FROM {$tableName}
+                 ORDER BY occurred_at ASC, id ASC
+                 LIMIT %d",
+                $batchSize
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($rows)) {
+            return [];
+        }
+
+        $ids = [];
+        $bytes = 0;
+
+        foreach ($rows as $row) {
+            $rowBytes = isset($row['payload_bytes']) ? (int) $row['payload_bytes'] : 0;
+
+            if (!empty($ids) && ($bytes + $rowBytes) > $maxBytes) {
+                break;
+            }
+
+            $ids[] = (int) $row['id'];
+            $bytes += $rowBytes;
+        }
+
+        return $ids;
     }
 
     /**
@@ -248,6 +337,62 @@ class EventBuffer
     }
 
     /**
+     * Deletes the oldest rows until at least $bytesToFree bytes of payload
+     * have been freed, never looking at more than $maxRows rows.
+     *
+     * @param int $bytesToFree
+     * @param int $maxRows
+     *
+     * @return int Number of rows deleted
+     */
+    public function deleteOldestBytes($bytesToFree, $maxRows)
+    {
+        global $wpdb;
+
+        $bytesToFree = (int) $bytesToFree;
+        $maxRows = (int) $maxRows;
+
+        if ($bytesToFree <= 0 || $maxRows <= 0) {
+            return 0;
+        }
+
+        SchemaInstaller::ensureTableExists();
+
+        $tableName = SchemaInstaller::getTableName();
+
+        $rows = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id, LENGTH(payload) AS payload_bytes
+                 FROM {$tableName}
+                 ORDER BY occurred_at ASC, id ASC
+                 LIMIT %d",
+                $maxRows
+            ),
+            ARRAY_A
+        );
+
+        if (!is_array($rows)) {
+            return 0;
+        }
+
+        $ids = [];
+        $freed = 0;
+
+        foreach ($rows as $row) {
+            $ids[] = (int) $row['id'];
+            $freed += isset($row['payload_bytes']) ? (int) $row['payload_bytes'] : 0;
+
+            if ($freed >= $bytesToFree) {
+                break;
+            }
+        }
+
+        $this->delete($ids);
+
+        return count($ids);
+    }
+
+    /**
      * Removes every row from the buffer. Used by the support page maintenance
      * action when the operator wants to drop all pending events without
      * waiting for the sync to drain them.
@@ -279,6 +424,23 @@ class EventBuffer
 
         $tableName = SchemaInstaller::getTableName();
         $result = $wpdb->get_var("SELECT COUNT(*) FROM {$tableName}");
+
+        return (int) $result;
+    }
+
+    /**
+     * Total size, in bytes, of every payload currently buffered.
+     *
+     * @return int
+     */
+    public function totalPayloadBytes()
+    {
+        global $wpdb;
+
+        SchemaInstaller::ensureTableExists();
+
+        $tableName = SchemaInstaller::getTableName();
+        $result = $wpdb->get_var("SELECT SUM(LENGTH(payload)) FROM {$tableName}");
 
         return (int) $result;
     }

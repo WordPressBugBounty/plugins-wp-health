@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Controller\Options;
 
+use WPUmbrella\Actions\BrokenLinkChecker\RedirectRouter;
 use WPUmbrella\Core\Models\AbstractController;
 use WPUmbrella\Services\BrokenLinkChecker\RedirectTableManager;
 
@@ -28,15 +29,18 @@ class SyncRedirects extends AbstractController
         if (!empty($params['redirects']) && is_array($params['redirects'])) {
             foreach ($params['redirects'] as $redirect) {
                 $sourcePattern = sanitize_text_field($redirect['sourcePattern'] ?? '');
-                if (empty($sourcePattern)) {
+                $matchType = sanitize_text_field($redirect['matchType'] ?? 'exact');
+                $destinationUrl = esc_url_raw($redirect['destinationUrl'] ?? '');
+
+                if (!$this->isValidRule($sourcePattern, $matchType, $destinationUrl)) {
                     continue;
                 }
 
                 $incoming[$sourcePattern] = [
                     'source_pattern' => $sourcePattern,
-                    'destination_url' => esc_url_raw($redirect['destinationUrl'] ?? ''),
-                    'redirect_type' => intval($redirect['httpCode'] ?? 301),
-                    'match_type' => sanitize_text_field($redirect['matchType'] ?? 'exact'),
+                    'destination_url' => $destinationUrl,
+                    'redirect_type' => $this->normalizeRedirectType($redirect['httpCode'] ?? 301),
+                    'match_type' => $matchType,
                 ];
             }
         }
@@ -79,5 +83,26 @@ class SyncRedirects extends AbstractController
         }
 
         return $this->returnResponse(['success' => true]);
+    }
+
+    protected function isValidRule($sourcePattern, $matchType, $destinationUrl)
+    {
+        if ($sourcePattern === '' || !preg_match('#^(https?://|/)#i', $destinationUrl)) {
+            return false;
+        }
+
+        if ($matchType !== 'regex') {
+            return true;
+        }
+
+        return strlen($sourcePattern) <= RedirectRouter::MAX_REGEX_PATTERN_LENGTH
+            && @preg_match($sourcePattern, '') !== false;
+    }
+
+    protected function normalizeRedirectType($httpCode)
+    {
+        $httpCode = intval($httpCode);
+
+        return in_array($httpCode, [301, 302, 307, 308], true) ? $httpCode : 301;
     }
 }

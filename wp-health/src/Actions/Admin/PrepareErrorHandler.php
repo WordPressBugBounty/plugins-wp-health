@@ -11,14 +11,17 @@ class PrepareErrorHandler implements ExecuteHooksBackend, DeactivationHook
     {
         $allowTracking = get_option('wp_health_allow_tracking');
         if (!$allowTracking) {
+            if (file_exists(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php')) {
+                $this->removeHandler();
+            }
+
             return;
         }
 
-		$versionGodHandler = get_option('wp_health_version_god_handler');
-		if(file_exists(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php') && !$versionGodHandler){ // Prevent file copy manually
-			update_option('wp_health_version_god_handler', WP_UMBRELLA_GOD_HANDLER_VERSION);
-		}
-
+        $versionGodHandler = get_option('wp_health_version_god_handler');
+        if (file_exists(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php') && !$versionGodHandler) {
+            update_option('wp_health_version_god_handler', WP_UMBRELLA_GOD_HANDLER_VERSION);
+        }
 
         if (version_compare(WP_UMBRELLA_GOD_HANDLER_VERSION, $versionGodHandler) > 0 && !file_exists(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php')) {
             $result = $this->createHandler();
@@ -58,7 +61,16 @@ class PrepareErrorHandler implements ExecuteHooksBackend, DeactivationHook
         return true;
     }
 
-    public function deactivate()
+    public function updateTracking($allowTracking)
+    {
+        update_option('wp_health_allow_tracking', $allowTracking);
+
+        if (!$allowTracking) {
+            $this->removeHandler();
+        }
+    }
+
+    public function removeHandler()
     {
         delete_option('wp_health_version_god_handler');
 
@@ -71,6 +83,11 @@ class PrepareErrorHandler implements ExecuteHooksBackend, DeactivationHook
         }
 
         wp_umbrella_remove_file(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php');
+    }
+
+    public function deactivate()
+    {
+        $this->removeHandler();
     }
 
     public static function adminNoticeNotWritable()

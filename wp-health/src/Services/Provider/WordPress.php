@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Morphism\Morphism;
+use WPUmbrella\DataTransferObject\WordPressUpdate;
 
 class WordPress
 {
@@ -377,73 +377,71 @@ class WordPress
             $data['memory_limit'] = null;
         }
 
-        $schema = [
-            'is_up_to_date' => 'wordpress_up_to_date.is_up_to_date',
-            'wordpress_version' => 'wordpress_version',
-            'hosting' => 'hosting',
-            'is_ssl' => 'is_ssl',
-            'is_multisite' => 'is_multisite',
-            // 'disk_free_space' => 'disk_free_space',
-            'memory_limit' => 'memory_limit',
-            'urls' => 'urls',
-            'php_version' => 'php_version',
-            // 'php_extensions' => 'php_extensions',
-            'is_indexable' => 'is_indexable',
-            'curl_is_defined' => 'curl_is_defined',
-            'zip_is_defined' => 'zip_is_defined',
-            'defined_data' => 'defined_data',
-            'hardening' => 'hardening',
-            'web_server' => 'web_server',
-            'base_directory' => 'base_directory',
-            'wp_content_directory' => 'wp_content_directory',
-            'wp_plugin_directory' => 'wp_plugin_directory',
-            'latest' => (object) [
-                'path' => 'wordpress_up_to_date.latest',
-                'fn' => function ($data) {
-                    if (!$data || !\is_object($data)) {
-                        return false;
-                    }
+        $update = new WordPressUpdate();
+        $update->is_up_to_date = $data['wordpress_up_to_date']['is_up_to_date'];
+        $update->wordpress_version = $data['wordpress_version'];
+        $update->hosting = $data['hosting'];
+        $update->is_ssl = $data['is_ssl'];
+        $update->is_multisite = $data['is_multisite'];
+        $update->memory_limit = $data['memory_limit'];
+        $update->urls = $data['urls'];
+        $update->php_version = $data['php_version'];
+        $update->is_indexable = $data['is_indexable'];
+        $update->curl_is_defined = $data['curl_is_defined'];
+        $update->zip_is_defined = $data['zip_is_defined'];
+        $update->defined_data = $data['defined_data'];
+        $update->hardening = $data['hardening'];
+        $update->web_server = $data['web_server'];
+        $update->base_directory = $data['base_directory'];
+        $update->wp_content_directory = $data['wp_content_directory'];
+        $update->wp_plugin_directory = $data['wp_plugin_directory'];
+        $update->latest = $this->hydrateLatestCore($data['wordpress_up_to_date']['latest']);
 
-                    try {
-                        return [
-                            'download' => \property_exists($data, 'download') ? $data->download : '',
-                            'locale' => \property_exists($data, 'locale') ? $data->locale : '',
-                            'full' => \property_exists($data, 'packages') ? $data->packages->full : '',
-                            'no_content' => \property_exists($data, 'packages') ? $data->packages->no_content : '',
-                            'new_bundled' => \property_exists($data, 'packages') ? $data->packages->new_bundled : '',
-                            'partial' => \property_exists($data, 'packages') ? $data->packages->partial : '',
-                            'rollback' => \property_exists($data, 'packages') ? $data->packages->rollback : '',
-                            'current' => \property_exists($data, 'current') ? $data->current : '',
-                            'version' => \property_exists($data, 'version') ? $data->version : '',
-                            'php_version' => \property_exists($data, 'php_version') ? $data->php_version : '',
-                            'mysql_version' => \property_exists($data, 'mysql_version') ? $data->mysql_version : '',
-                            'new_bundled' => \property_exists($data, 'new_bundled') ? $data->new_bundled : '',
-                            'partial_version' => \property_exists($data, 'partial_version') ? $data->partial_version : '',
-                        ];
-                    } catch (\Exception $e) {
-                        return [
-                            'download' => '',
-                            'locale' => '',
-                            'full' => '',
-                            'no_content' => '',
-                            'new_bundled' => '',
-                            'partial' => '',
-                            'rollback' => '',
-                            'current' => '',
-                            'version' => '',
-                            'php_version' => '',
-                            'mysql_version' => '',
-                            'new_bundled' => '',
-                            'partial_version' => '',
-                        ];
-                    }
-                },
-            ],
-        ];
+        return $update;
+    }
 
-        Morphism::setMapper('WPUmbrella\DataTransferObject\WordPressUpdate', $schema);
+    /**
+     * @param mixed $latest
+     * @return array|false
+     */
+    protected function hydrateLatestCore($latest)
+    {
+        if (!$latest || !\is_object($latest)) {
+            return false;
+        }
 
-        return Morphism::map('WPUmbrella\DataTransferObject\WordPressUpdate', $data);
+        try {
+            return [
+                'download' => \property_exists($latest, 'download') ? $latest->download : '',
+                'locale' => \property_exists($latest, 'locale') ? $latest->locale : '',
+                'full' => \property_exists($latest, 'packages') ? $latest->packages->full : '',
+                'no_content' => \property_exists($latest, 'packages') ? $latest->packages->no_content : '',
+                'new_bundled' => \property_exists($latest, 'new_bundled') ? $latest->new_bundled : '',
+                'partial' => \property_exists($latest, 'packages') ? $latest->packages->partial : '',
+                'rollback' => \property_exists($latest, 'packages') ? $latest->packages->rollback : '',
+                'current' => \property_exists($latest, 'current') ? $latest->current : '',
+                'version' => \property_exists($latest, 'version') ? $latest->version : '',
+                'php_version' => \property_exists($latest, 'php_version') ? $latest->php_version : '',
+                'mysql_version' => \property_exists($latest, 'mysql_version') ? $latest->mysql_version : '',
+                'partial_version' => \property_exists($latest, 'partial_version') ? $latest->partial_version : '',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'download' => '',
+                'locale' => '',
+                'full' => '',
+                'no_content' => '',
+                'new_bundled' => '',
+                'partial' => '',
+                'rollback' => '',
+                'current' => '',
+                'version' => '',
+                'php_version' => '',
+                'mysql_version' => '',
+                'new_bundled' => '',
+                'partial_version' => '',
+            ];
+        }
     }
 
     /**

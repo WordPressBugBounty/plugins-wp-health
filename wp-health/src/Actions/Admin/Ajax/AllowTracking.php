@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Actions\Admin\Ajax;
 
+use WPUmbrella\Actions\Admin\PrepareErrorHandler;
 use WPUmbrella\Core\Hooks\ExecuteHooksBackend;
 
 class AllowTracking implements ExecuteHooksBackend
@@ -27,7 +28,7 @@ class AllowTracking implements ExecuteHooksBackend
             exit;
         }
 
-        update_option('wp_health_allow_tracking', true);
+        (new PrepareErrorHandler())->updateTracking(true);
 
         wp_send_json_success();
     }
@@ -48,7 +49,7 @@ class AllowTracking implements ExecuteHooksBackend
             exit;
         }
 
-        update_option('wp_health_allow_tracking', false);
+        (new PrepareErrorHandler())->updateTracking(false);
 
         wp_send_json_success();
     }

@@ -15,6 +15,7 @@ class ClearCache
         do_action('wp_umbrella_clear_cache');
 
         $collection = new CacheCollection();
+        $applied = [];
 
         $items = CacheCompatibility::getCacheCompatibilities();
         foreach ($items as $item) {
@@ -26,7 +27,15 @@ class ClearCache
             $collection->addItem(
                 new $item()
             );
+
+            $applied[] = substr((string) strrchr($item, '\\'), 1);
         }
+
+        // Which caches actually answered. Support has no other way to tell a
+        // purge that found nothing to clear from one that ran.
+        wp_umbrella_get_service('RequestTrace')->addTrace('cache_adapters', [
+            'applied' => $applied,
+        ]);
 
         if ($collection->isEmpty()) {
             return;

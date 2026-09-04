@@ -55,26 +55,64 @@ class Directories extends AbstractController
             $host === Host::PRESSABLE
         );
 
-        if (!$shouldResolveAbsolute) {
-            return Directory::joinPaths($defaultSource, (string) $source);
-        }
-
-        $candidate = ($source !== null && $source !== '' && $source[0] === '/')
+        $candidate = ($shouldResolveAbsolute && $source !== null && $source !== '' && $source[0] === '/')
             ? $source
             : Directory::joinPaths($defaultSource, (string) $source);
 
         $real = @realpath($candidate);
-        $rootReal = @realpath($defaultSource);
 
-        if ($real === false || $rootReal === false) {
+        if ($real === false) {
             return null;
+        }
+
+        if ($this->belongsToAnotherBlog($real)) {
+            return null;
+        }
+
+        foreach ([$defaultSource, ABSPATH, WP_CONTENT_DIR] as $root) {
+            if ($this->isInsideRoot($real, $root)) {
+                return $real;
+            }
+        }
+
+        return null;
+    }
+
+    protected function belongsToAnotherBlog($real)
+    {
+        if (!function_exists('is_multisite') || !is_multisite() || is_main_site()) {
+            return false;
+        }
+
+        $uploads = wp_upload_dir(null, false);
+
+        if (!is_array($uploads) || empty($uploads['basedir'])) {
+            return false;
+        }
+
+        $baseDir = @realpath($uploads['basedir']);
+
+        if ($baseDir === false) {
+            return false;
+        }
+
+        if (!$this->isInsideRoot($real, dirname($baseDir))) {
+            return false;
+        }
+
+        return !$this->isInsideRoot($real, $baseDir);
+    }
+
+    protected function isInsideRoot($real, $root)
+    {
+        $rootReal = @realpath($root);
+
+        if ($rootReal === false) {
+            return false;
         }
 
         $rootPrefix = rtrim($rootReal, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
-        if (strpos($real . DIRECTORY_SEPARATOR, $rootPrefix) !== 0) {
-            return null;
-        }
 
-        return $real;
+        return strpos($real . DIRECTORY_SEPARATOR, $rootPrefix) === 0;
     }
 }

@@ -10,9 +10,8 @@ class AttachByApiKeyCommand
     /**
      * Attach this WordPress site to a WP Umbrella account using a user API key.
      *
-     * Mirrors the admin "enter your API key" form (Actions/Admin/Ajax/ValidationApiKey)
-     * — same SaaS calls, same option writes, same outcome. Does NOT use the
-     * /v1/projects/pair endpoint (which is the partner/CLI pair_code flow).
+     * Mirrors the admin "enter your API key" form: same calls, same option
+     * writes, same outcome.
      *
      * ## OPTIONS
      *
@@ -59,6 +58,10 @@ class AttachByApiKeyCommand
         $ownerService = \wp_umbrella_get_service('Owner');
         $projectsService = \wp_umbrella_get_service('Projects');
         $contextService = \wp_umbrella_get_service('WordPressContext');
+        $pairingSigningKey = \wp_umbrella_get_service('PairingSigningKey');
+
+        $storedOptions = $optionService->getOptions(['secure' => false]);
+        $storedProjectId = isset($storedOptions['project_id']) ? $storedOptions['project_id'] : '';
 
         if ($this->isAlreadyPaired($optionService) && !$force) {
             \WP_CLI::error('This site is already paired. Re-run with --force to clear the current state and re-attach.');
@@ -86,12 +89,6 @@ class AttachByApiKeyCommand
 
             $owner = $ownerData['result'];
 
-            // Workspace resolution. The /v1/external/me response embeds every
-            // workspace the api_key has access to — own + accepted invites
-            // from other owners. Each workspace ships its own owner-scoped
-            // api_key so picking a workspace really means "switch the
-            // api_key under which the project will be created", which is
-            // why we substitute `$apiKey` further down.
             $workspaces = isset($owner['workspaces']) && is_array($owner['workspaces'])
                 ? $owner['workspaces']
                 : [];
@@ -132,9 +129,6 @@ class AttachByApiKeyCommand
 
             $existingProjectId = isset($owner['project']['id']) ? $owner['project']['id'] : null;
 
-            // Generate the per-site secret_token. Plain stays in memory (sent
-            // to the SaaS once); the hashed form is what gets persisted in
-            // wp_options and what inbound Bearer checks compare against.
             $secretToken = \wp_umbrella_generate_random_string(128);
             if (!\wp_umbrella_is_new_hash()) {
                 \wp_umbrella_init_new_hash();
@@ -146,6 +140,7 @@ class AttachByApiKeyCommand
             $options['api_key'] = $apiKey;
             $options['secret_token'] = $hashedSecretToken;
             $options['project_id'] = $existingProjectId;
+            $options = $pairingSigningKey->clearWhenProjectChanged($options, $storedProjectId, $existingProjectId);
             $optionService->setOptions($options);
             \wp_cache_flush();
             \wp_load_alloptions(true);
@@ -324,6 +319,9 @@ class AttachByApiKeyCommand
             'secret_token' => isset($options['secret_token']) ? $options['secret_token'] : '',
             'project_id' => isset($options['project_id']) ? $options['project_id'] : '',
             'allowed' => isset($options['allowed']) ? $options['allowed'] : false,
+            'public_key' => isset($options['public_key']) ? $options['public_key'] : '',
+            'key_id' => isset($options['key_id']) ? $options['key_id'] : '',
+            'key_state' => isset($options['key_state']) ? $options['key_state'] : '',
         ];
     }
 
@@ -346,6 +344,9 @@ class AttachByApiKeyCommand
         $options['secret_token'] = $snapshot['secret_token'] ?? '';
         $options['project_id'] = $snapshot['project_id'] ?? '';
         $options['allowed'] = $snapshot['allowed'] ?? false;
+        $options['public_key'] = $snapshot['public_key'] ?? '';
+        $options['key_id'] = $snapshot['key_id'] ?? '';
+        $options['key_state'] = $snapshot['key_state'] ?? '';
         $optionService->setOptions($options);
     }
 
@@ -355,8 +356,6 @@ class AttachByApiKeyCommand
             $this->restoreState($optionService, $snapshot);
             \WP_CLI::warning('Attach failed; restored previous state.');
         } else {
-            // No prior state to restore — wipe whatever we partially wrote so
-            // the site is not left half-armed (api_key set, no request_token).
             $this->clearState($optionService);
         }
         \WP_CLI::error($message);

@@ -30,6 +30,8 @@ class RedirectRouter implements ExecuteHooks
     /** Rules evaluated per request. */
     protected const MAX_REDIRECTS = 1000;
 
+    const MAX_REGEX_PATTERN_LENGTH = 512;
+
     public function hooks()
     {
         add_action('init', [$this, 'handleRedirect'], 12);
@@ -84,13 +86,15 @@ class RedirectRouter implements ExecuteHooks
 
     protected function matchRedirect($redirect, $currentPath)
     {
-        if ($redirect->match_type === 'regex') {
-            return @preg_match($redirect->source_pattern, $currentPath) === 1;
+        if ($redirect->match_type !== 'regex') {
+            return $currentPath === rtrim($redirect->source_pattern, '/');
         }
 
-        $sourcePath = rtrim($redirect->source_pattern, '/');
+        if (strlen($redirect->source_pattern) > self::MAX_REGEX_PATTERN_LENGTH) {
+            return false;
+        }
 
-        return $currentPath === $sourcePath;
+        return @preg_match($redirect->source_pattern, $currentPath) === 1;
     }
 
     protected function getRedirects()

@@ -11,10 +11,6 @@ class Login extends AbstractController
 {
     public function executePost($params)
     {
-        // Bind the login to the exact user id the permission callback verified
-        // the signature against (UmbrellaRequest::getParam), NOT WP core's merged
-        // get_params(): a query/body split of user_id must not let a signature
-        // minted for X create a session for Y.
         $userId = \WPUmbrella\Core\UmbrellaRequest::createFromGlobals()->getParam('user_id');
 
 		if ($userId === null || $userId === '') {
@@ -34,6 +30,12 @@ class Login extends AbstractController
         if (!$user) {
             return $this->returnResponse([
                 'code' => 'user_not_exist'
+            ], 401);
+        }
+
+        if (!wp_umbrella_get_service('WordPressContext')->canOneClickLoginAs((int) $user->ID)) {
+            return $this->returnResponse([
+                'code' => 'not_authorized'
             ], 401);
         }
 

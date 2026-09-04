@@ -131,6 +131,18 @@ class Option
      */
     public function setOptions($options)
     {
+        $stored = $this->getOptions([
+            'secure' => false,
+        ]);
+
+        foreach ($stored as $key => $value) {
+            if (array_key_exists($key, $options)) {
+                continue;
+            }
+
+            $options[$key] = $value;
+        }
+
         update_option(WP_UMBRELLA_SLUG, $options);
 
         return $this;

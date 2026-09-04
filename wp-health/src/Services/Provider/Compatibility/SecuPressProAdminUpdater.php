@@ -182,21 +182,20 @@ class SecuPressProAdminUpdater extends SecuPressEDDUpdater
             'beta' => !empty($data['beta']),
         ];
 
-        $response = wp_remote_post($this->plugin_api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
+        $response = wp_remote_post($this->plugin_api_url, ['timeout' => 15, 'sslverify' => true, 'body' => $api_params]);
 
         if (is_wp_error($response)) {
             return false;
         }
 
-        $response = json_decode(wp_remote_retrieve_body($response));
+        $response = $this->sanitizeApiResponse(json_decode(wp_remote_retrieve_body($response)));
 
-        if (!$response || !isset($response->sections)) {
+        if ($response === false) {
             return false;
         }
 
-        $response = (object) array_map('wp_umbrella_safe_unserialize', (array) $response);
         $response->name = SECUPRESS_PLUGIN_NAME;
-        $response->sections = array_filter((array) $response->sections);
+        $response->sections = array_filter($response->sections);
 
         if (!empty($response->new_version) && empty($response->version)) {
             $response->version = $response->new_version;

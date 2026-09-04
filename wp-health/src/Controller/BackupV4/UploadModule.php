@@ -2,6 +2,7 @@
 namespace WPUmbrella\Controller\BackupV4;
 
 use WPUmbrella\Core\Models\AbstractController;
+use WPUmbrella\Helpers\Opcache;
 
 class UploadModule extends AbstractController
 {
@@ -68,13 +69,8 @@ class UploadModule extends AbstractController
 
         $result = file_put_contents($source . $filename, $str);
 
-        if (function_exists('opcache_invalidate')) {
-            $result = opcache_invalidate($source . $filename, true);
-            if (!$result) {
-                if (function_exists('opcache_reset')) {
-                    opcache_reset();
-                }
-            }
+        if (!Opcache::invalidate($source . $filename)) {
+            Opcache::reset();
         }
 
         return $this->returnResponse([

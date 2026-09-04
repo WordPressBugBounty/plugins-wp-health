@@ -19,7 +19,6 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
 
     public function hooks()
     {
-        add_action('admin_init', [$this, 'init']);
         add_action('admin_post_wp_umbrella_support_option', [$this, 'supportOption']);
         add_action('admin_post_wp_umbrella_regenerate_secret_token', [$this, 'regenerateSecretToken']);
         add_action('wp_ajax_wp_umbrella_repair_ajax', [$this, 'repairAjax']);
@@ -58,11 +57,8 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             return;
         }
 
-        if (isset($_POST['wp_health_allow_tracking']) && $_POST['wp_health_allow_tracking'] === '1') {
-            update_option('wp_health_allow_tracking', true);
-        } else {
-            update_option('wp_health_allow_tracking', false);
-        }
+        $allowTracking = isset($_POST['wp_health_allow_tracking']) && $_POST['wp_health_allow_tracking'] === '1';
+        (new PrepareErrorHandler())->updateTracking($allowTracking);
 
         if (isset($_POST['wp_umbrella_disallow_one_click_access']) && $_POST['wp_umbrella_disallow_one_click_access'] === '1') {
             delete_option('wp_umbrella_disallow_one_click_access');
@@ -107,31 +103,68 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             'secure' => false,
         ]);
 
+        $locked = !self::canWriteCredentials();
+        $candidate = $this->credentialsFromPost($options);
+
+        if (!$locked) {
+            $options = $candidate;
+        }
+
+        $this->optionService->setOptions($options);
+
+        $redirect = '/options-general.php?page=wp-umbrella-settings&support=1';
+
+        if ($locked && $this->credentialsDiffer($options, $candidate)) {
+            $redirect .= '&credentials=locked';
+        }
+
+        wp_redirect(admin_url($redirect));
+        return;
+    }
+
+    protected static function credentialFields()
+    {
+        return ['secret_token', 'project_id', 'request_token'];
+    }
+
+    public static function canWriteCredentials()
+    {
+        if (!is_multisite()) {
+            return true;
+        }
+
+        return is_super_admin();
+    }
+
+    protected function credentialsDiffer($options, $candidate)
+    {
+        foreach (self::credentialFields() as $field) {
+            $before = isset($options[$field]) ? $options[$field] : '';
+            $after = isset($candidate[$field]) ? $candidate[$field] : '';
+
+            if ((string) $before !== (string) $after) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function credentialsFromPost($options)
+    {
         if (isset($_POST['secret_token']) && $_POST['secret_token'] !== self::SECURED_VALUE && strlen($_POST['secret_token']) < 400) {
             $options['secret_token'] = !empty($_POST['secret_token']) ? wp_umbrella_get_service('WordPressContext')->getHash(sanitize_text_field($_POST['secret_token'])) : '';
         }
 
         if (isset($_POST['project_id']) && $_POST['project_id'] !== self::SECURED_VALUE && strlen($_POST['project_id']) < 100) {
-            $options['project_id'] = isset($_POST['project_id']) ? sanitize_text_field($_POST['project_id']) : '';
+            $options['project_id'] = sanitize_text_field($_POST['project_id']);
         }
 
         if (isset($_POST['request_token']) && $_POST['request_token'] !== self::SECURED_VALUE && strlen($_POST['request_token']) < 400) {
             $options['request_token'] = !empty($_POST['request_token']) ? sanitize_text_field($_POST['request_token']) : '';
         }
 
-        $this->optionService->setOptions($options);
-        wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
-        return;
-    }
-
-    /**
-     * Register setting options.
-     *
-     * @see admin_init
-     */
-    public function init()
-    {
-        register_setting(WP_UMBRELLA_OPTION_GROUP, WP_UMBRELLA_SLUG, [$this, 'parseArgs']);
+        return $options;
     }
 
     public function repairAjax()
@@ -152,6 +185,16 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             'code' => 'noop',
             'message' => __('Reconnection did not complete. The site stays connected via the legacy path; you can retry.', 'wp-health'),
         ]);
+    }
+
+    protected function rollbackSecretToken($options, $previousSecretToken, $wasNewHash)
+    {
+        $options['secret_token'] = $previousSecretToken;
+        wp_umbrella_get_service('Option')->setOptions($options);
+
+        if (!$wasNewHash) {
+            wp_umbrella_rollback_new_hash();
+        }
     }
 
     public function regenerateSecretToken()
@@ -178,13 +221,17 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
 
         $secretToken = wp_umbrella_generate_random_string(128);
 
-        if (!wp_umbrella_is_new_hash()) {
+        $wasNewHash = wp_umbrella_is_new_hash();
+
+        if (!$wasNewHash) {
             wp_umbrella_init_new_hash();
         }
 
         $options = wp_umbrella_get_options([
             'secure' => false
         ]);
+
+        $previousSecretToken = isset($options['secret_token']) ? $options['secret_token'] : '';
 
         $options['secret_token'] = wp_umbrella_get_service('WordPressContext')->getHash($secretToken);
         wp_umbrella_get_service('Option')->setOptions($options);
@@ -200,15 +247,13 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         ], wp_umbrella_get_api_key());
 
         if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-            unset($options['secret_token']);
-            wp_umbrella_get_service('Option')->setOptions($options);
+            $this->rollbackSecretToken($options, $previousSecretToken, $wasNewHash);
             wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
             return;
         }
 
         if (!$responseValidateSecret['success']) {
-            unset($options['secret_token']);
-            wp_umbrella_get_service('Option')->setOptions($options);
+            $this->rollbackSecretToken($options, $previousSecretToken, $wasNewHash);
             wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
             return;
         }
@@ -233,22 +278,5 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         wp_umbrella_get_service('Option')->setOptions($options);
         wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1'));
         return;
-    }
-
-    /**
-     * Callback register_setting for parseArgs options.
-     *
-     * @param array $options
-     *
-     * @return array
-     */
-    public function parseArgs($options)
-    {
-        $optionsBdd = $this->optionService->getOptions([
-            'secure' => false,
-        ]);
-        $newOptions = wp_parse_args($options, $optionsBdd);
-
-        return $newOptions;
     }
 }

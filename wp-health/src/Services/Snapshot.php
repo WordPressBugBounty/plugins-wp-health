@@ -17,7 +17,23 @@ class Snapshot
             'database_optimization' => $databaseOptimization,
             'unlisted_code' => $this->getUnlistedCode(),
             'emptied_files' => $this->getEmptiedFiles(),
+            'tls_probe' => $this->getTlsProbe(),
         ];
+    }
+
+    protected function getTlsProbe()
+    {
+        try {
+            $probe = wp_umbrella_get_service('CertificateProbe');
+
+            if (!$probe) {
+                return null;
+            }
+
+            return $probe->getState();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     protected function getUnlistedCode()

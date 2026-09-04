@@ -411,6 +411,9 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 						case "not_authorized":
 							errorMessage.innerHTML = 'You are not authorized to perform this action.';
 							break;
+						case "network_admin_required":
+							errorMessage.textContent = 'On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to enter the API key for this site.';
+							break;
 						case "api_key_invalid":
 							errorMessage.innerHTML = 'The API key is invalid.';
 							break;
@@ -447,7 +450,7 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 					workspaces.forEach(workspace => {
 						const option = document.createElement('option');
 						option.value = workspace.api_key;
-						option.innerHTML = workspace.name;
+						option.textContent = workspace.name;
 						select.appendChild(option);
 					})
 				}
@@ -539,6 +542,13 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 						case "not_authorized":
 							Swal.fire({
 								text: 'You are not authorized to perform this action.',
+								icon: 'error',
+								confirmButtonText: "Close",
+							})
+							break;
+						case "network_admin_required":
+							Swal.fire({
+								text: 'On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to enter the API key for this site.',
 								icon: 'error',
 								confirmButtonText: "Close",
 							})

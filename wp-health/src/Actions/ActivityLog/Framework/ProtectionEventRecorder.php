@@ -48,7 +48,7 @@ class ProtectionEventRecorder
             'wpUsername' => null,
             'wpUserRoles' => [],
             'occurredAt' => self::nowWithMilliseconds(),
-            'context' => $context,
+            'context' => PayloadLimits::truncateArray($context),
         ];
 
         $this->buffer->insert([

@@ -4,6 +4,7 @@ defined('ABSPATH') or exit('Cheatin&#8217; uh?');
 
 use WPUmbrella\Actions\ActivityLog\Framework\ActivityLogLogger;
 use WPUmbrella\Actions\ActivityLog\Framework\EventBuffer;
+use WPUmbrella\Actions\ActivityLog\Framework\PayloadLimits;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 
 /**
@@ -20,9 +21,13 @@ use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 define('WP_UMBRELLA_ACTIVITY_LOG_BATCH_SIZE', 300);
 define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_ROWS', 10000);
 define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_TRIM_BATCH', 5000);
+define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_BYTES', 16777216);
+define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_SIZE_TRIM_BATCH', 500);
 define('WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_AGE_DAYS', 7);
-define('WP_UMBRELLA_ACTIVITY_LOG_MAX_ITERATIONS_PER_RUN', 5);
+define('WP_UMBRELLA_ACTIVITY_LOG_MAX_ITERATIONS_PER_RUN', 10);
 define('WP_UMBRELLA_ACTIVITY_LOG_MAX_DURATION_SECONDS_PER_RUN', 20);
+define('WP_UMBRELLA_ACTIVITY_LOG_RUN_RESERVE_SECONDS', 5);
+define('WP_UMBRELLA_ACTIVITY_LOG_POST_TIMEOUT_SECONDS', 15);
 define('WP_UMBRELLA_ACTIVITY_LOG_OPTION_LAST_SYNC_AT', 'wp_umbrella_activity_log_last_sync_at');
 define('WP_UMBRELLA_ACTIVITY_LOG_OPTION_LAST_SYNC_STATUS', 'wp_umbrella_activity_log_last_sync_status');
 define('WP_UMBRELLA_ACTIVITY_LOG_TRANSIENT_BUFFER_COUNT', 'wp_umbrella_activity_log_buffer_count');
@@ -36,28 +41,43 @@ add_action(SyncScheduler::ACTION_HOOK, 'wp_umbrella_activity_log_sync_handle', 1
  * batches when the site produces events faster than one batch per cron tick.
  * Stops on any error (network, 429, 4xx, 5xx) so the next run retries.
  *
+ * The buffer cleanup runs after the loop so every row gets offered to the
+ * drain before it can be dropped.
+ *
+ * The first batch always runs. Every later one has to fit in what is left of
+ * the budget, measured against the slowest batch of the run, so the loop never
+ * starts work it has no time to finish.
+ *
  * @return void
  */
 function wp_umbrella_activity_log_sync_handle()
 {
     $buffer = new EventBuffer();
 
-    wp_umbrella_activity_log_enforce_buffer_cap($buffer);
-
     $startedAt = microtime(true);
+    $budget = wp_umbrella_activity_log_run_budget();
+    $slowestIteration = 0.0;
     $finalStatus = 'success';
 
     for ($iteration = 0; $iteration < WP_UMBRELLA_ACTIVITY_LOG_MAX_ITERATIONS_PER_RUN; $iteration++) {
         $elapsed = microtime(true) - $startedAt;
-        if ($elapsed >= WP_UMBRELLA_ACTIVITY_LOG_MAX_DURATION_SECONDS_PER_RUN) {
+
+        if ($iteration > 0 && ($elapsed + $slowestIteration) >= $budget) {
             ActivityLogLogger::info('Activity log sync stopped: time budget exceeded', [
                 'iteration' => $iteration,
                 'elapsedSeconds' => $elapsed,
+                'budgetSeconds' => $budget,
             ]);
             break;
         }
 
+        $iterationStartedAt = microtime(true);
         $outcome = wp_umbrella_activity_log_sync_one_batch($buffer);
+        $iterationDuration = microtime(true) - $iterationStartedAt;
+
+        if ($iterationDuration > $slowestIteration) {
+            $slowestIteration = $iterationDuration;
+        }
 
         if ($outcome === 'empty') {
             break;
@@ -71,7 +91,45 @@ function wp_umbrella_activity_log_sync_handle()
         break;
     }
 
+    wp_umbrella_activity_log_enforce_buffer_cap($buffer);
+
     wp_umbrella_activity_log_record_sync_result($finalStatus, $buffer);
+}
+
+/**
+ * Seconds the drain loop is allowed to spend, capped by our own ceiling and by
+ * what is left of the host execution limit once a reserve is kept for the
+ * buffer cleanup that follows the loop.
+ *
+ * A limit of 0 means the host sets none, in which case only our ceiling applies.
+ * The elapsed time is measured from the start of the request, which understates
+ * what is left whenever the runner has raised the limit, so the result errs on
+ * the low side.
+ *
+ * @return float
+ */
+function wp_umbrella_activity_log_run_budget()
+{
+    $ceiling = (float) WP_UMBRELLA_ACTIVITY_LOG_MAX_DURATION_SECONDS_PER_RUN;
+    $limit = (int) ini_get('max_execution_time');
+
+    if ($limit <= 0) {
+        return $ceiling;
+    }
+
+    $consumed = 0.0;
+
+    if (isset($_SERVER['REQUEST_TIME_FLOAT']) && is_numeric($_SERVER['REQUEST_TIME_FLOAT'])) {
+        $consumed = max(0.0, microtime(true) - (float) $_SERVER['REQUEST_TIME_FLOAT']);
+    }
+
+    $remaining = $limit - $consumed - WP_UMBRELLA_ACTIVITY_LOG_RUN_RESERVE_SECONDS;
+
+    if ($remaining >= $ceiling) {
+        return $ceiling;
+    }
+
+    return max(0.0, $remaining);
 }
 
 /**
@@ -90,7 +148,7 @@ function wp_umbrella_activity_log_sync_handle()
  */
 function wp_umbrella_activity_log_sync_one_batch(EventBuffer $buffer)
 {
-    $rows = $buffer->drain(WP_UMBRELLA_ACTIVITY_LOG_BATCH_SIZE);
+    $rows = $buffer->drain(WP_UMBRELLA_ACTIVITY_LOG_BATCH_SIZE, PayloadLimits::MAX_BATCH_BYTES);
 
     if (empty($rows)) {
         return 'empty';
@@ -179,7 +237,7 @@ function wp_umbrella_activity_log_post_batch(array $events)
             'X-Secret-Token' => wp_umbrella_get_secret_token(),
         ],
         'body' => wp_json_encode(['events' => $events]),
-        'timeout' => 15,
+        'timeout' => WP_UMBRELLA_ACTIVITY_LOG_POST_TIMEOUT_SECONDS,
     ]));
 }
 
@@ -199,12 +257,15 @@ function wp_umbrella_activity_log_record_sync_result($status, EventBuffer $buffe
 }
 
 /**
- * Two-stage buffer cleanup:
+ * Three-stage buffer cleanup, run once the drain loop has had its turn on
+ * every row it could deliver:
  *   1. drop events older than the configured TTL (prevents zombie events
  *      from a permanently broken sync from hogging buffer space forever)
  *   2. cap by row count, dropping the oldest excess rows
+ *   3. cap by stored volume, dropping the oldest rows
  *
- * Both stages are no-ops by default if the corresponding filter returns 0.
+ * Every stage is a no-op if the corresponding filter returns 0, and the whole
+ * cleanup is skipped when the drain emptied the buffer.
  *
  * @param EventBuffer $buffer
  *
@@ -212,8 +273,13 @@ function wp_umbrella_activity_log_record_sync_result($status, EventBuffer $buffe
  */
 function wp_umbrella_activity_log_enforce_buffer_cap(EventBuffer $buffer)
 {
+    if ($buffer->count() === 0) {
+        return;
+    }
+
     wp_umbrella_activity_log_enforce_buffer_ttl($buffer);
     wp_umbrella_activity_log_enforce_buffer_count_cap($buffer);
+    wp_umbrella_activity_log_enforce_buffer_size_cap($buffer);
 }
 
 /**
@@ -285,6 +351,47 @@ function wp_umbrella_activity_log_enforce_buffer_count_cap(EventBuffer $buffer)
     ActivityLogLogger::warning('Activity log buffer cap exceeded, oldest rows dropped', [
         'cap' => $cap,
         'previousCount' => $count,
+        'dropped' => $dropped,
+    ]);
+}
+
+/**
+ * Drops just enough of the oldest rows to bring the stored payload volume
+ * back under the configured cap. Bounded per run, successive runs converge.
+ *
+ * @param EventBuffer $buffer
+ *
+ * @return void
+ */
+function wp_umbrella_activity_log_enforce_buffer_size_cap(EventBuffer $buffer)
+{
+    $cap = (int) apply_filters(
+        'wp_umbrella_activity_log_buffer_max_bytes',
+        WP_UMBRELLA_ACTIVITY_LOG_BUFFER_MAX_BYTES
+    );
+
+    if ($cap <= 0) {
+        return;
+    }
+
+    $bytes = $buffer->totalPayloadBytes();
+
+    if ($bytes <= $cap) {
+        return;
+    }
+
+    $dropped = $buffer->deleteOldestBytes(
+        $bytes - $cap,
+        WP_UMBRELLA_ACTIVITY_LOG_BUFFER_SIZE_TRIM_BATCH
+    );
+
+    if ($dropped === 0) {
+        return;
+    }
+
+    ActivityLogLogger::warning('Activity log buffer size cap exceeded, oldest rows dropped', [
+        'cap' => $cap,
+        'previousBytes' => $bytes,
         'dropped' => $dropped,
     ]);
 }

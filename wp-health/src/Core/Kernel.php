@@ -207,7 +207,9 @@ abstract class Kernel
                 $request->getHeaders(),
                 $request->getMethod(),
                 $request->getRequestPath(),
-                $request->getRawBody()
+                $request->getRawBody(),
+                $request->getRequestQuery(),
+                $request->getActionHeader()
             );
             if ($verified) {
                 return true;
@@ -314,6 +316,10 @@ abstract class Kernel
             }
 
             $user = get_userdata($userId);
+
+            if (!$user || !wp_umbrella_get_service('WordPressContext')->canOneClickLoginAs((int) $user->ID)) {
+                return;
+            }
 
             self::recordTwoFactorBypass($user);
 
@@ -435,6 +441,10 @@ abstract class Kernel
             }
 
             wp_umbrella_get_service('RequestSettings')->setupAdmin();
+
+            // On multisite the admin lookup can come up empty, and the hosting
+            // cookie is needed either way.
+            wp_umbrella_get_service('RequestSettings')->preventWPEngine();
         }, 1);
     }
 

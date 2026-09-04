@@ -39,7 +39,7 @@ class HardeningOptions implements ExecuteHooksBackend
 
         $editable = array_intersect(array_keys($hardening->getDefaultSettings()), $rendered);
 
-        if (!$hardening->currentUserCanEditNetworkScopedKeys()) {
+        if (!$hardening->canEditNetworkScopedKeys()) {
             $editable = array_diff($editable, $hardening->getNetworkScopedKeys());
         }
 

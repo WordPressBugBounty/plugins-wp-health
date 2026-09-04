@@ -5,8 +5,6 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-use Morphism\Morphism;
-
 class Languages
 {
     const NAME_SERVICE = 'LanguagesProvider';

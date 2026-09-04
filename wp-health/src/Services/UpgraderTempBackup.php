@@ -230,6 +230,13 @@ class UpgraderTempBackup
         restore_error_handler();
 
         if (is_wp_error($result)) {
+            // copy_dir() stops on the first file it cannot copy, so what it left
+            // behind is a partial plugin. Keeping it is worse than having no
+            // backup at all: a later rollback would restore it as if it were
+            // whole. Seen on WP Engine, where a directory held nothing but the
+            // plugin's readme.txt.
+            $wp_filesystem->delete($dest, true);
+
             return [
                 'code' => 'fs_temp_backup_move',
                 'success' => false,
@@ -241,6 +248,8 @@ class UpgraderTempBackup
         }
 
         if (!empty($copyFailures)) {
+            $wp_filesystem->delete($dest, true);
+
             return [
                 'code' => 'fs_temp_backup_incomplete',
                 'success' => false,

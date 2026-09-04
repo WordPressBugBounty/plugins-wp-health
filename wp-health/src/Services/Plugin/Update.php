@@ -2,6 +2,7 @@
 namespace WPUmbrella\Services\Plugin;
 
 use WPUmbrella\Core\Update\Plugin\UpdaterSkin;
+use WPUmbrella\Helpers\Opcache;
 use WPUmbrella\Services\Manage\BaseManageUpdate;
 use Automatic_Upgrader_Skin;
 use Exception;
@@ -687,9 +688,7 @@ class Update extends BaseManageUpdate
     {
         $fullPath = WP_PLUGIN_DIR . '/' . $pluginFile;
         @clearstatcache(true, $fullPath);
-        if (function_exists('opcache_invalidate')) {
-            @opcache_invalidate($fullPath, true);
-        }
+        Opcache::invalidate($fullPath);
         if (!file_exists($fullPath)) {
             return null;
         }

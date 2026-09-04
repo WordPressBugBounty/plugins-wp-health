@@ -892,13 +892,27 @@ class HtaccessFile
 
     public function cleanUmbrellaBlock()
     {
-        $result = $this->cleanRootBlock();
+        $result = $this->cleanUmbrellaBlockFiles();
 
         if ($result['status'] === 'error') {
             return $result;
         }
 
         wp_umbrella_get_service('HardeningSettings')->clearBlockState();
+
+        return $result;
+    }
+
+    /**
+     * The file side alone, so uninstall.php can run it without the container.
+     */
+    public function cleanUmbrellaBlockFiles()
+    {
+        $result = $this->cleanRootBlock();
+
+        if ($result['status'] === 'error') {
+            return $result;
+        }
 
         $result['uploads'] = $this->cleanUploadsBlock();
         $result['headers'] = $this->cleanSecurityHeadersBlock();

@@ -91,17 +91,27 @@ class HardeningSettings
     /**
      * @return bool
      */
-    public function currentUserCanEditNetworkScopedKeys()
+    public function canEditNetworkScopedKeys()
     {
         if (!$this->isNetwork()) {
             return true;
         }
 
-        return current_user_can('manage_network_options');
+        if (current_user_can('manage_network_options')) {
+            return true;
+        }
+
+        return get_current_user_id() === 0 && is_main_site();
     }
 
     public function updateSettings($params)
     {
+        $params = (array) $params;
+
+        if (!$this->canEditNetworkScopedKeys()) {
+            $params = array_diff_key($params, array_flip($this->getNetworkScopedKeys()));
+        }
+
         $settings = $this->getSettings();
         $previous = $settings;
 

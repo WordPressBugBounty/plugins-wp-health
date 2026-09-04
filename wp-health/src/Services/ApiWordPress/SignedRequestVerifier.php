@@ -13,17 +13,21 @@ class SignedRequestVerifier
 
     public function hasSignatureHeaders(array $headers)
     {
-        return isset($headers[strtolower(SignedRequest::SIGNATURE_HEADER)])
+        $hasSignature = isset($headers[strtolower(SignedRequest::SIGNATURE_V2_HEADER)])
+            || isset($headers[strtolower(SignedRequest::SIGNATURE_HEADER)]);
+
+        return $hasSignature
             && isset($headers[strtolower(SignedRequest::TIMESTAMP_HEADER)])
             && isset($headers[strtolower(SignedRequest::NONCE_HEADER)]);
     }
 
     /**
-     * Verify a one-click login signature carried as request params (a browser
-     * form cannot set headers). Binds only the user id, so a valid signature
-     * authorizes a login for that user without the site's secret_token ever
-     * travelling to the browser. Single-use nonce + freshness bound the replay
-     * window; the private key needed to forge one never leaves the worker.
+     * @param int|string $userId
+     * @param string $signature
+     * @param int|string $timestamp
+     * @param string $nonce
+     * @param string|null $keyId
+     * @return boolean
      */
     public function verifyLogin($userId, $signature, $timestamp, $nonce, $keyId = null)
     {
@@ -106,7 +110,7 @@ class SignedRequestVerifier
         return true;
     }
 
-    public function verify(array $headers, $method, $path, $body)
+    public function verify(array $headers, $method, $path, $body, $query, $xAction)
     {
         $nonceKey = isset($headers[strtolower(SignedRequest::NONCE_HEADER)])
             ? $headers[strtolower(SignedRequest::NONCE_HEADER)] : null;
@@ -115,7 +119,7 @@ class SignedRequestVerifier
             return self::$resultByNonce[$nonceKey];
         }
 
-        $result = $this->doVerify($headers, $method, $path, $body);
+        $result = $this->doVerify($headers, $method, $path, $body, $query, $xAction);
 
         if ($nonceKey !== null) {
             self::$resultByNonce[$nonceKey] = $result;
@@ -124,7 +128,40 @@ class SignedRequestVerifier
         return $result;
     }
 
-    protected function doVerify(array $headers, $method, $path, $body)
+    /**
+     * Raw query string (no leading "?") to its canonical form: split on "&",
+     * drop empty segments, split each on the first "=" (no "=" means an empty
+     * value), urldecode then rawurlencode key and value, sort the "key=value"
+     * pairs by byte order, join with "&".
+     *
+     * @param string|null $rawQuery
+     * @return string
+     */
+    public function canonicalizeQuery($rawQuery)
+    {
+        if (!is_string($rawQuery) || $rawQuery === '') {
+            return '';
+        }
+
+        $pairs = [];
+        foreach (explode('&', $rawQuery) as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+
+            $parts = explode('=', $segment, 2);
+            $key = rawurlencode(urldecode($parts[0]));
+            $value = isset($parts[1]) ? rawurlencode(urldecode($parts[1])) : '';
+
+            $pairs[] = $key . '=' . $value;
+        }
+
+        sort($pairs, SORT_STRING);
+
+        return implode('&', $pairs);
+    }
+
+    protected function doVerify(array $headers, $method, $path, $body, $query, $xAction)
     {
         $ctx = strtoupper($method) . ' ' . $path;
 
@@ -133,15 +170,15 @@ class SignedRequestVerifier
             return false;
         }
 
-        $signature = isset($headers[strtolower(SignedRequest::SIGNATURE_HEADER)])
-            ? $headers[strtolower(SignedRequest::SIGNATURE_HEADER)] : null;
+        $signature = isset($headers[strtolower(SignedRequest::SIGNATURE_V2_HEADER)])
+            ? $headers[strtolower(SignedRequest::SIGNATURE_V2_HEADER)] : null;
         $timestamp = isset($headers[strtolower(SignedRequest::TIMESTAMP_HEADER)])
             ? $headers[strtolower(SignedRequest::TIMESTAMP_HEADER)] : null;
         $nonce = isset($headers[strtolower(SignedRequest::NONCE_HEADER)])
             ? $headers[strtolower(SignedRequest::NONCE_HEADER)] : null;
 
         if (!$signature || !$timestamp || !$nonce) {
-            wp_umbrella_debug_log("signed request {$ctx}: missing signature headers");
+            wp_umbrella_debug_log("signed request {$ctx}: missing or empty v2 signature");
             return false;
         }
 
@@ -182,8 +219,11 @@ class SignedRequestVerifier
         }
 
         $canonical = implode(SignedRequest::CANONICAL_SEPARATOR, [
+            SignedRequest::CANONICAL_V2_PREFIX,
             strtoupper($method),
             $path,
+            $this->canonicalizeQuery($query),
+            $xAction === null ? '' : (string) $xAction,
             hash('sha256', $body === null ? '' : $body),
             (string) $timestamp,
             $nonce,

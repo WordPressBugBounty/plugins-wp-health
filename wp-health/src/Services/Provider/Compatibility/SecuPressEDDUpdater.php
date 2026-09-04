@@ -18,6 +18,16 @@ class SecuPressEDDUpdater
     private $beta = false;
     private $cache_key = '';
 
+    const RESPONSE_VERSION_FIELDS = ['new_version', 'version', 'tested', 'requires', 'requires_php'];
+
+    const RESPONSE_URL_FIELDS = ['package', 'download_link', 'url', 'homepage'];
+
+    const RESPONSE_TEXT_FIELDS = ['name', 'slug', 'plugin', 'author', 'last_updated', 'id', 'upgrade_notice'];
+
+    const RESPONSE_TEXT_ARRAY_FIELDS = ['sections', 'contributors'];
+
+    const RESPONSE_URL_ARRAY_FIELDS = ['banners', 'icons'];
+
     /**
      * Class constructor.
      *
@@ -165,17 +175,14 @@ class SecuPressEDDUpdater
     }
 
     /**
-     * Disable SSL verification in order to prevent download update failures
-     *
      * @param array   $args
      * @param string  $url
      * @return object $array
      */
     public function http_request_args($args, $url)
     {
-        // If it is an https request and we are performing a package download, disable ssl verification
         if (strpos($url, 'https://') !== false && strpos($url, 'edd_action=package_download')) {
-            $args['sslverify'] = wp_umbrella_should_verify_ssl();
+            $args['sslverify'] = true;
         }
         return $args;
     }
@@ -217,29 +224,113 @@ class SecuPressEDDUpdater
             'beta' => !empty($data['beta']),
         ];
 
-        $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
+        $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => true, 'body' => $api_params]);
 
-        if (!is_wp_error($request)) {
-            $request = json_decode(wp_remote_retrieve_body($request));
+        if (is_wp_error($request)) {
+            return false;
         }
 
-        if ($request && isset($request->sections)) {
-            $request->sections = wp_umbrella_safe_unserialize($request->sections);
-        } else {
-            $request = false;
+        return $this->sanitizeApiResponse(json_decode(wp_remote_retrieve_body($request)));
+    }
+
+    /**
+     * @param mixed $response
+     * @return false|\stdClass
+     */
+    protected function sanitizeApiResponse($response)
+    {
+        if (!is_object($response) || !isset($response->sections)) {
+            return false;
         }
 
-        if ($request && isset($request->banners)) {
-            $request->banners = wp_umbrella_safe_unserialize($request->banners);
-        }
+        $clean = new \stdClass();
 
-        if (!empty($request->sections)) {
-            foreach ($request->sections as $key => $section) {
-                $request->$key = (array) $section;
+        foreach (self::RESPONSE_VERSION_FIELDS as $field) {
+            if (isset($response->$field) && is_scalar($response->$field) && preg_match('/^[0-9][0-9A-Za-z.\-]{0,31}$/', (string) $response->$field)) {
+                $clean->$field = (string) $response->$field;
             }
         }
 
-        return $request;
+        foreach (self::RESPONSE_URL_FIELDS as $field) {
+            $url = isset($response->$field) ? $this->sanitizeHttpsUrl($response->$field) : null;
+
+            if ($url !== null) {
+                $clean->$field = $url;
+            }
+        }
+
+        foreach (self::RESPONSE_TEXT_FIELDS as $field) {
+            if (isset($response->$field) && is_string($response->$field)) {
+                $clean->$field = sanitize_text_field($response->$field);
+            }
+        }
+
+        foreach (self::RESPONSE_TEXT_ARRAY_FIELDS as $field) {
+            if (isset($response->$field)) {
+                $clean->$field = $this->sanitizeStringArray($response->$field, false);
+            }
+        }
+
+        foreach (self::RESPONSE_URL_ARRAY_FIELDS as $field) {
+            if (isset($response->$field)) {
+                $clean->$field = $this->sanitizeStringArray($response->$field, true);
+            }
+        }
+
+        return $clean;
+    }
+
+    /**
+     * @param mixed $url
+     * @return string|null
+     */
+    protected function sanitizeHttpsUrl($url)
+    {
+        if (!is_string($url) || strtolower((string) wp_parse_url($url, PHP_URL_SCHEME)) !== 'https') {
+            return null;
+        }
+
+        $url = wp_http_validate_url($url);
+
+        return $url === false ? null : $url;
+    }
+
+    /**
+     * @param mixed $value
+     * @param bool  $urls
+     * @return array
+     */
+    protected function sanitizeStringArray($value, $urls)
+    {
+        $value = wp_umbrella_safe_unserialize($value);
+
+        if (is_object($value)) {
+            $value = (array) $value;
+        }
+
+        if (!is_array($value)) {
+            return [];
+        }
+
+        $clean = [];
+
+        foreach ($value as $key => $item) {
+            if (!is_string($item)) {
+                continue;
+            }
+
+            if ($urls) {
+                $item = strtolower((string) wp_parse_url($item, PHP_URL_SCHEME)) === 'https' ? esc_url_raw($item) : '';
+            } else {
+                $item = wp_kses_post($item);
+            }
+
+            if ($item !== '') {
+                $clean[is_int($key) ? $key : sanitize_text_field($key)] = $item;
+            }
+        }
+
+        return $clean;
     }
 
     public function show_changelog()
@@ -278,22 +369,10 @@ class SecuPressEDDUpdater
                 'beta' => !empty($data['beta'])
             ];
 
-            $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => wp_umbrella_should_verify_ssl(), 'body' => $api_params]);
+            $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => true, 'body' => $api_params]);
 
             if (!is_wp_error($request)) {
-                $version_info = json_decode(wp_remote_retrieve_body($request));
-            }
-
-            if (!empty($version_info) && isset($version_info->sections)) {
-                $version_info->sections = wp_umbrella_safe_unserialize($version_info->sections);
-            } else {
-                $version_info = false;
-            }
-
-            if (!empty($version_info)) {
-                foreach ($version_info->sections as $key => $section) {
-                    $version_info->$key = (array) $section;
-                }
+                $version_info = $this->sanitizeApiResponse(json_decode(wp_remote_retrieve_body($request)));
             }
 
             $this->set_version_info_cache($version_info, $cache_key);

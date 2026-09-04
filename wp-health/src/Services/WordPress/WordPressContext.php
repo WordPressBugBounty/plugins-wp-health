@@ -162,6 +162,27 @@ class WordPressContext
         return get_userdata($userId);
     }
 
+    public function canOneClickLoginAs($userId)
+    {
+        if (!is_multisite()) {
+            return true;
+        }
+
+        if (is_super_admin($userId) && is_main_site()) {
+            return true;
+        }
+
+        if (!is_user_member_of_blog($userId, get_current_blog_id())) {
+            return false;
+        }
+
+        if (!is_super_admin($userId)) {
+            return true;
+        }
+
+        return (bool) apply_filters('wp_umbrella_one_click_allow_super_admin_on_subsite', false, $userId);
+    }
+
     public function getHash($value)
     {
         if ($value === null) {

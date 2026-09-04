@@ -255,19 +255,38 @@ if (!class_exists('UmbrellaSqlInstruction', false)):
                 $flushSize = 2 << 20; // 2 MiB
                 $valuesPerInsert = 300; // batch rows per INSERT
 
+                // Byte cap per INSERT statement: 300 rows when they fit, an
+                // early flush otherwise. The dump runs on the SOURCE but the
+                // statement must fit the TARGET's max_allowed_packet, which is
+                // unknown here -- so cap at half the source's packet, ceiled at
+                // 8 MiB (any 16M target still imports with a 2x margin). A
+                // wp_posts full of page-builder rows produced a single 17 MB
+                // INSERT that no 16M shared host could ever import.
+                $maxInsertBytes = 8 << 20;
+                if (is_array($packetRow = $connection->query("SHOW VARIABLES LIKE 'max_allowed_packet'")->fetch())) {
+                    $sourceMaxPacket = (int) end($packetRow);
+                    if ($sourceMaxPacket > 0) {
+                        $maxInsertBytes = min((int) ($sourceMaxPacket / 2), $maxInsertBytes);
+                    }
+                }
+
                 $buf = '';
                 $currentValues = [];
+                $currentBytes = 0;
 
                 if ($batchSize === 0) {
                     // Fetch all rows at once
                     $fetchAll = $connection->query($fetchAllQuery, [], true);
                     while ($row = $fetchAll->fetch()) {
-                        $currentValues[] = self::createValuesTuple($connection, $columns, $row);
+                        $tuple = self::createValuesTuple($connection, $columns, $row);
+                        $currentValues[] = $tuple;
+                        $currentBytes += strlen($tuple) + 1;
 
-                        if (count($currentValues) >= $valuesPerInsert) {
+                        if (count($currentValues) >= $valuesPerInsert || $currentBytes >= $maxInsertBytes) {
                             $insert = "INSERT INTO `$tableName` VALUES " . implode(',', $currentValues) . ";\n";
                             $buf .= $insert;
                             $currentValues = [];
+                            $currentBytes = 0;
                         }
 
                         if (strlen($buf) >= $flushSize) {
@@ -318,12 +337,15 @@ if (!class_exists('UmbrellaSqlInstruction', false)):
 
                         while ($row = $fetchAll->fetch()) {
                             $rowsInBatch++;
-                            $currentValues[] = self::createValuesTuple($connection, $columns, $row);
+                            $tuple = self::createValuesTuple($connection, $columns, $row);
+                            $currentValues[] = $tuple;
+                            $currentBytes += strlen($tuple) + 1;
 
-                            if (count($currentValues) >= $valuesPerInsert) {
+                            if (count($currentValues) >= $valuesPerInsert || $currentBytes >= $maxInsertBytes) {
                                 $insert = "INSERT INTO `$tableName` VALUES " . implode(',', $currentValues) . ";\n";
                                 $buf .= $insert;
                                 $currentValues = [];
+                                $currentBytes = 0;
                             }
 
                             if (strlen($buf) >= $flushSize) {
@@ -356,6 +378,7 @@ if (!class_exists('UmbrellaSqlInstruction', false)):
                     $insert = "INSERT INTO `$tableName` VALUES " . implode(',', $currentValues) . ";\n";
                     $buf .= $insert;
                     $currentValues = [];
+                    $currentBytes = 0;
                 }
 
                 if (strlen($buf)) {

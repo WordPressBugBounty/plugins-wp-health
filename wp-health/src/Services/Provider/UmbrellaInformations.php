@@ -56,6 +56,18 @@ class UmbrellaInformations
             'allow_issues_monitoring' => get_option('wp_health_allow_tracking'),
             'options' => wp_umbrella_get_options(),
             'memory_limit' => wp_umbrella_get_service('WordPressProvider')->getMemoryLimitBytes(),
+            'tls_probe' => $this->getTlsProbeState(),
         ];
+    }
+
+    protected function getTlsProbeState()
+    {
+        $probe = wp_umbrella_get_service('CertificateProbe');
+
+        if (!$probe) {
+            return null;
+        }
+
+        return $probe->getState();
     }
 }

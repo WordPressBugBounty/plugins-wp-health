@@ -10,10 +10,13 @@ class ValidationApiKey implements ExecuteHooksBackend
 
     protected $getOwnerService;
 
+    protected $pairingSigningKey;
+
     public function __construct()
     {
         $this->optionService = \wp_umbrella_get_service('Option');
         $this->getOwnerService = wp_umbrella_get_service('Owner');
+        $this->pairingSigningKey = wp_umbrella_get_service('PairingSigningKey');
     }
 
     public function hooks()
@@ -34,6 +37,13 @@ class ValidationApiKey implements ExecuteHooksBackend
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wp_umbrella_valid_api_key')) {
             wp_send_json_error([
                 'code' => 'not_authorized',
+            ]);
+            exit;
+        }
+
+        if (!Option::canWriteCredentials()) {
+            wp_send_json_error([
+                'code' => 'network_admin_required',
             ]);
             exit;
         }
@@ -150,7 +160,12 @@ class ValidationApiKey implements ExecuteHooksBackend
             $newOptions['project_id'] = $projectId;
 
             $newOptions['request_token'] = '';
-            unset($newOptions['public_key'], $newOptions['key_id'], $newOptions['key_state']);
+
+            $newOptions = $this->pairingSigningKey->clearWhenProjectChanged(
+                $newOptions,
+                isset($optionsBdd['project_id']) ? $optionsBdd['project_id'] : '',
+                $projectId
+            );
 
             $this->optionService->setOptions($newOptions);
 
@@ -186,11 +201,6 @@ class ValidationApiKey implements ExecuteHooksBackend
                 }
 
                 if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
-                    // No decodable answer means the call never completed: a
-                    // timeout, a DNS or TLS failure, an intermediate error page.
-                    // We cannot tell that from a refusal, and the credentials we
-                    // just wrote may still be needed by requests in flight on the
-                    // other side, so leave them alone.
                     wp_send_json_error([
                         'code' => 'api_unreachable',
                     ]);
@@ -219,12 +229,10 @@ class ValidationApiKey implements ExecuteHooksBackend
                     $newOptions['api_key'] = '';
                 }
 
-                $signingKey = wp_umbrella_signing_key_from_response($responseValidateSecret);
-                if ($signingKey) {
-                    $newOptions['public_key'] = $signingKey['public_key'];
-                    $newOptions['key_id'] = $signingKey['key_id'];
-                    $newOptions['key_state'] = 'dual';
-                }
+                $newOptions = $this->applySigningKey(
+                    $newOptions,
+                    wp_umbrella_signing_key_from_response($responseValidateSecret)
+                );
 
                 $this->optionService->setOptions($newOptions);
 
@@ -261,10 +269,6 @@ class ValidationApiKey implements ExecuteHooksBackend
 
                 $response = wp_umbrella_get_service('Projects')->createProjectOnApplication($data, $apiKey);
 
-                // Same reasoning as the branch above: a transport failure decodes
-                // to null, exactly like a refusal would. Wiping here would revoke
-                // the secret_token we just published while the project creation
-                // may still be running on the other side.
                 if (!is_array($response)) {
                     wp_send_json_error([
                         'code' => 'api_unreachable',
@@ -287,12 +291,10 @@ class ValidationApiKey implements ExecuteHooksBackend
                         $newOptions['api_key'] = '';
                     }
 
-                    $signingKey = wp_umbrella_signing_key_from_response($result);
-                    if ($signingKey) {
-                        $newOptions['public_key'] = $signingKey['public_key'];
-                        $newOptions['key_id'] = $signingKey['key_id'];
-                        $newOptions['key_state'] = 'dual';
-                    }
+                    $newOptions = $this->applySigningKey(
+                        $newOptions,
+                        wp_umbrella_signing_key_from_response($result)
+                    );
 
                     $this->optionService->setOptions($newOptions);
 
@@ -334,6 +336,19 @@ class ValidationApiKey implements ExecuteHooksBackend
             ]);
             exit;
         }
+    }
+
+    protected function applySigningKey($options, $signingKey)
+    {
+        if (!$signingKey) {
+            return $options;
+        }
+
+        $options['public_key'] = $signingKey['public_key'];
+        $options['key_id'] = $signingKey['key_id'];
+        $options['key_state'] = 'dual';
+
+        return $options;
     }
 
     protected function probeHttpAuthRequirement($httpAuthUser, $httpAuthPassword)

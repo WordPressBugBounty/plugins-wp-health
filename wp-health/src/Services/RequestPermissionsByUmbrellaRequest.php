@@ -109,7 +109,9 @@ class RequestPermissionsByUmbrellaRequest
             $request->getHeaders(),
             $request->getMethod(),
             $request->getRequestPath(),
-            $request->getRawBody()
+            $request->getRawBody(),
+            $request->getRequestQuery(),
+            $request->getActionHeader()
         );
     }
 
