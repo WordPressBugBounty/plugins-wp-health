@@ -34,9 +34,12 @@ abstract class BaseClient
                 break;
         }
 
+        $homeUrl = home_url();
+
         $headers = [
             'Content-Type' => $type,
             'X-Project' => site_url(),
+            'X-Project-Home' => $homeUrl,
             'X-Multisite' => is_multisite(),
             'X-Version' => WP_UMBRELLA_VERSION
         ];
@@ -45,6 +48,7 @@ abstract class BaseClient
             $headers = [
                 'Content-Type: ' . $type,
                 'X-Project: ' . site_url(),
+                'X-Project-Home: ' . $homeUrl,
                 'X-Multisite: ' . is_multisite(),
                 'X-Version: ' . WP_UMBRELLA_VERSION,
             ];

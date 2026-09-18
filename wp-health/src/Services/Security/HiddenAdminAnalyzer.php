@@ -28,6 +28,34 @@ class HiddenAdminAnalyzer
 
     const MIN_SITE_HOST_LABEL_LENGTH = 5;
 
+    const CORE_ROLES = [
+        'administrator',
+        'editor',
+        'author',
+        'contributor',
+        'subscriber',
+    ];
+
+    const CRITICAL_CAPABILITIES = [
+        'install_plugins',
+        'install_themes',
+        'edit_plugins',
+        'edit_themes',
+        'edit_files',
+        'update_core',
+        'manage_options',
+        'create_users',
+        'edit_users',
+        'delete_users',
+        'promote_users',
+        'unfiltered_upload',
+    ];
+
+    /**
+     * @var UnlistedCodeAnalyzer|null
+     */
+    protected $unlistedCodeAnalyzer;
+
     public function analyze()
     {
         global $wpdb;
@@ -55,9 +83,16 @@ class HiddenAdminAnalyzer
         $rawIds = $wpdb->get_col(
             $wpdb->prepare(
                 "SELECT DISTINCT user_id FROM {$wpdb->usermeta}
-                 WHERE meta_key = %s AND meta_value LIKE %s",
+                 WHERE meta_key = %s
+                 AND (
+                     meta_value LIKE %s
+                     OR CAST(meta_value AS BINARY) LIKE %s
+                     OR CAST(meta_value AS BINARY) LIKE %s
+                 )",
                 $capabilitiesKey,
-                '%' . $wpdb->esc_like('"administrator"') . '%'
+                '%' . $wpdb->esc_like('"administrator"') . '%',
+                '%' . $wpdb->esc_like('{S:') . '%',
+                '%' . $wpdb->esc_like(';S:') . '%'
             )
         );
 
@@ -110,6 +145,7 @@ class HiddenAdminAnalyzer
             'application_passwords' => $this->collectApplicationPasswords($auditedUserIds),
             'application_passwords_available' => $this->areApplicationPasswordsAvailable(),
             'provenance_suspects' => $this->collectProvenanceSuspects($auditedUserIds),
+            'privileged_roles' => $this->collectPrivilegedRoles(),
             'has_findings' => !empty($orphanIds) || !empty($hiddenIds),
         ];
     }
@@ -155,7 +191,7 @@ class HiddenAdminAnalyzer
             $metaByUser[(int) $row->user_id][$row->meta_key] = $row->meta_value;
         }
 
-        $suspects = [];
+        $candidates = [];
         $unlistedCodeTimes = $this->getUnlistedCodeTimes();
         $siteHostLabel = $this->getSiteHostLabel();
 
@@ -186,14 +222,37 @@ class HiddenAdminAnalyzer
                 $reasons[] = self::PROVENANCE_REASON_LOGIN_MATCHES_SITE_HOST;
             }
 
-            if (!empty($reasons)) {
-                $suspects[] = [
-                    'user_id' => $id,
-                    'user_login' => $user->user_login,
-                    'reasons' => $reasons,
-                    'confidence' => $this->confidence($reasons),
-                ];
+            $candidates[] = [
+                'user_id' => $id,
+                'user_login' => $user->user_login,
+                'reasons' => $reasons,
+            ];
+        }
+
+        return $this->reportableSuspects($candidates);
+    }
+
+    /**
+     * @param array[] $candidates
+     * @return array[]
+     */
+    protected function reportableSuspects($candidates)
+    {
+        $suspects = [];
+
+        foreach ($candidates as $candidate) {
+            if (empty($candidate['reasons'])) {
+                continue;
             }
+
+            $confidence = $this->confidence($candidate['reasons']);
+
+            if ($confidence !== 'high') {
+                continue;
+            }
+
+            $candidate['confidence'] = $confidence;
+            $suspects[] = $candidate;
         }
 
         return $suspects;
@@ -215,16 +274,106 @@ class HiddenAdminAnalyzer
     }
 
     /**
+     * @return array[]
+     */
+    protected function collectPrivilegedRoles()
+    {
+        return $this->findPrivilegedRoles($this->readRoleDefinitions());
+    }
+
+    /**
+     * @return array
+     */
+    protected function readRoleDefinitions()
+    {
+        if (!function_exists('wp_roles')) {
+            return [];
+        }
+
+        $roles = wp_roles();
+
+        if (!is_object($roles) || !isset($roles->roles) || !is_array($roles->roles)) {
+            return [];
+        }
+
+        return $roles->roles;
+    }
+
+    /**
+     * @param array $roles
+     * @return array[]
+     */
+    protected function findPrivilegedRoles($roles)
+    {
+        $privileged = [];
+
+        foreach ($roles as $slug => $definition) {
+            if (!is_string($slug) || $slug === '' || in_array($slug, self::CORE_ROLES, true)) {
+                continue;
+            }
+
+            $capabilities = isset($definition['capabilities']) && is_array($definition['capabilities'])
+                ? $definition['capabilities']
+                : [];
+
+            $critical = $this->criticalCapabilitiesOf($capabilities);
+
+            if (empty($critical)) {
+                continue;
+            }
+
+            $privileged[] = [
+                'role' => $slug,
+                'name' => isset($definition['name']) && is_scalar($definition['name'])
+                    ? (string) $definition['name']
+                    : $slug,
+                'critical_capabilities' => $critical,
+            ];
+        }
+
+        return $privileged;
+    }
+
+    /**
+     * @param array $capabilities
+     * @return string[]
+     */
+    protected function criticalCapabilitiesOf($capabilities)
+    {
+        $granted = [];
+
+        foreach (self::CRITICAL_CAPABILITIES as $capability) {
+            if (!empty($capabilities[$capability])) {
+                $granted[] = $capability;
+            }
+        }
+
+        return $granted;
+    }
+
+    /**
+     * @param UnlistedCodeAnalyzer $analyzer
+     */
+    public function setUnlistedCodeAnalyzer($analyzer)
+    {
+        $this->unlistedCodeAnalyzer = $analyzer;
+    }
+
+    /**
      * @return int[]
      */
     protected function getUnlistedCodeTimes()
     {
-        if (!function_exists('wp_umbrella_get_service')) {
+        if ($this->unlistedCodeAnalyzer === null && !function_exists('wp_umbrella_get_service')) {
             return [];
         }
 
         try {
-            return wp_umbrella_get_service('UnlistedCodeAnalyzer')->getModificationTimes();
+            if ($this->unlistedCodeAnalyzer === null) {
+                $this->unlistedCodeAnalyzer = wp_umbrella_get_service('UnlistedCodeAnalyzer');
+            }
+
+            return $this->unlistedCodeAnalyzer->getModificationTimes();
         } catch (\Throwable $e) {
             return [];
         }
@@ -323,15 +472,25 @@ class HiddenAdminAnalyzer
      */
     protected function hasStringSerializedAdministratorRole($serialized)
     {
-        if (!is_string($serialized)) {
+        if (!is_string($serialized) || $serialized === '') {
             return false;
         }
 
-        if (!preg_match('/s:13:"administrator";([a-z]):/', $serialized, $matches)) {
+        $capabilities = @unserialize($serialized, ['allowed_classes' => false]);
+
+        if (!is_array($capabilities)) {
             return false;
         }
 
-        return $matches[1] !== 'b';
+        foreach ($capabilities as $capability => $granted) {
+            if ((string) $capability !== 'administrator') {
+                continue;
+            }
+
+            return !is_bool($granted);
+        }
+
+        return false;
     }
 
     /**

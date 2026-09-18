@@ -35,6 +35,11 @@ class HtaccessClean implements ExecuteHooksBackend
             exit;
         }
 
+        if (!wp_umbrella_get_service('HardeningSettings')->canEditNetworkScopedKeys()) {
+            wp_safe_redirect($redirect);
+            exit;
+        }
+
         $result = wp_umbrella_get_service('HtaccessFile')->cleanUmbrellaBlock();
         $this->storeResult($result);
 

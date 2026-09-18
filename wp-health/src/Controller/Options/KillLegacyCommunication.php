@@ -21,11 +21,21 @@ class KillLegacyCommunication extends AbstractController
 
     protected function cutover()
     {
-        wp_umbrella_set_key_state('new');
+        $option = wp_umbrella_get_service('Option');
+
+        $options = $option->getOptions(['secure' => false]);
+        $options['key_state'] = 'new';
+        $options['secret_token'] = '';
+        $option->setOptions($options);
+
+        wp_load_alloptions(true);
+
+        $stored = $option->getOptions(['secure' => false]);
 
         return $this->returnResponse([
             'code' => 'success',
             'key_state' => 'new',
+            'secret_token_cleared' => empty($stored['secret_token']),
         ]);
     }
 }

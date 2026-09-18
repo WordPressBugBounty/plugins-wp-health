@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: v2.27.3
+Stable tag: v2.27.4
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,16 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.27.4 (09-18-2026) =
+- Fixed: the white label settings could stay on an outdated value and keep showing the plugin in your admin.
+- Fixed: a site whose WordPress folder layout changed could no longer be reconnected.
+- Fixed: the file editor was reported as protected on a host that locks the setting itself.
+- Fixed: deleting WP Umbrella now removes everything it leaves behind, on every site of a network.
+- Fixed: the activity log could stop updating on some sites.
+- Fixed: the connection form now tells you when the page has been left open too long, instead of doing nothing.
+- Improved: backups run faster, and an interrupted backup resumes faster.
+- Improved: a restoration checks the free disk space before it starts.
 
 = 2.27.3 (09-04-2026) =
 - New: the page cache is now cleared after an update on WP Engine.

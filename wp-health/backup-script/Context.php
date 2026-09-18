@@ -555,7 +555,7 @@ if (!class_exists('UmbrellaContext', false)):
             // Write .htaccess with deny all
             $htaccess = $directory . DIRECTORY_SEPARATOR . '.htaccess';
             if (!file_exists($htaccess)) {
-                @file_put_contents($htaccess, 'deny from all');
+                @file_put_contents($htaccess, $this->getDenyAllRules());
             }
 
             // Write index.php
@@ -572,6 +572,23 @@ if (!class_exists('UmbrellaContext', false)):
                     '<configuration><system.webServer><authorization><deny users="*" /></authorization></system.webServer></configuration>'
                 );
             }
+        }
+
+        protected function getDenyAllRules()
+        {
+            return implode("\n", [
+                '<IfModule mod_authz_core.c>',
+                'Require all denied',
+                '</IfModule>',
+                '<IfModule !mod_authz_core.c>',
+                'Order allow,deny',
+                'Deny from all',
+                '</IfModule>',
+                '<IfModule mod_rewrite.c>',
+                'RewriteEngine On',
+                'RewriteRule .* - [F,L]',
+                '</IfModule>',
+            ]) . "\n";
         }
 
         public function getDictionaryPath()

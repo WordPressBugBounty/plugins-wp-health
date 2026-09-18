@@ -2,6 +2,7 @@
 namespace WPUmbrella\Actions\Admin\Ajax;
 
 use WPUmbrella\Core\Hooks\ExecuteHooksBackend;
+use WPUmbrella\Actions\Admin\Option;
 
 class Register implements ExecuteHooksBackend
 {
@@ -30,6 +31,13 @@ class Register implements ExecuteHooksBackend
         if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wp_umbrella_register')) {
             wp_send_json_error([
                 'code' => 'not_authorized',
+            ]);
+            exit;
+        }
+
+        if (!Option::canWriteCredentials()) {
+            wp_send_json_error([
+                'code' => 'network_admin_required',
             ]);
             exit;
         }

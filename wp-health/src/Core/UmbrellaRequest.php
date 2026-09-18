@@ -1,6 +1,7 @@
 <?php
 namespace WPUmbrella\Core;
 
+use WPUmbrella\Core\Constants\SignedRequest;
 use WPUmbrella\Helpers\Controller;
 
 class UmbrellaRequest
@@ -101,10 +102,19 @@ class UmbrellaRequest
         return true;
     }
 
+    protected function hasSignatureHeaders()
+    {
+        return isset($this->headers[strtolower(SignedRequest::SIGNATURE_V2_HEADER)])
+            || isset($this->headers[strtolower(SignedRequest::SIGNATURE_HEADER)]);
+    }
+
     public function getAction()
     {
         $value = null;
-        switch($this->checkTypeQuery) {
+        $source = $this->checkTypeQuery !== null && $this->hasSignatureHeaders()
+            ? 'headers' : $this->checkTypeQuery;
+
+        switch($source) {
             case 'headers':
                 $value = isset($this->headers['x-action']) ? $this->headers['x-action'] : null;
                 break;

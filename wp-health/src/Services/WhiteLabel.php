@@ -30,37 +30,46 @@ class WhiteLabel
         return apply_filters('wp_umbrella_white_label_hide_menu', $data['hide_plugin']);
     }
 
-    public function setData($data)
+    public function setData($data, $duration = null)
     {
-        set_transient($this->key, $data, apply_filters($this->key . '_duration', MINUTE_IN_SECONDS * 60));
+        if ($duration === null) {
+            $duration = MINUTE_IN_SECONDS * 60;
+        }
+
+        set_transient($this->key, $data, apply_filters($this->key . '_duration', $duration));
     }
 
     public function getData($withCache = true)
     {
-        $data = DataTemporary::getDataByKey($this->key);
-        if ($data !== null && apply_filters($this->key . '_active', $withCache)) {
-            return apply_filters('wp_umbrella_white_label_data', $data);
-        }
+        $withCache = apply_filters($this->key . '_active', $withCache);
 
-        $cacheData = get_transient($this->key);
-        if ($cacheData && apply_filters($this->key . '_active', $withCache)) {
-            DataTemporary::setDataByKey($this->key, $cacheData);
-            return apply_filters('wp_umbrella_white_label_data', $cacheData);
-        }
-
-        $default = $this->getDefaultData();
-
-        if ($data === null) {
-            $owner = wp_umbrella_get_service('Owner')->getOwnerImplicitApiKey();
-
-            if (!isset($owner['white_label'])) {
-                $owner['white_label'] = $default;
+        if ($withCache) {
+            $data = DataTemporary::getDataByKey($this->key);
+            if ($data !== null) {
+                return apply_filters('wp_umbrella_white_label_data', $data);
             }
 
-            $data = $owner['white_label'];
+            $cacheData = get_transient($this->key);
+            if ($cacheData) {
+                DataTemporary::setDataByKey($this->key, $cacheData);
+                return apply_filters('wp_umbrella_white_label_data', $cacheData);
+            }
         }
 
-        $this->setData($data);
+        $owner = wp_umbrella_get_service('Owner')->getOwnerImplicitApiKey();
+
+        // An account with no white label answers with the key and no value,
+        // which is an answer. A call that failed carries no key at all.
+        $answered = is_array($owner) && array_key_exists('white_label', $owner);
+
+        $data = $answered && !empty($owner['white_label'])
+            ? $owner['white_label']
+            : $this->getDefaultData();
+
+        // A call that never answered is retried sooner: holding the defaults
+        // for the usual hour would show the plugin under its own name for that
+        // whole time.
+        $this->setData($data, $answered ? null : MINUTE_IN_SECONDS * 5);
         DataTemporary::setDataByKey($this->key, $data);
 
         return apply_filters('wp_umbrella_white_label_data', $data);

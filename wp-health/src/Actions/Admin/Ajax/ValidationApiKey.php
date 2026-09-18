@@ -243,6 +243,14 @@ class ValidationApiKey implements ExecuteHooksBackend
                 ]);
             } elseif ($projectId === null) {
                 // Api is valid but project not exist
+                // The call below is answered by a callback this site has no key
+                // to verify, so the signing material is dropped and persisted
+                // before it goes out.
+                $newOptions = $this->pairingSigningKey->clearForNewProject($newOptions);
+                $this->optionService->setOptions($newOptions);
+                wp_cache_flush();
+                wp_load_alloptions(true);
+
                 $name = get_bloginfo('name');
                 $hosting = wp_umbrella_get_service('HostResolver')->getCurrentHost();
 
@@ -340,15 +348,7 @@ class ValidationApiKey implements ExecuteHooksBackend
 
     protected function applySigningKey($options, $signingKey)
     {
-        if (!$signingKey) {
-            return $options;
-        }
-
-        $options['public_key'] = $signingKey['public_key'];
-        $options['key_id'] = $signingKey['key_id'];
-        $options['key_state'] = 'dual';
-
-        return $options;
+        return $this->pairingSigningKey->applySigningKey($options, $signingKey, 'validate api key');
     }
 
     protected function probeHttpAuthRequirement($httpAuthUser, $httpAuthPassword)

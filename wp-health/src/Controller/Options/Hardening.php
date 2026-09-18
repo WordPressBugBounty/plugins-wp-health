@@ -2,7 +2,6 @@
 namespace WPUmbrella\Controller\Options;
 
 use WPUmbrella\Core\Models\AbstractController;
-use WPUmbrella\Services\TwoFactor\CompatibilityGuard;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -12,13 +11,13 @@ class Hardening extends AbstractController
 {
     public function executeGet($params)
     {
-        $states = wp_umbrella_get_service('HardeningSettings')->getStates();
+        $service = wp_umbrella_get_service('HardeningSettings');
 
         return $this->returnResponse([
             'success' => true,
-            'settings' => $states,
+            'settings' => $service->getStates(),
             'web_server' => wp_umbrella_get_service('WebServer')->getType(),
-            'two_factor' => $this->getTwoFactorState(),
+            'two_factor' => $this->getTwoFactorState($service),
         ]);
     }
 
@@ -32,13 +31,14 @@ class Hardening extends AbstractController
             'settings' => $settings,
             'web_server' => wp_umbrella_get_service('WebServer')->getType(),
             'htaccess_result' => $service->getLastHtaccessResult(),
-            'two_factor' => $this->getTwoFactorState(),
+            'file_editor_locked' => $service->isFileEditorLocked(),
+            'two_factor' => $this->getTwoFactorState($service),
         ]);
     }
 
-    protected function getTwoFactorState()
+    protected function getTwoFactorState($service)
     {
-        $guard = new CompatibilityGuard();
+        $guard = $service->getTwoFactorGuard();
 
         return [
             'enforceable' => $guard->isEnforceable(),

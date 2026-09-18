@@ -136,9 +136,9 @@ class PairByCodeService
             ];
         }
 
-        $this->clearSigningKeyOnProjectChange($projectId);
-
         $pairingService = wp_umbrella_get_service('PairingService');
+
+        $pairingService->clearSigningKeyOnProjectChange($projectId);
 
         if (!$pairingService->persistRequestToken($requestToken, $projectId)) {
             return [
@@ -155,23 +155,6 @@ class PairByCodeService
             'project_id' => $projectId,
             'request_token' => $requestToken,
         ];
-    }
-
-    protected function clearSigningKeyOnProjectChange($projectId)
-    {
-        $optionService = wp_umbrella_get_service('Option');
-        $pairingSigningKey = wp_umbrella_get_service('PairingSigningKey');
-
-        $options = $optionService->getOptions(['secure' => false]);
-        $storedProjectId = isset($options['project_id']) ? $options['project_id'] : '';
-
-        if ($pairingSigningKey->isSameProject($storedProjectId, $projectId)) {
-            return;
-        }
-
-        $optionService->setOptions(
-            $pairingSigningKey->clearWhenProjectChanged($options, $storedProjectId, $projectId)
-        );
     }
 
     protected function mapErrorResponse($status, array $body)

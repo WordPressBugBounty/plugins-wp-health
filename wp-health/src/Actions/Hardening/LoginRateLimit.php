@@ -75,14 +75,33 @@ class LoginRateLimit implements ExecuteHooks
             return $user;
         }
 
-        if (get_transient($this->blockKey($ip)) !== false) {
+        if ($this->isBlocked($ip)) {
             return $this->deny($username);
         }
 
-        if ($this->getCount($ip) < $this->maxFailures()) {
-            return $user;
+        return $user;
+    }
+
+    public function onFailure($username)
+    {
+        $ip = ClientIpResolver::resolve();
+
+        if ($ip === null || $this->isBlocked($ip)) {
+            return;
         }
 
+        $count = $this->counter->increment($this->key($ip), $this->windowMinutes() * MINUTE_IN_SECONDS);
+
+        if ($count < $this->maxFailures()) {
+            return;
+        }
+
+        $this->block($ip);
+        $this->recordBlockEvent($username);
+    }
+
+    protected function block($ip)
+    {
         $strikes = $this->getStrikes($ip) + 1;
 
         set_transient($this->strikesKey($ip), $strikes, self::STRIKES_TTL);
@@ -95,22 +114,24 @@ class LoginRateLimit implements ExecuteHooks
         $this->rememberBlock($ip, $duration);
 
         delete_transient($this->key($ip));
-
-        return $this->deny($username);
     }
 
-    public function onFailure($username)
+    protected function isBlocked($ip)
     {
-        $ip = ClientIpResolver::resolve();
-
-        if ($ip === null) {
-            return;
-        }
-
-        $this->counter->increment($this->key($ip), $this->windowMinutes() * MINUTE_IN_SECONDS);
+        return get_transient($this->blockKey($ip)) !== false;
     }
 
     protected function deny($username)
+    {
+        $this->recordBlockEvent($username);
+
+        return new WP_Error(
+            'wp_umbrella_login_rate_limited',
+            __('Too many failed login attempts. Please try again later.', 'wp-health')
+        );
+    }
+
+    protected function recordBlockEvent($username)
     {
         (new ProtectionEventRecorder())->recordAggregated(self::BLOCK_EVENT_KEY, 'INFO', [
             'kind' => 'protection',
@@ -118,11 +139,6 @@ class LoginRateLimit implements ExecuteHooks
             'outcome' => 'blocked',
             'targetUsername' => is_string($username) && $username !== '' ? $username : null,
         ], self::BLOCK_BUCKET_KEY, self::BLOCK_WINDOW);
-
-        return new WP_Error(
-            'wp_umbrella_login_rate_limited',
-            __('Too many failed login attempts. Please try again later.', 'wp-health')
-        );
     }
 
     protected function maxFailures()
@@ -164,11 +180,6 @@ class LoginRateLimit implements ExecuteHooks
         }
 
         update_option(self::BLOCK_INDEX_KEY, $index, false);
-    }
-
-    protected function getCount($ip)
-    {
-        return $this->counter->get($this->key($ip));
     }
 
     protected function getStrikes($ip)

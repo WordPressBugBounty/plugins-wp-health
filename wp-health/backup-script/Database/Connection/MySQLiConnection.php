@@ -92,9 +92,30 @@ if (!class_exists('UmbrellaMySQLiConnection', false)):
                 // }
             }
 
+            // What the site is really configured for, kept before any fallback
+            // replaces the connection and with it the error worth reporting.
+            $error = $this->connection->connect_error;
+            $errno = $this->connection->connect_errno;
+
+            if (!$success) {
+                $legacy = $configuration->getLegacyParsing();
+                if (!empty($legacy)) {
+                    $this->connection = mysqli_init();
+                    $success = @$this->connection->real_connect(
+                        $legacy['hostname'],
+                        $configuration->user,
+                        $configuration->password,
+                        $configuration->name,
+                        $legacy['port'],
+                        null,
+                        $flag
+                    );
+                }
+            }
+
             if (!$success) {
                 if ($throwOnError) {
-                    throw new UmbrellaException($this->connection->connect_error, 'db_connect_error_mysqli', $this->connection->connect_errno);
+                    throw new UmbrellaException($error, 'db_connect_error_mysqli', $errno);
                 }
                 return false;
             }

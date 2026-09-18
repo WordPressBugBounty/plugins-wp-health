@@ -38,12 +38,7 @@ class WhiteLabel implements ExecuteHooksBackend, DeactivationHook
             return;
         }
 
-        $withCache = true;
-        if ($page === 'plugins.php') {
-            $withCache = false;
-        }
-
-        $whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData($withCache);
+        $whiteLabelData = wp_umbrella_get_service('WhiteLabel')->getData();
 
         if ($whiteLabelData['plugin_name'] !== 'WP Umbrella' || $whiteLabelData['hide_plugin']) {
             echo '<style>

@@ -22,6 +22,8 @@ $wpUmbrellaOptions = [
     'wp-umbrella-errors-save',
     'wp_umbrella_disallow_one_click_access',
     'wp_umbrella_backup_data_process',
+    'wp_umbrella_wordpress_sizes',
+    'wp_umbrella_wordpress_sizes_lock',
     'wp_umbrella_backup_suffix_security',
     'wp_umbrella_backup_version',
     'wp_umbrella_restoration_suffix_security',
@@ -102,6 +104,7 @@ $wpUmbrellaCronHooks = [
 
 $wpUmbrellaScheduledActions = [
     ['wp_umbrella_send_errors', 'umbrella_errors'],
+    ['wp_umbrella_wordpress_sizes_scan', 'umbrella_sizes'],
     ['wp_umbrella_tls_probe', 'umbrella_tls'],
     ['wp_umbrella_activity_log_sync', 'wp-umbrella'],
     ['wp_umbrella_snapshot_data', ''],
@@ -229,6 +232,7 @@ try {
 try {
     if (is_multisite()) {
         delete_site_option('wp_umbrella_hardening_require_2fa_admin');
+        delete_site_option('wp_umbrella_hardening_htaccess_umbrella_block');
     }
 } catch (\Throwable $e) {
     error_log('WP Umbrella uninstall, network options: ' . $e->getMessage());

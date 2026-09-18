@@ -76,19 +76,56 @@ class BackupFinderConfiguration
      */
     public function getScratchDirectoryPatterns()
     {
-        $bases = array_unique([
+        return $this->buildScratchDirectoryPatterns(['umb_database', 'umb_checksum']);
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getScratchDirectoryPatternsIncludingRestore()
+    {
+        return $this->buildScratchDirectoryPatterns(['umb_database', 'umb_checksum', 'umb_restore']);
+    }
+
+    /**
+     * The bases a module can live under, trailing separator included.
+     *
+     * @return string[]
+     */
+    public function getModuleRoots()
+    {
+        $bases = [
             $this->getRootBackupModule(),
             $this->getDefaultSource(),
-        ]);
+            ABSPATH,
+        ];
 
-        $patterns = [];
+        $roots = [];
 
         foreach ($bases as $base) {
-            $base = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+            if (empty($base)) {
+                continue;
+            }
+
+            $roots[] = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        }
+
+        return array_values(array_unique($roots));
+    }
+
+    /**
+     * @param string[] $names
+     * @return string[]
+     */
+    protected function buildScratchDirectoryPatterns(array $names)
+    {
+        $patterns = [];
+
+        foreach ($this->getModuleRoots() as $base) {
             $roots = [$base, $base . 'wp-content' . DIRECTORY_SEPARATOR];
 
             foreach ($roots as $root) {
-                foreach (['umb_database', 'umb_checksum'] as $name) {
+                foreach ($names as $name) {
                     $patterns[] = $root . $name;
                     $patterns[] = $root . $name . '-*';
                 }

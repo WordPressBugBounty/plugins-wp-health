@@ -107,7 +107,10 @@ class Plugins
                 if (strlen($pluginData['Name']) > 0 && strlen($pluginData['Version']) > 0) {
                     $index = array_search($pluginPath, $pluginsByKey);
 
-                    if ($index !== false && isset($current->response[$pluginPath])) {
+                    if ($index !== false
+                        && isset($current->response[$pluginPath])
+                        && $this->isUsableUpdateEntry($current->response[$pluginPath])
+                    ) {
                         $current->response[$pluginPath]->name = $pluginData['Name'];
                         $current->response[$pluginPath]->old_version = $pluginData['Version'];
                         $current->response[$pluginPath]->file = $pluginPath;
@@ -154,7 +157,7 @@ class Plugins
         $pluginsByKey = array_column($data, 'key');
 
         foreach ($transient->no_update as $pluginPath => $entry) {
-            $newVersion = is_object($entry) && isset($entry->new_version) ? $entry->new_version : null;
+            $newVersion = $this->isUsableUpdateEntry($entry) && isset($entry->new_version) ? $entry->new_version : null;
             if (!$this->isVersionString($newVersion)) {
                 continue;
             }
@@ -189,6 +192,20 @@ class Plugins
         }
 
         return $data;
+    }
+
+    /**
+     * An updater that only loads its classes in the admin leaves an incomplete
+     * object behind when the transient is unserialized outside of it. Reading a
+     * property on one raises a warning, writing to one is fatal, so an entry
+     * that is not a usable object is left untouched.
+     *
+     * @param mixed $entry
+     * @return bool
+     */
+    protected function isUsableUpdateEntry($entry)
+    {
+        return is_object($entry) && !($entry instanceof \__PHP_Incomplete_Class);
     }
 
     /**

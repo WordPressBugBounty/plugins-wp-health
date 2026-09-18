@@ -165,6 +165,11 @@ class SignedRequestVerifier
     {
         $ctx = strtoupper($method) . ' ' . $path;
 
+        if ($this->isMultipartRequest($headers)) {
+            wp_umbrella_debug_log("signed request {$ctx}: unsupported content type");
+            return false;
+        }
+
         if (!function_exists('sodium_crypto_sign_verify_detached')) {
             wp_umbrella_debug_log("signed request {$ctx}: sodium unavailable");
             return false;
@@ -242,6 +247,26 @@ class SignedRequestVerifier
 
         wp_umbrella_debug_log("signed request {$ctx}: signature OK key_id={$storedKeyId}");
         return true;
+    }
+
+    protected function isMultipartRequest(array $headers)
+    {
+        $contentTypes = [
+            isset($headers['content-type']) ? $headers['content-type'] : null,
+            isset($_SERVER['CONTENT_TYPE']) ? $_SERVER['CONTENT_TYPE'] : null,
+        ];
+
+        foreach ($contentTypes as $contentType) {
+            if (!is_string($contentType) || $contentType === '') {
+                continue;
+            }
+
+            if (stripos($contentType, 'multipart/form-data') !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function decodePublicKey($publicKey)

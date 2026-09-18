@@ -48,14 +48,7 @@ class Pages implements ExecuteHooksBackend
 
     public function hideMenu()
     {
-        global $pagenow;
-
-        $withCache = true;
-        if (isset($pagenow) && $pagenow !== null && $pagenow === 'plugins.php') {
-            $withCache = false;
-        }
-
-        if (!\wp_umbrella_get_service('WhiteLabel')->hideMenu($withCache)) {
+        if (!\wp_umbrella_get_service('WhiteLabel')->hideMenu()) {
             return;
         } ?>
 <style type="text/css">

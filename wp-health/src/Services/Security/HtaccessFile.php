@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Security;
 
+use WPUmbrella\Actions\Hardening\SecurityHeaders;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -9,7 +11,7 @@ class HtaccessFile
 {
     const MARKER = 'WP Umbrella';
     const HEADERS_MARKER = 'WP Umbrella Headers';
-    const BLOCK_VERSION = 5;
+    const BLOCK_VERSION = 8;
     const UPLOADS_BLOCK_VERSION = 1;
     const SANDBOX_DIRNAME = 'wpu-htcheck';
     const CANARY_DIRNAME = 'wpu-canary';
@@ -160,7 +162,28 @@ class HtaccessFile
         return wp_umbrella_get_service('HardeningSettings')->isEnabled('security_headers');
     }
 
+    /**
+     * Same values as the PHP filter, read from the same constant so the two
+     * paths cannot drift. "Header always set" replaces a header rather than
+     * appending to it, so whichever of the two lands last wins and both stay in
+     * agreement either way.
+     */
     protected function getSecurityHeaderLines()
+    {
+        return [
+            '<IfModule mod_headers.c>',
+            'Header always set X-Frame-Options "SAMEORIGIN"',
+            'Header always set X-Content-Type-Options "nosniff"',
+            'Header always set Referrer-Policy "strict-origin-when-cross-origin"',
+            'Header always set Content-Security-Policy "' . SecurityHeaders::CONTENT_SECURITY_POLICY . '"',
+            '</IfModule>',
+        ];
+    }
+
+    /**
+     * The header set as v5 wrote it, before Content-Security-Policy joined it.
+     */
+    protected function getPreviousSecurityHeaderLines()
     {
         return [
             '<IfModule mod_headers.c>',
@@ -171,25 +194,119 @@ class HtaccessFile
         ];
     }
 
+    /**
+     * The extensions a shared host may hand to a PHP handler, read from here
+     * by the root block and by the uploads block so the two cannot drift.
+     */
+    protected function getScriptExtensions()
+    {
+        return 'php[0-9]?|pht|phtm|phtml|phps|phar|sh';
+    }
+
+    protected function getNoScriptDirectories()
+    {
+        return [
+            'uploads',
+            'upgrade',
+            'languages',
+            'fonts',
+            'gravatars',
+            'wp-rocket-config',
+        ];
+    }
+
+    /**
+     * Matched in full, by the <FilesMatch> guard on a basename and by the
+     * rewrite guard on the last segment of a path.
+     */
+    protected function getProtectedNames()
+    {
+        return 'wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt'
+            . '|composer\.json|composer\.lock|package\.json|package-lock\.json|npm-shrinkwrap\.json'
+            . '|yarn\.lock|pnpm-lock\.yaml|Gemfile\.lock';
+    }
+
+    /**
+     * Three shapes in one pattern, matched case-insensitively by the caller,
+     * against a whole path as well as against a basename.
+     *
+     * Dumps stand anywhere in the name, words are anchored on its end, and an
+     * appended suffix counts only behind a source or configuration extension.
+     */
+    protected function getSensitiveSuffixes()
+    {
+        $dumps = 'sql\.gz|sql';
+        $words = 'old|save|copy|tmp|disabled|bak|bkp|orig|swp';
+        $sources = 'php[0-9]?|pht|phtm|phtml|phps|phar|inc|env';
+        $appended = 'old|bak|save|orig|bkp|copy|tmp|swp|disabled|txt|1';
+
+        return '(\.(' . $dumps . ')(\.|$)'
+            . '|\.(' . $words . ')$'
+            . '|\.(' . $sources . ')[-._]?(' . $appended . ')(\.|$)'
+            . '|~$)';
+    }
+
     protected function getHardeningLines()
     {
-        $extensions = '(php[0-9]?|phtml|sh)';
+        return $this->buildHardeningLines(!is_multisite());
+    }
+
+    /**
+     * Two Apache mechanics shape every pattern below.
+     *
+     * A RewriteRule pattern is matched against the URL path, and PATH_INFO is
+     * part of that path, so an extension test ends on (/|$) rather than on the
+     * end of the string: the last segment of a request is not necessarily the
+     * file Apache resolves it to. A <FilesMatch> section is the other way
+     * around, it is handed the resolved basename and never sees PATH_INFO.
+     *
+     * And mod_mime maps an extension onto a handler without regard for case,
+     * so every pattern reading an extension carries [NC] or (?i).
+     *
+     * The multisite state is a parameter rather than a call because the
+     * accepted-variant list needs both shapes of the block.
+     */
+    protected function buildHardeningLines($withWpIncludesRule)
+    {
+        $extensions = '(' . $this->getScriptExtensions() . ')';
+        $names = $this->getProtectedNames();
+        $suffixes = $this->getSensitiveSuffixes();
 
         $lines = [
             '# Version: ' . self::BLOCK_VERSION,
             '<IfModule mod_rewrite.c>',
             'RewriteEngine On',
-            'RewriteRule ^wp-content/uploads/.*\.' . $extensions . '$ - [F,L]',
-            'RewriteRule ^wp-content/upgrade/.*\.' . $extensions . '$ - [F,L]',
         ];
 
-        if (!is_multisite()) {
-            $lines[] = 'RewriteRule ^wp-includes/[^/]+\.php$ - [F,L]';
+        foreach ($this->getNoScriptDirectories() as $directory) {
+            $lines[] = 'RewriteRule ^wp-content/' . $directory . '/.*\.' . $extensions . '(/|$) - [NC,F,L]';
         }
 
-        $lines[] = 'RewriteRule ^wp-includes/js/tinymce/langs/.+\.php - [F,L]';
-        $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [F,L]';
-        $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [F,L]';
+        if ($withWpIncludesRule) {
+            $lines[] = 'RewriteRule ^wp-includes/[^/]+\.php(/|$) - [NC,F,L]';
+        }
+
+        $lines[] = 'RewriteRule ^wp-includes/js/tinymce/langs/.+\.php - [NC,F,L]';
+        $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [NC,F,L]';
+        $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [NC,F,L]';
+
+        // mod_rewrite is a per-directory module and RewriteRule is rejected
+        // inside a <Files> or <FilesMatch> section, so the rewrite form of the
+        // two guards below is written here, at the level of the file, against
+        // the same two patterns.
+        //
+        // Both read the request rather than a resolved file, so on their own
+        // they would answer for a path that is on no disk. Apache ANDs
+        // consecutive RewriteCond lines, and -f keeps each verdict on the set
+        // its <FilesMatch> arm below covers. Anything else stays with the
+        // WordPress front controller.
+        $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+        $lines[] = 'RewriteCond %{REQUEST_URI} (^|/)(' . $names . ')(/|$) [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
+
+        $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+        $lines[] = 'RewriteCond %{REQUEST_URI} ' . $suffixes . ' [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
         $lines[] = '</IfModule>';
 
         // No "Options -Indexes" here. AllowOverride is evaluated when Apache
@@ -200,7 +317,43 @@ class HtaccessFile
         // analyzer strips our own block before looking for the directive, so
         // disable_directory_browsing never counted it. The FilesMatch rules
         // below already deny the files a listing would help an attacker find.
-        $denied = $this->getDenyLines();
+        $denied = $this->getFileDenyLines();
+
+        $lines[] = '<FilesMatch "(?i)^(' . $names . ')$">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        $lines[] = '<FilesMatch "(?i)' . $suffixes . '">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        return $lines;
+    }
+
+    /**
+     * The block as v6 wrote it, frozen so it cannot drift with the current one.
+     */
+    protected function buildLegacyHardeningLines($withWpIncludesRule)
+    {
+        $extensions = '(php[0-9]?|phtml|sh)';
+
+        $lines = [
+            '<IfModule mod_rewrite.c>',
+            'RewriteEngine On',
+            'RewriteRule ^wp-content/uploads/.*\.' . $extensions . '$ - [F,L]',
+            'RewriteRule ^wp-content/upgrade/.*\.' . $extensions . '$ - [F,L]',
+        ];
+
+        if ($withWpIncludesRule) {
+            $lines[] = 'RewriteRule ^wp-includes/[^/]+\.php$ - [F,L]';
+        }
+
+        $lines[] = 'RewriteRule ^wp-includes/js/tinymce/langs/.+\.php - [F,L]';
+        $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [F,L]';
+        $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [F,L]';
+        $lines[] = '</IfModule>';
+
+        $denied = $this->getFileDenyLines();
 
         $lines[] = '<FilesMatch "^(wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt|composer\.json|composer\.lock|package\.json)$">';
         $lines = array_merge($lines, $denied);
@@ -213,7 +366,76 @@ class HtaccessFile
         return $lines;
     }
 
-    protected function getDenyLines()
+    /**
+     * The block as v7 wrote it, frozen so it cannot drift with the current one.
+     */
+    protected function buildPreviousHardeningLines($withWpIncludesRule)
+    {
+        $extensions = '(php[0-9]?|pht|phtm|phtml|phps|phar|sh)';
+        $names = 'wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt'
+            . '|composer\.json|composer\.lock|package\.json|package-lock\.json|npm-shrinkwrap\.json'
+            . '|yarn\.lock|pnpm-lock\.yaml|Gemfile\.lock';
+        $suffixes = '(\.(sql\.gz|sql)(\.|$)'
+            . '|\.(old|save|copy|tmp|disabled|bak|bkp|orig|swp)$'
+            . '|\.(php[0-9]?|pht|phtm|phtml|phps|phar|inc|env)[-._]?'
+            . '(old|bak|save|orig|bkp|copy|tmp|swp|disabled|txt|1)(\.|$)'
+            . '|~$)';
+
+        $lines = [
+            '<IfModule mod_rewrite.c>',
+            'RewriteEngine On',
+        ];
+
+        foreach (['uploads', 'upgrade', 'languages', 'fonts', 'gravatars', 'wp-rocket-config'] as $directory) {
+            $lines[] = 'RewriteRule ^wp-content/' . $directory . '/.*\.' . $extensions . '(/|$) - [NC,F,L]';
+        }
+
+        if ($withWpIncludesRule) {
+            $lines[] = 'RewriteRule ^wp-includes/[^/]+\.php(/|$) - [NC,F,L]';
+        }
+
+        $lines[] = 'RewriteRule ^wp-includes/js/tinymce/langs/.+\.php - [NC,F,L]';
+        $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [NC,F,L]';
+        $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [NC,F,L]';
+        $lines[] = 'RewriteCond %{REQUEST_URI} (^|/)(' . $names . ')(/|$) [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
+        $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+        $lines[] = 'RewriteCond %{REQUEST_URI} ' . $suffixes . ' [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
+        $lines[] = '</IfModule>';
+
+        $denied = $this->getFileDenyLines();
+
+        $lines[] = '<FilesMatch "(?i)^(' . $names . ')$">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        $lines[] = '<FilesMatch "(?i)' . $suffixes . '">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        return $lines;
+    }
+
+    /**
+     * For a whole directory, where a RewriteRule is in a context that accepts
+     * it. Every arm says the same thing to a different module.
+     */
+    public function getDenyLines()
+    {
+        return array_merge($this->getFileDenyLines(), [
+            '<IfModule mod_rewrite.c>',
+            'RewriteEngine On',
+            'RewriteRule .* - [F,L]',
+            '</IfModule>',
+        ]);
+    }
+
+    /**
+     * For the inside of a <FilesMatch> section, which takes neither
+     * RewriteEngine nor RewriteRule.
+     */
+    protected function getFileDenyLines()
     {
         return [
             '<IfModule mod_authz_core.c>',
@@ -230,8 +452,8 @@ class HtaccessFile
     {
         $lines = ['# Version: ' . self::UPLOADS_BLOCK_VERSION];
 
-        $lines[] = '<FilesMatch "(?i)\.(php[0-9]?|pht|phtm|phtml|phps|phar|sh)(\.|$)">';
-        $lines = array_merge($lines, $this->getDenyLines());
+        $lines[] = '<FilesMatch "(?i)\.(' . $this->getScriptExtensions() . ')(\.|$)">';
+        $lines = array_merge($lines, $this->getFileDenyLines());
         $lines[] = '</FilesMatch>';
 
         return $lines;
@@ -280,8 +502,49 @@ class HtaccessFile
         // day the block changes.
         $inner = $this->withoutRetiredIndexesOption($inner);
 
-        return $this->matchesLines($inner, $this->getUmbrellaBlockLines())
-            || $this->matchesLines($inner, $this->getHardeningLines());
+        foreach ($this->getAcceptedBlockVariants() as $variant) {
+            if ($this->matchesLines($inner, $variant)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Both multisite shapes and all three header shapes, whatever the site
+     * reads as right now. A block is written once and read back on every
+     * posture scan, and the settings behind those two differences can change
+     * between the two moments without the file on disk changing at all. Only
+     * the rewrite of the next admin request lines them up again, and a block
+     * still carrying the earlier shape is ours, not a tampered one.
+     */
+    protected function getAcceptedBlockVariants()
+    {
+        $rulesets = [
+            $this->buildHardeningLines(true),
+            $this->buildHardeningLines(false),
+            $this->buildPreviousHardeningLines(true),
+            $this->buildPreviousHardeningLines(false),
+            $this->buildLegacyHardeningLines(true),
+            $this->buildLegacyHardeningLines(false),
+        ];
+
+        $headerSets = [
+            [],
+            $this->getSecurityHeaderLines(),
+            $this->getPreviousSecurityHeaderLines(),
+        ];
+
+        $variants = [];
+
+        foreach ($rulesets as $rules) {
+            foreach ($headerSets as $headers) {
+                $variants[] = array_merge($rules, $headers);
+            }
+        }
+
+        return $variants;
     }
 
     protected function withoutRetiredIndexesOption($inner)

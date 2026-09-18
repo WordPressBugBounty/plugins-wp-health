@@ -157,6 +157,12 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 	</div>
 	<?php endif; ?>
 
+	<?php if (isset($_GET['credentials']) && $_GET['credentials'] === 'locked_regenerate') : ?>
+	<div class="notice notice-warning">
+		<p><?php echo esc_html__('The credentials were not regenerated. On a WordPress network, only a network administrator can rotate the credentials of a site.', 'wp-health'); ?></p>
+	</div>
+	<?php endif; ?>
+
 	<div class="wpu-support-wrap">
 
 	<!-- Settings -->
@@ -353,7 +359,9 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 				</tr>
 			</tbody>
 		</table>
-		<?php if ($htaccessExists) : ?>
+		<?php if (!$hardeningCanEditNetworkKeys) : ?>
+			<p class="description"><?php echo esc_html__('This file is shared by the whole network, so only a network administrator can view and edit it.', 'wp-health'); ?></p>
+		<?php elseif ($htaccessExists) : ?>
 			<textarea readonly rows="12" style="width:100%;font-family:monospace;font-size:12px;" onclick="this.select();"><?php echo esc_textarea($htaccessContents); ?></textarea>
 		<?php else : ?>
 			<p class="description"><?php echo esc_html__('No .htaccess file found. This is expected on Nginx.', 'wp-health'); ?></p>
@@ -361,7 +369,7 @@ if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $activityLogBufferTable
 		<form method="post" action="<?php echo admin_url('admin-post.php'); ?>" novalidate="novalidate" style="margin-top:12px;">
 			<?php wp_nonce_field(HtaccessClean::NONCE); ?>
 			<input type="hidden" name="action" value="<?php echo esc_attr(HtaccessClean::ACTION); ?>" />
-			<?php submit_button(esc_html__('Clean WP Umbrella block', 'wp-health'), 'delete', 'submit', false, $htaccessHasBlock ? null : ['disabled' => 'disabled']); ?>
+			<?php submit_button(esc_html__('Clean WP Umbrella block', 'wp-health'), 'delete', 'submit', false, $htaccessHasBlock && $hardeningCanEditNetworkKeys ? null : ['disabled' => 'disabled']); ?>
 		</form>
 	</div>
 

@@ -95,6 +95,7 @@ class CertificateProbe
         }
 
         $message = (string) $response->get_error_message();
+        $kind = $this->classify($message);
         $control = $this->requestWithoutVerification($url);
 
         if ($control === null) {
@@ -102,16 +103,16 @@ class CertificateProbe
                 'verdict' => 'unreachable',
                 'duration_ms' => $durationMs,
                 'error' => $this->truncate($message),
-                'error_kind' => $this->classify($message),
+                'error_kind' => $kind,
             ]);
         }
 
         return $this->buildResult([
-            'verdict' => 'tls_failure',
+            'verdict' => $kind === 'timeout' ? 'inconclusive' : 'tls_failure',
             'http_code' => (int) wp_remote_retrieve_response_code($control),
             'duration_ms' => $durationMs,
             'error' => $this->truncate($message),
-            'error_kind' => $this->classify($message),
+            'error_kind' => $kind,
             'clock_skew_seconds' => $this->clockSkew($control),
         ]);
     }
@@ -168,7 +169,7 @@ class CertificateProbe
             'hostname_mismatch' => ['subjectaltname', 'does not match target host', 'no alternative certificate subject name'],
             'untrusted_chain' => ['unable to get local issuer certificate', 'self signed certificate', 'self-signed certificate', 'certificate verify failed', 'ssl certificate problem'],
             'handshake' => ['ssl connect error', 'wrong version number', 'unsupported protocol', 'handshake'],
-            'timeout' => ['operation timed out', 'timed out after', 'connection timed out'],
+            'timeout' => ['operation timed out', 'timed out after', 'connection timed out', 'timeout after', 'timeout was reached', 'ssl connection timeout'],
             'dns' => ['could not resolve host', 'name or service not known'],
         ];
 

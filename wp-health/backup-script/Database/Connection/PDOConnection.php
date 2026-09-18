@@ -52,20 +52,34 @@ if (!class_exists('UmbrellaPDOConnection', false)):
             try {
                 $this->connection = new PDO(self::getDsn($configuration), $configuration->user, $configuration->password, $options);
             } catch (PDOException $e) {
+                $connected = false;
+                $code = (string)$e->getCode();
+
                 if ((int)$e->getCode() === 2002 && strtolower($configuration->getHostname()) === 'localhost') {
                     try {
                         $fallbackConfig = clone $configuration;
                         $fallbackConfig->host = '127.0.0.1';
                         $this->connection = new PDO(self::getDsn($fallbackConfig), $fallbackConfig->user, $fallbackConfig->password, $options);
+                        $connected = true;
                     } catch (PDOException $e2) {
-                        if ($throwOnError) {
-                            throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e2->getCode());
-                        }
-                        return false;
+                        $code = (string)$e2->getCode();
                     }
-                } else {
+                }
+
+                if (!$connected) {
+                    $legacyDsn = self::getLegacyDsn($configuration);
+                    if ($legacyDsn !== '') {
+                        try {
+                            $this->connection = new PDO($legacyDsn, $configuration->user, $configuration->password, $options);
+                            $connected = true;
+                        } catch (PDOException $e3) {
+                        }
+                    }
+                }
+
+                if (!$connected) {
                     if ($throwOnError) {
-                        throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', (string)$e->getCode());
+                        throw new UmbrellaException($e->getMessage(), 'db_connect_error_pdo', $code);
                     }
                     return false;
                 }
@@ -142,24 +156,44 @@ if (!class_exists('UmbrellaPDOConnection', false)):
 
         public static function getDsn(UmbrellaDatabaseConfiguration $configuration)
         {
+            return self::buildDsn(
+                $configuration->name,
+                $configuration->getHostname(),
+                $configuration->getPort(),
+                $configuration->getSocket()
+            );
+        }
+
+        /**
+         * @return string
+         */
+        public static function getLegacyDsn(UmbrellaDatabaseConfiguration $configuration)
+        {
+            $legacy = $configuration->getLegacyParsing();
+            if (empty($legacy)) {
+                return '';
+            }
+
+            return self::buildDsn($configuration->name, $legacy['hostname'], $legacy['port'], $legacy['socket']);
+        }
+
+        protected static function buildDsn($name, $hostname, $port, $socket)
+        {
             $pdoParameters = [
-                'dbname' => $configuration->name,
+                'dbname' => $name,
                 'charset' => 'utf8',
+                'host' => $hostname,
             ];
-            $socket = $configuration->getSocket();
             if ($socket !== '') {
-                $pdoParameters['host'] = $configuration->getHostname();
                 $pdoParameters['unix_socket'] = $socket;
             } else {
-                $pdoParameters['host'] = $configuration->getHostname();
-                $pdoParameters['port'] = $configuration->getPort();
+                $pdoParameters['port'] = $port;
             }
             $parameters = [];
-            foreach ($pdoParameters as $name => $value) {
-                $parameters[] = $name . '=' . $value;
+            foreach ($pdoParameters as $key => $value) {
+                $parameters[] = $key . '=' . $value;
             }
-            $dsn = sprintf('mysql:%s', implode(';', $parameters));
-            return $dsn;
+            return sprintf('mysql:%s', implode(';', $parameters));
         }
     }
 

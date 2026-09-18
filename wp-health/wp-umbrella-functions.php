@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.27.3');
+    define('WP_UMBRELLA_VERSION', '2.27.4');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -423,15 +423,21 @@ function wp_umbrella_remove_file($file)
     // Try to delete.
     if (file_exists($file) && !@unlink($file)) {
         try {
-            // Or try to empty it.
+            // Or try to empty it. A host that refuses the unlink often refuses
+            // the write too, and fopen then hands back false.
             $handler = @fopen($file, 'w');
+            if (!is_resource($handler)) {
+                // Or try to rename it.
+                return @rename($file, $file . '.old');
+            }
+
             $responsefWrite = @fwrite($handler, '<?php // File removed by WP Umbrella');
             @fclose($handler);
             if (!$responsefWrite) {
                 // Or try to rename it.
                 return @rename($file, $file . '.old');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
         }
     }
     return true;

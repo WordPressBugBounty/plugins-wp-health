@@ -15,6 +15,8 @@ class BloomFilter
 
     const CHECKSUM_LENGTH = 32;
 
+    const MAX_HASH_COUNT = 64;
+
     public static function canonicalizeIp($ip)
     {
         if (!is_string($ip)) {
@@ -59,6 +61,10 @@ class BloomFilter
         $header = self::readHeader($blob);
 
         if ($header === null) {
+            return false;
+        }
+
+        if ($header['k'] < 1 || $header['k'] > self::MAX_HASH_COUNT) {
             return false;
         }
 

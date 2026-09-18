@@ -50,6 +50,10 @@ class ManageUser
             \WP_Session_Tokens::get_instance($userId)->destroy_all();
         }
 
+        if (class_exists('WP_Application_Passwords')) {
+            \WP_Application_Passwords::delete_all_application_passwords($userId);
+        }
+
         return [
             'status' => 'success',
             'code' => 'success',
@@ -177,6 +181,12 @@ class ManageUser
             'role' => 'administrator',
             'fields' => 'ID',
             'number' => 2,
+            'meta_query' => [
+                [
+                    'key' => self::META_KEY,
+                    'compare' => 'NOT EXISTS',
+                ],
+            ],
         ]);
 
         return count($admins) <= 1;

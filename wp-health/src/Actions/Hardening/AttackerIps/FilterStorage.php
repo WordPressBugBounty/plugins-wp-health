@@ -150,6 +150,7 @@ class FilterStorage
         }
 
         $this->ensureIndexGuard($dir);
+        $this->ensureDenyGuard($dir);
 
         if (!wp_is_writable($dir)) {
             return false;
@@ -178,6 +179,19 @@ class FilterStorage
         if (!file_exists($index)) {
             @file_put_contents($index, self::INDEX_GUARD);
         }
+    }
+
+    protected function ensureDenyGuard($dir)
+    {
+        $htaccess = $dir . '/.htaccess';
+
+        if (file_exists($htaccess)) {
+            return;
+        }
+
+        $lines = wp_umbrella_get_service('HtaccessFile')->getDenyLines();
+
+        @file_put_contents($htaccess, implode("\n", $lines) . "\n");
     }
 
     protected function directory()

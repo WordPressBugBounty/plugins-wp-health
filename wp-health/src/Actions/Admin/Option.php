@@ -175,6 +175,13 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
 
         check_ajax_referer('wp_umbrella_repair_ajax');
 
+        if (!self::canWriteCredentials()) {
+            wp_send_json_error([
+                'code' => 'network_admin_required',
+                'message' => __('On a WordPress network, only a network administrator can reconnect this site.', 'wp-health'),
+            ], 403);
+        }
+
         $result = wp_umbrella_get_service('PairingService')->runPairing();
 
         if ($result) {
@@ -211,6 +218,11 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
 
         if (!wp_verify_nonce($_POST['_wpnonce'], 'wp_umbrella_regenerate_secret_token')) {
             wp_redirect(admin_url());
+            return;
+        }
+
+        if (!self::canWriteCredentials()) {
+            wp_redirect(admin_url('/options-general.php?page=wp-umbrella-settings&support=1&credentials=locked_regenerate'));
             return;
         }
 

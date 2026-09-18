@@ -1,90 +1,29 @@
 <?php
 namespace WPUmbrella\Controller\BackupV4;
 
+use WPUmbrella\Core\BackupScript\BackupScriptCompiler;
+use WPUmbrella\Core\BackupScript\BackupScriptManifest;
 use WPUmbrella\Core\Models\AbstractController;
 use WPUmbrella\Helpers\Opcache;
 
 class MoveBackupModule extends AbstractController
 {
-    protected function mergeFiles($directory, $outputFilePath)
+    /**
+     * The file list and its order come from the manifest, the same one the
+     * developer entry point reads. They used to be two arrays kept in two
+     * files, which had already drifted: the same sources compiled into two
+     * different scripts depending on which path deployed them.
+     *
+     * @param string $generation
+     * @param string $outputFilePath
+     */
+    protected function mergeFiles($generation, $outputFilePath)
     {
-        $outputContent = '';
-        $firstFile = true;
-
-        $fileOrder = [
-            'DefaultException.php',
-            'UmbrellaException.php',
-            'UmbrellaInternalRequestException.php',
-            'UmbrellaSocketException.php',
-            'ProcessCapacityTrait.php',
-            'UmbrellaPreventMaxExecutionTime.php',
-            'UmbrellaDatabasePreventMaxExecutionTime.php',
-            'ConnectionInterface.php',
-            'DatabaseStatementInterface.php',
-            'ChecksumDictionaryGenerator.php',
-            'SiteChecksumDirectoryGenerator.php',
-            'AbstractProcessBackup.php',
-            'Context.php',
-        ];
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($directory)
-        );
-
-        $sortedFiles = [];
-
-        foreach ($iterator as $file) {
-            if ($file->isDir()) {
-                continue;
-            }
-
-            // Test files sit next to the sources and pull in PHPUnit, which is not
-            // there once merged: the module would fatal on its first request.
-            if (strpos($file->getPathname(), DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR) !== false) {
-                continue;
-            }
-
-            if (strtolower($file->getExtension()) == 'php') {
-                $sortedFiles[$file->getBasename()] = $file->getPathname();
-            }
-        }
-
-        usort($sortedFiles, function ($a, $b) use ($fileOrder) {
-            $isScriptA = basename($a) == 'script.php';
-            $isScriptB = basename($b) == 'script.php';
-
-            if ($isScriptA && !$isScriptB) {
-                return 1;
-            } elseif (!$isScriptA && $isScriptB) {
-                return -1;
-            }
-
-            $posA = array_search(basename($a), $fileOrder);
-            $posB = array_search(basename($b), $fileOrder);
-
-            return ($posA !== false ? $posA : PHP_INT_MAX) - ($posB !== false ? $posB : PHP_INT_MAX);
-        });
-
-        foreach ($sortedFiles as $filePath) {
-            $handle = fopen($filePath, 'rb');
-
-            if ($handle) {
-                $buffer = [];
-                while (!feof($handle)) {
-                    $buffer[] = fgets($handle, 400);
-                }
-                fclose($handle);
-                $buffer[0][0] = chr(hexdec('FF')); // set the first byte to 0xFF
-            }
-
-            array_shift($buffer);
-            $content = implode('', $buffer);
-            $outputContent .= $content;
-        }
+        $compiler = new BackupScriptCompiler(WP_UMBRELLA_DIR);
 
         global $wp_filesystem;
 
-        $wp_filesystem->put_contents($outputFilePath, "<?php \n" . $outputContent, 0755);
+        $wp_filesystem->put_contents($outputFilePath, $compiler->compile($generation), 0755);
     }
 
     /**
@@ -124,8 +63,9 @@ class MoveBackupModule extends AbstractController
 
     public function executeGet($params)
     {
+        $generation = BackupScriptManifest::GENERATION_BACKUP_V4;
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
-        $filename = 'cloner.php';
+        $filename = BackupScriptManifest::generation($generation)['output'];
         $requestId = sanitize_text_field($params['requestId'] ?? null);
 
         if (empty($requestId)) {
@@ -154,7 +94,7 @@ class MoveBackupModule extends AbstractController
                 $wp_filesystem->delete($destinationPath);
             }
 
-            $this->mergeFiles(WP_UMBRELLA_DIR . DIRECTORY_SEPARATOR . 'backup-script', $destinationPath);
+            $this->mergeFiles($generation, $destinationPath);
 
             $fileContent = $wp_filesystem->get_contents($destinationPath);
 

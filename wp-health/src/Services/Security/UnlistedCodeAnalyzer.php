@@ -10,6 +10,9 @@ class UnlistedCodeAnalyzer
     const MAX_ENTRIES = 200;
     const MAX_HASHED_BYTES = 2097152;
     const MAX_HEADER_PROBES = 10;
+    const MAX_PHP_SCAN_LEVELS = 3;
+    const MAX_PHP_SCAN_ENTRIES = 500;
+    const MAX_PHP_FILES_COUNTED = 25;
 
     const UMBRELLA_MU_FILES = ['InitUmbrella.php', '_WPHealthHandlerMU.php'];
 
@@ -28,11 +31,34 @@ class UnlistedCodeAnalyzer
         'blog-suspended.php',
     ];
 
+    const SUSPENDING_MODES = [
+        'elementor-safe-mode.php' => [
+            'option' => 'elementor_safe_mode',
+            'allowed_plugins_option' => 'elementor_safe_mode_allowed_plugins',
+        ],
+        'health-check-troubleshooting-mode.php' => [
+            'option' => 'health-check-disable-plugin-hash',
+            'allowed_plugins_option' => 'health-check-allowed-plugins',
+        ],
+        'troubleshooting-mode.php' => [
+            'option' => 'health-check-disable-plugin-hash',
+            'allowed_plugins_option' => 'health-check-allowed-plugins',
+        ],
+    ];
+
+    protected $muPlugins;
+
+    protected $dropins;
+
+    protected $unlistedPluginDirectories;
+
     public function analyze()
     {
         $muPlugins = $this->collectMuPlugins();
         $dropins = $this->collectDropins();
         $directories = $this->collectUnlistedPluginDirectories();
+        $missingActivePlugins = $this->collectMissingActivePlugins();
+        $suspendingModes = $this->collectSuspendingModes($muPlugins);
 
         $unexpectedMuPlugins = 0;
         foreach ($muPlugins as $entry) {
@@ -42,6 +68,7 @@ class UnlistedCodeAnalyzer
         }
 
         return [
+            'analyzer_version' => $this->analyzerVersion(),
             'mu_plugins' => $muPlugins,
             'mu_plugins_dir_exists' => defined('WPMU_PLUGIN_DIR') && is_dir(WPMU_PLUGIN_DIR),
             'mu_plugins_count' => count($muPlugins),
@@ -50,11 +77,58 @@ class UnlistedCodeAnalyzer
             'dropins_count' => count($dropins),
             'unlisted_plugin_directories' => $directories,
             'unlisted_plugin_directories_count' => count($directories),
-            'has_findings' => $unexpectedMuPlugins > 0 || !empty($dropins) || !empty($directories),
+            'missing_active_plugins' => $missingActivePlugins,
+            'missing_active_plugins_count' => count($missingActivePlugins),
+            'suspending_modes' => $suspendingModes,
+            'suspending_modes_count' => count($suspendingModes),
+            'has_findings' => $unexpectedMuPlugins > 0
+                || !empty($dropins)
+                || !empty($directories)
+                || !empty($missingActivePlugins)
+                || !empty($suspendingModes),
         ];
     }
 
+    /**
+     * @return string|null
+     */
+    protected function analyzerVersion()
+    {
+        if (!defined('WP_UMBRELLA_VERSION')) {
+            return null;
+        }
+
+        return (string) WP_UMBRELLA_VERSION;
+    }
+
     protected function collectMuPlugins()
+    {
+        if ($this->muPlugins === null) {
+            $this->muPlugins = $this->readMuPluginEntries();
+        }
+
+        return $this->muPlugins;
+    }
+
+    protected function collectDropins()
+    {
+        if ($this->dropins === null) {
+            $this->dropins = $this->readDropinEntries();
+        }
+
+        return $this->dropins;
+    }
+
+    protected function collectUnlistedPluginDirectories()
+    {
+        if ($this->unlistedPluginDirectories === null) {
+            $this->unlistedPluginDirectories = $this->readUnlistedPluginDirectoryEntries();
+        }
+
+        return $this->unlistedPluginDirectories;
+    }
+
+    protected function readMuPluginEntries()
     {
         if (!defined('WPMU_PLUGIN_DIR') || !is_dir(WPMU_PLUGIN_DIR)) {
             return [];
@@ -109,7 +183,7 @@ class UnlistedCodeAnalyzer
         return $entries;
     }
 
-    protected function collectDropins()
+    protected function readDropinEntries()
     {
         if (!defined('WP_CONTENT_DIR') || !is_dir(WP_CONTENT_DIR)) {
             return [];
@@ -148,7 +222,7 @@ class UnlistedCodeAnalyzer
         return $entries;
     }
 
-    protected function collectUnlistedPluginDirectories()
+    protected function readUnlistedPluginDirectoryEntries()
     {
         if (!defined('WP_PLUGIN_DIR') || !is_dir(WP_PLUGIN_DIR)) {
             return [];
@@ -164,9 +238,9 @@ class UnlistedCodeAnalyzer
                 continue;
             }
 
-            $phpFiles = $this->countPhpFiles($path);
+            $scan = $this->scanPhpFiles($path);
 
-            if ($phpFiles === 0) {
+            if ($scan['count'] === 0) {
                 continue;
             }
 
@@ -175,7 +249,8 @@ class UnlistedCodeAnalyzer
             $entries[] = [
                 'directory' => $name,
                 'is_hidden' => strpos($name, '.') === 0,
-                'php_files' => $phpFiles,
+                'php_files' => $scan['count'],
+                'php_files_capped' => $scan['capped'],
                 'name' => $this->headerValue($header, 'Name'),
                 'version' => $this->headerValue($header, 'Version'),
                 'modified_at' => $this->modifiedAt($path),
@@ -187,6 +262,152 @@ class UnlistedCodeAnalyzer
         }
 
         return $entries;
+    }
+
+    protected function collectMissingActivePlugins()
+    {
+        if (!defined('WP_PLUGIN_DIR')) {
+            return [];
+        }
+
+        $entries = [];
+
+        foreach ($this->readActivePluginKeys() as $key => $isNetwork) {
+            if (strpos($key, '..') !== false) {
+                continue;
+            }
+
+            if (file_exists(WP_PLUGIN_DIR . '/' . $key)) {
+                continue;
+            }
+
+            $parts = explode('/', $key);
+
+            $entries[] = [
+                'plugin' => $key,
+                'directory' => count($parts) > 1 ? $parts[0] : null,
+                'is_network' => $isNetwork,
+            ];
+
+            if (count($entries) >= self::MAX_ENTRIES) {
+                break;
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @return bool[] Plugin file keys mapped to their network scope.
+     */
+    protected function readActivePluginKeys()
+    {
+        $keys = [];
+
+        foreach ((array) $this->readOption('active_plugins', []) as $key) {
+            if (is_string($key) && $key !== '') {
+                $keys[$key] = false;
+            }
+        }
+
+        if (!function_exists('is_multisite') || !is_multisite()) {
+            return $keys;
+        }
+
+        foreach (array_keys((array) $this->readSiteOption('active_sitewide_plugins', [])) as $key) {
+            if (is_string($key) && $key !== '') {
+                $keys[$key] = true;
+            }
+        }
+
+        return $keys;
+    }
+
+    protected function collectSuspendingModes($muPlugins)
+    {
+        $modes = [];
+
+        foreach ($muPlugins as $entry) {
+            if ($entry['is_directory'] || !isset(self::SUSPENDING_MODES[$entry['file']])) {
+                continue;
+            }
+
+            $mode = self::SUSPENDING_MODES[$entry['file']];
+
+            if (!$this->isOptionSet($this->readOption($mode['option'], ''))) {
+                continue;
+            }
+
+            $modes[] = [
+                'loader' => $entry['file'],
+                'option' => $mode['option'],
+                'allowed_plugins_option' => $mode['allowed_plugins_option'],
+                'allowed_plugins' => $this->readAllowedPlugins($mode['allowed_plugins_option']),
+            ];
+        }
+
+        return $modes;
+    }
+
+    protected function readOption($key, $default)
+    {
+        if (!function_exists('get_option')) {
+            return $default;
+        }
+
+        return get_option($key, $default);
+    }
+
+    protected function readSiteOption($key, $default)
+    {
+        if (!function_exists('get_site_option')) {
+            return $default;
+        }
+
+        return get_site_option($key, $default);
+    }
+
+    protected function isOptionSet($value)
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (!is_scalar($value)) {
+            return false;
+        }
+
+        $value = trim((string) $value);
+
+        return $value !== '' && $value !== '0' && $value !== 'no';
+    }
+
+    /**
+     * @return string[]
+     */
+    protected function readAllowedPlugins($key)
+    {
+        $allowed = $this->readOption($key, []);
+
+        if (!is_array($allowed)) {
+            return [];
+        }
+
+        $plugins = [];
+
+        foreach ($allowed as $value) {
+            if (!is_string($value) || $value === '') {
+                continue;
+            }
+
+            $plugins[] = $value;
+
+            if (count($plugins) >= self::MAX_ENTRIES) {
+                break;
+            }
+        }
+
+        return $plugins;
     }
 
     /**
@@ -287,6 +508,68 @@ class UnlistedCodeAnalyzer
         }
 
         return [];
+    }
+
+    /**
+     * @return array{count: int, capped: bool}
+     */
+    protected function scanPhpFiles($path)
+    {
+        $budget = self::MAX_PHP_SCAN_ENTRIES;
+        $count = $this->scanPhpFilesIn($path, self::MAX_PHP_SCAN_LEVELS, $budget);
+
+        return [
+            'count' => $count,
+            'capped' => $count >= self::MAX_PHP_FILES_COUNTED || $budget <= 0,
+        ];
+    }
+
+    /**
+     * @param int $levels Directory levels left to read, the current one included.
+     * @param int $budget Remaining entries, decremented across the whole walk.
+     *
+     * @return int
+     */
+    protected function scanPhpFilesIn($path, $levels, &$budget)
+    {
+        $count = 0;
+        $directories = [];
+
+        foreach ($this->readDirectory($path) as $name) {
+            if (--$budget < 0) {
+                return $count;
+            }
+
+            $child = $path . '/' . $name;
+
+            if (substr($name, -4) === '.php' && is_file($child)) {
+                ++$count;
+
+                if ($count >= self::MAX_PHP_FILES_COUNTED) {
+                    return self::MAX_PHP_FILES_COUNTED;
+                }
+
+                continue;
+            }
+
+            if ($levels > 1 && !is_link($child) && is_dir($child)) {
+                $directories[] = $child;
+            }
+        }
+
+        foreach ($directories as $directory) {
+            $count += $this->scanPhpFilesIn($directory, $levels - 1, $budget);
+
+            if ($count >= self::MAX_PHP_FILES_COUNTED) {
+                return self::MAX_PHP_FILES_COUNTED;
+            }
+
+            if ($budget <= 0) {
+                return $count;
+            }
+        }
+
+        return $count;
     }
 
     protected function countPhpFiles($path)

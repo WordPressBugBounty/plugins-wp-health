@@ -78,6 +78,11 @@ class WordPressData
             require_once ABSPATH . 'wp-admin/includes/class-wp-debug-data.php';
         }
 
+        // The REST path does not go through the universal loader, which is
+        // where this filter is otherwise set. A deprecation notice printed
+        // here lands in the middle of the JSON body and makes it unparseable.
+        add_filter('deprecated_function_trigger_error', '__return_false');
+
         return \WP_Debug_Data::get_sizes();
     }
 

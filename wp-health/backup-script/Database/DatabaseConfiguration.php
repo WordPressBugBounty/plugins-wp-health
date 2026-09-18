@@ -42,20 +42,20 @@ if (!class_exists('UmbrellaDatabaseConfiguration', false)):
 
         public function getHostname()
         {
-            $parts = explode(':', $this->host, 2);
-            if ($parts[0] === '') {
+            $host = self::stripSocketPath($this->host);
+            preg_match('#^([^:/]*)#', $host, $parts);
+            if ($parts[1] === '') {
                 return 'localhost';
             }
-            return $parts[0];
+            return $parts[1];
         }
 
         public function getPort()
         {
-            if (strpos($this->host, '/') !== false) {
+            if (self::getSocketPath($this->host) !== '') {
                 return 0;
             }
-            $parts = explode(':', $this->host, 2);
-            if (count($parts) === 2) {
+            if (preg_match('#^[^:/]*:(\d+)#', $this->host, $parts)) {
                 return (int)$parts[1];
             }
             return 0;
@@ -64,6 +64,29 @@ if (!class_exists('UmbrellaDatabaseConfiguration', false)):
         public function getSocket()
         {
             return self::getSocketPath($this->host);
+        }
+
+        /**
+         * @return array
+         */
+        public function getLegacyParsing()
+        {
+            $parts = explode(':', $this->host, 2);
+            $hostname = $parts[0] === '' ? 'localhost' : $parts[0];
+
+            $port = 0;
+            $socket = '';
+            if (strpos($this->host, '/') === false) {
+                $port = count($parts) === 2 ? (int) $parts[1] : 0;
+            } else {
+                $socket = count($parts) === 2 ? $parts[1] : $parts[0];
+            }
+
+            if ($hostname === $this->getHostname() && $port === $this->getPort() && $socket === $this->getSocket()) {
+                return [];
+            }
+
+            return ['hostname' => $hostname, 'port' => $port, 'socket' => $socket];
         }
 
         public function setUseSSL($ssl)
@@ -85,14 +108,23 @@ if (!class_exists('UmbrellaDatabaseConfiguration', false)):
 
         protected static function getSocketPath($host)
         {
-            if (strpos($host, '/') === false) {
-                return '';
+            $separator = strpos($host, ':/');
+            if ($separator !== false) {
+                return substr($host, $separator + 1);
             }
-            $parts = explode(':', $host, 2);
-            if (count($parts) === 2) {
-                return $parts[1];
+            if (strpos($host, '/') === 0) {
+                return $host;
             }
-            return $parts[0];
+            return '';
+        }
+
+        protected static function stripSocketPath($host)
+        {
+            $separator = strpos($host, ':/');
+            if ($separator !== false) {
+                return substr($host, 0, $separator);
+            }
+            return $host;
         }
     }
 endif;

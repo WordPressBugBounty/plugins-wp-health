@@ -92,15 +92,29 @@
 					body: new FormData(form)
 				})
 
-				const { data : { code, success = true, ...rest } } = await response.json();
+				const { success: accepted = true, data : { code, success = true } } = await response.json();
 
 				loader.classList.remove('flex')
 				loader.classList.add('hidden');
 
 				form.querySelector('button[type="submit"]').removeAttribute('disabled');
 
-				if(!success){
+				if(!accepted || !success){
 					switch(code){
+						case "not_authorized":
+							Swal.fire({
+								text: 'Your session expired or you are not allowed to do this. Reload the page and try again.',
+								icon: 'error',
+								confirmButtonText: "Close",
+							})
+							break;
+						case "network_admin_required":
+							Swal.fire({
+								text: 'On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to create the account for this site.',
+								icon: 'error',
+								confirmButtonText: "Close",
+							})
+							break;
 						case "not_available":
 							Swal.fire({
 								title: 'Registration is not possible!',

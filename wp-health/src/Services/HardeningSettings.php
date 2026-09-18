@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services;
 
+use WPUmbrella\Services\TwoFactor\CompatibilityGuard;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -13,9 +15,18 @@ class HardeningSettings
 
     const NETWORK_TWO_FACTOR_OPTION_KEY = 'wp_umbrella_hardening_require_2fa_admin';
 
+    const NETWORK_HTACCESS_BLOCK_OPTION_KEY = 'wp_umbrella_hardening_htaccess_umbrella_block';
+
     const TWO_FACTOR_KEY = 'require_2fa_admin';
 
+    const HTACCESS_BLOCK_KEY = 'htaccess_umbrella_block';
+
     protected $lastHtaccessResult = null;
+
+    /**
+     * @var CompatibilityGuard|null
+     */
+    protected $twoFactorGuard = null;
 
     public function getLastHtaccessResult()
     {
@@ -57,10 +68,12 @@ class HardeningSettings
         $settings = array_intersect_key($settings, $defaults);
 
         if ($this->isNetwork()) {
-            $networkValue = get_site_option(self::NETWORK_TWO_FACTOR_OPTION_KEY, null);
+            foreach ($this->getNetworkOptionKeys() as $key => $optionKey) {
+                $networkValue = get_site_option($optionKey, null);
 
-            if ($networkValue !== null) {
-                $settings[self::TWO_FACTOR_KEY] = $this->castBoolean($networkValue);
+                if ($networkValue !== null) {
+                    $settings[$key] = $this->castBoolean($networkValue);
+                }
             }
         }
 
@@ -75,8 +88,6 @@ class HardeningSettings
     }
 
     /**
-     * Settings stored network wide rather than per site.
-     *
      * @return array
      */
     public function getNetworkScopedKeys()
@@ -85,7 +96,18 @@ class HardeningSettings
             return [];
         }
 
-        return [self::TWO_FACTOR_KEY];
+        return array_keys($this->getNetworkOptionKeys());
+    }
+
+    /**
+     * @return array
+     */
+    protected function getNetworkOptionKeys()
+    {
+        return [
+            self::TWO_FACTOR_KEY => self::NETWORK_TWO_FACTOR_OPTION_KEY,
+            self::HTACCESS_BLOCK_KEY => self::NETWORK_HTACCESS_BLOCK_OPTION_KEY,
+        ];
     }
 
     /**
@@ -135,6 +157,13 @@ class HardeningSettings
 
         update_option(self::OPTION_KEY, $settings);
 
+        if ($this->isNetwork() && $this->ownsRootHtaccess()) {
+            update_site_option(
+                self::NETWORK_HTACCESS_BLOCK_OPTION_KEY,
+                $settings[self::HTACCESS_BLOCK_KEY] ? 1 : 0
+            );
+        }
+
         $this->announceTwoFactorPolicyChange($previous, $settings);
 
         return $settings;
@@ -157,8 +186,17 @@ class HardeningSettings
         return function_exists('is_multisite') && is_multisite();
     }
 
+    public function ownsRootHtaccess()
+    {
+        return !$this->isNetwork() || is_main_site();
+    }
+
     protected function syncHtaccessUmbrellaBlock($previous, $settings)
     {
+        if (!$this->ownsRootHtaccess() || !$this->canEditNetworkScopedKeys()) {
+            return $settings;
+        }
+
         $before = isset($previous['htaccess_umbrella_block']) && $previous['htaccess_umbrella_block'];
         $after = isset($settings['htaccess_umbrella_block']) && $settings['htaccess_umbrella_block'];
 
@@ -243,9 +281,29 @@ class HardeningSettings
         delete_option(self::BLOCK_STATE_OPTION_KEY);
     }
 
+    /**
+     * @return bool
+     */
+    public function isFileEditorLocked()
+    {
+        return defined('DISALLOW_FILE_EDIT') && !DISALLOW_FILE_EDIT;
+    }
+
     protected function isSecurityHeadersEnabled($settings)
     {
         return isset($settings['security_headers']) && $settings['security_headers'];
+    }
+
+    /**
+     * @return CompatibilityGuard
+     */
+    public function getTwoFactorGuard()
+    {
+        if ($this->twoFactorGuard === null) {
+            $this->twoFactorGuard = new CompatibilityGuard();
+        }
+
+        return $this->twoFactorGuard;
     }
 
     public function getStates()
@@ -253,6 +311,12 @@ class HardeningSettings
         $settings = $this->getSettings();
 
         $settings['file_editor_disabled'] = defined('DISALLOW_FILE_EDIT') && DISALLOW_FILE_EDIT;
+        $settings['file_editor_locked'] = $this->isFileEditorLocked();
+
+        $guard = $this->getTwoFactorGuard();
+
+        $settings['two_factor_enforceable'] = $guard->isEnforceable();
+        $settings['two_factor_conflict'] = $guard->getConflictingPlugin();
 
         $state = $this->getBlockState();
 

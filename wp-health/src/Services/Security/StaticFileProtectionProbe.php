@@ -147,10 +147,15 @@ class StaticFileProtectionProbe
         ];
     }
 
+    /**
+     * Read from the hardening rather than restated, so the fixture cannot
+     * measure a directory deny we no longer write.
+     */
     protected function rules()
     {
-        return "<IfModule mod_authz_core.c>\nRequire all denied\n</IfModule>\n"
-            . "<IfModule !mod_authz_core.c>\nOrder allow,deny\nDeny from all\n</IfModule>\n";
+        $lines = wp_umbrella_get_service('HtaccessFile')->getDenyLines();
+
+        return implode("\n", $lines) . "\n";
     }
 
     protected function sweep($basedir, $dir)

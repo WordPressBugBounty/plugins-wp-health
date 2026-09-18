@@ -32,6 +32,10 @@ class RedirectRouter implements ExecuteHooks
 
     const MAX_REGEX_PATTERN_LENGTH = 512;
 
+    const REGEX_BACKTRACK_LIMIT = 100000;
+
+    const MAX_MATCHING_SECONDS = 0.1;
+
     public function hooks()
     {
         add_action('init', [$this, 'handleRedirect'], 12);
@@ -63,14 +67,41 @@ class RedirectRouter implements ExecuteHooks
             return;
         }
 
-        $currentPath = rtrim($currentPath, '/');
+        $redirect = $this->findRedirect($redirects, rtrim($currentPath, '/'));
+
+        if ($redirect === null) {
+            return;
+        }
+
+        wp_redirect($redirect->destination_url, intval($redirect->redirect_type));
+        exit;
+    }
+
+    protected function findRedirect($redirects, $currentPath)
+    {
+        $previousLimit = function_exists('ini_set')
+            ? ini_set('pcre.backtrack_limit', (string) self::REGEX_BACKTRACK_LIMIT)
+            : false;
+
+        $deadline = microtime(true) + self::MAX_MATCHING_SECONDS;
+        $match = null;
 
         foreach ($redirects as $redirect) {
             if ($this->matchRedirect($redirect, $currentPath)) {
-                wp_redirect($redirect->destination_url, intval($redirect->redirect_type));
-                exit;
+                $match = $redirect;
+                break;
+            }
+
+            if (microtime(true) > $deadline) {
+                break;
             }
         }
+
+        if ($previousLimit !== false) {
+            ini_set('pcre.backtrack_limit', $previousLimit);
+        }
+
+        return $match;
     }
 
     protected function isProtectedPath($path)
@@ -94,6 +125,7 @@ class RedirectRouter implements ExecuteHooks
             return false;
         }
 
+        // preg_match() returns false, not 0, when it does not run to completion.
         return @preg_match($redirect->source_pattern, $currentPath) === 1;
     }
 

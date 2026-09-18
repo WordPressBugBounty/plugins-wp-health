@@ -175,6 +175,14 @@ class AttachByApiKeyCommand
             }
 
             // No existing project for this site under this owner → create one.
+            // The call below is answered by a callback this site has no key to
+            // verify, so the signing material is dropped and persisted before
+            // it goes out. Restored by the snapshot if the creation fails.
+            $options = $pairingSigningKey->clearForNewProject($options);
+            $optionService->setOptions($options);
+            \wp_cache_flush();
+            \wp_load_alloptions(true);
+
             $contextService->requireWpRewrite();
             $name = \get_bloginfo('name');
             $hosting = \wp_umbrella_get_service('HostResolver')->getCurrentHost();

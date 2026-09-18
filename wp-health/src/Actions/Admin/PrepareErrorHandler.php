@@ -72,6 +72,12 @@ class PrepareErrorHandler implements ExecuteHooksBackend, DeactivationHook
 
     public function removeHandler()
     {
+        // The handler is a single file in the network-wide mu-plugins directory.
+        // A subsite must not take it away from the rest of the network.
+        if (is_multisite() && !is_main_site()) {
+            return;
+        }
+
         delete_option('wp_health_version_god_handler');
 
         if (!file_exists(WPMU_PLUGIN_DIR . '/_WPHealthHandlerMU.php')) {

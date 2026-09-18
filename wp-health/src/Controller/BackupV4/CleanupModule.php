@@ -15,26 +15,39 @@ class CleanupModule extends AbstractController
             ]);
         }
 
-        $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
+        $configuration = wp_umbrella_get_service('BackupFinderConfiguration');
 
-        $files = [
-            $source . 'cloner.php',
-            $source . 'cloner_error_log',
-            $source . 'cloner_error_log.php',
-            $source . 'cloner_attempts',
-            $source . sprintf('%s-dictionnary.php', $params['requestId']),
-            $source . sprintf('dictionnary.php', $params['requestId']),
-        ];
-
-        foreach ($files as $file) {
-            if (!file_exists($file)) {
-                continue;
-            }
-
-            @unlink($file);
+        $isRestoreCleanup = false;
+        if (isset($params['cleanupRestore'])) {
+            $isRestoreCleanup = filter_var($params['cleanupRestore'], FILTER_VALIDATE_BOOLEAN);
+        } elseif (isset($params['filename']) && is_string($params['filename'])) {
+            $isRestoreCleanup = basename($params['filename']) === 'restore.php';
         }
 
-        $patterns = wp_umbrella_get_service('BackupFinderConfiguration')->getScratchDirectoryPatterns();
+        $names = ['cloner.php', 'cloner_error_log', 'cloner_error_log.php', 'cloner_attempts'];
+
+        if ($isRestoreCleanup) {
+            $names = array_merge(
+                $names,
+                ['restore.php', 'restore_error_log', 'restore_error_log.php', 'restore_attempts']
+            );
+        }
+
+        foreach ($configuration->getModuleRoots() as $source) {
+            foreach ($names as $name) {
+                $file = $source . $name;
+
+                if (!file_exists($file)) {
+                    continue;
+                }
+
+                @unlink($file);
+            }
+        }
+
+        $patterns = $isRestoreCleanup
+            ? $configuration->getScratchDirectoryPatternsIncludingRestore()
+            : $configuration->getScratchDirectoryPatterns();
 
         foreach ($patterns as $pattern) {
             foreach ((array) glob($pattern, GLOB_ONLYDIR) as $directory) {

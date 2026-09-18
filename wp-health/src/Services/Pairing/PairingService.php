@@ -76,7 +76,9 @@ class PairingService
             return false;
         }
 
-        $persisted = $this->persistRequestToken($requestToken);
+        $this->clearSigningKeyOnProjectChange($projectId);
+
+        $persisted = $this->persistRequestToken($requestToken, $projectId);
         if (!$persisted) {
             return false;
         }
@@ -106,6 +108,23 @@ class PairingService
         $optionService->setOptions($options);
 
         return true;
+    }
+
+    public function clearSigningKeyOnProjectChange($projectId)
+    {
+        $optionService = wp_umbrella_get_service('Option');
+        $pairingSigningKey = wp_umbrella_get_service('PairingSigningKey');
+
+        $options = $optionService->getOptions(['secure' => false]);
+        $storedProjectId = isset($options['project_id']) ? $options['project_id'] : '';
+
+        if (!$pairingSigningKey->isProjectChanged($storedProjectId, $projectId)) {
+            return;
+        }
+
+        $optionService->setOptions(
+            $pairingSigningKey->clearWhenProjectChanged($options, $storedProjectId, $projectId)
+        );
     }
 
     public function persistRequestToken($requestToken, $projectId = null)
@@ -205,9 +224,9 @@ class PairingService
         $optionService = wp_umbrella_get_service('Option');
 
         $options = $optionService->getOptions(['secure' => false]);
-        $options['public_key'] = $signingKey['public_key'];
-        $options['key_id'] = $signingKey['key_id'];
-        $options['key_state'] = 'dual';
-        $optionService->setOptions($options);
+
+        $optionService->setOptions(
+            wp_umbrella_get_service('PairingSigningKey')->applySigningKey($options, $signingKey, 'pairing')
+        );
     }
 }

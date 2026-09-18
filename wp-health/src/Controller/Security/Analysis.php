@@ -2,6 +2,7 @@
 namespace WPUmbrella\Controller\Security;
 
 use WPUmbrella\Core\Models\AbstractController;
+use WPUmbrella\Services\Security\HiddenAdminAnalyzer;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -10,6 +11,11 @@ if (!defined('ABSPATH')) {
 class Analysis extends AbstractController
 {
     const MAX_TYPES = 10;
+
+    /**
+     * @var object[]
+     */
+    protected $analyzers = [];
 
     const ANALYZERS = [
         'hidden_admin' => 'HiddenAdminAnalyzer',
@@ -76,7 +82,32 @@ class Analysis extends AbstractController
 
     protected function run($type)
     {
-        return wp_umbrella_get_service(self::ANALYZERS[$type])->analyze();
+        return $this->analyzer($type)->analyze();
+    }
+
+    /**
+     * One instance per type for the whole request, so the analyses that share
+     * a directory walk share its result instead of running it again.
+     *
+     * @param string $type
+     *
+     * @return object
+     */
+    protected function analyzer($type)
+    {
+        if (isset($this->analyzers[$type])) {
+            return $this->analyzers[$type];
+        }
+
+        $analyzer = wp_umbrella_get_service(self::ANALYZERS[$type]);
+
+        if ($analyzer instanceof HiddenAdminAnalyzer) {
+            $analyzer->setUnlistedCodeAnalyzer($this->analyzer('unlisted_code'));
+        }
+
+        $this->analyzers[$type] = $analyzer;
+
+        return $analyzer;
     }
 
     protected function isBatch($params)

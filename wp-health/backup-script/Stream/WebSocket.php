@@ -106,6 +106,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 ],
                 'socket' => [
                     'bindto' => '0.0.0.0:0', // force IPv4
+                    'tcp_nodelay' => true,
                 ],
             ]);
 
