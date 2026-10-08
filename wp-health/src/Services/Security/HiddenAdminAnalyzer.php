@@ -80,19 +80,27 @@ class HiddenAdminAnalyzer
 
         $capabilitiesKey = $wpdb->prefix . 'capabilities';
 
+        $conditions = [
+            'meta_value LIKE %s',
+            'CAST(meta_value AS BINARY) LIKE %s',
+            'CAST(meta_value AS BINARY) LIKE %s',
+        ];
+        $needles = [
+            '%' . $wpdb->esc_like('"administrator"') . '%',
+            '%' . $wpdb->esc_like('{S:') . '%',
+            '%' . $wpdb->esc_like(';S:') . '%',
+        ];
+
+        foreach (self::CRITICAL_CAPABILITIES as $capability) {
+            $conditions[] = 'meta_value LIKE %s';
+            $needles[] = '%' . $wpdb->esc_like('"' . $capability . '"') . '%';
+        }
+
         $rawIds = $wpdb->get_col(
             $wpdb->prepare(
-                "SELECT DISTINCT user_id FROM {$wpdb->usermeta}
-                 WHERE meta_key = %s
-                 AND (
-                     meta_value LIKE %s
-                     OR CAST(meta_value AS BINARY) LIKE %s
-                     OR CAST(meta_value AS BINARY) LIKE %s
-                 )",
-                $capabilitiesKey,
-                '%' . $wpdb->esc_like('"administrator"') . '%',
-                '%' . $wpdb->esc_like('{S:') . '%',
-                '%' . $wpdb->esc_like(';S:') . '%'
+                "SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s AND ("
+                . implode(' OR ', $conditions) . ')',
+                array_merge([$capabilitiesKey], $needles)
             )
         );
 
@@ -127,7 +135,13 @@ class HiddenAdminAnalyzer
 
             $user = get_userdata($id);
 
-            if (!$user || !in_array('administrator', (array) $user->roles, true)) {
+            if (!$user) {
+                continue;
+            }
+
+            if (!in_array('administrator', (array) $user->roles, true)
+                && !$this->holdsCriticalCapabilityDirectly($user)
+            ) {
                 continue;
             }
 
@@ -335,6 +349,17 @@ class HiddenAdminAnalyzer
     }
 
     /**
+     * @param \WP_User $user
+     * @return bool
+     */
+    protected function holdsCriticalCapabilityDirectly($user)
+    {
+        $capabilities = isset($user->caps) && is_array($user->caps) ? $user->caps : [];
+
+        return $this->criticalCapabilitiesOf($capabilities) !== [];
+    }
+
+    /**
      * @param array $capabilities
      * @return string[]
      */
@@ -474,6 +499,10 @@ class HiddenAdminAnalyzer
     {
         if (!is_string($serialized) || $serialized === '') {
             return false;
+        }
+
+        if (preg_match('/[{;]S:\d+:"/', $serialized) === 1) {
+            return true;
         }
 
         $capabilities = @unserialize($serialized, ['allowed_classes' => false]);

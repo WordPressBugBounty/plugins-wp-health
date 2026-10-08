@@ -8,12 +8,37 @@ class UpgradeProcessComplete implements ExecuteHooks
 {
     protected $coreUpdateReported = false;
 
+    protected $installedTranslations = [];
+
     public function hooks()
     {
         add_action('upgrader_package_options', [$this, 'getOldVersion'], 10, 1);
         add_action('upgrader_process_complete', [$this, 'processComplete'], 10, 2);
         add_action('core_upgrade_preamble', [$this, 'getOldVersionWordPressCore']);
         add_action('_core_updated_successfully', [$this, 'coreUpdatedSuccessfully'], 10, 1);
+        add_filter('upgrader_install_package_result', [$this, 'captureInstalledTranslation'], 10, 2);
+    }
+
+    public function captureInstalledTranslation($result, $hookExtra)
+    {
+        if (defined('WP_UMBRELLA_PROCESS_FROM_UMBRELLA') && WP_UMBRELLA_PROCESS_FROM_UMBRELLA) {
+            return $result;
+        }
+
+        if (wp_doing_cron()) {
+            return $result;
+        }
+
+        if (is_wp_error($result) || empty($hookExtra['language_update'])) {
+            return $result;
+        }
+
+        $translation = wp_umbrella_get_service('LanguagesProvider')->format($hookExtra['language_update']);
+        $key = $translation['type'] . '|' . $translation['slug'] . '|' . $translation['language'];
+
+        $this->installedTranslations[$key] = $translation;
+
+        return $result;
     }
 
     public function coreUpdatedSuccessfully($newVersion)
@@ -188,6 +213,15 @@ class UpgradeProcessComplete implements ExecuteHooks
                     'action' => 'update',
                     'values' => $data,
                 ];
+                break;
+            case 'translation':
+                $json = [
+                    'type' => 'translation',
+                    'action' => 'update',
+                    'values' => array_values($this->installedTranslations),
+                ];
+
+                $this->installedTranslations = [];
                 break;
         }
 

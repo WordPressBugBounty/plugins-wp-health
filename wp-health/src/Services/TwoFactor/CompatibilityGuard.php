@@ -125,16 +125,6 @@ class CompatibilityGuard
         foreach ($this->getActivePlugins() as $pluginFile) {
             if (isset(self::KNOWN_PLUGIN_FILES[$pluginFile])) {
                 $labels[self::KNOWN_PLUGIN_FILES[$pluginFile]] = true;
-                continue;
-            }
-
-            $basename = basename($pluginFile);
-
-            foreach (self::KNOWN_PLUGIN_FILES as $knownFile => $label) {
-                if ($basename === basename($knownFile)) {
-                    $labels[$label] = true;
-                    break;
-                }
             }
         }
 
@@ -142,16 +132,6 @@ class CompatibilityGuard
     }
 
     /**
-     * A plugin is treated as enforcing as soon as it is there. The ones below
-     * ship two factor as one feature among many, off until someone turns it on,
-     * and expose a signal we could source and check, so they are asked for
-     * their own state instead.
-     *
-     * Solid Security is deliberately not one of them: its module flag says the
-     * module is on, not that anyone is ever challenged, and we have no way to
-     * read enrolment there. Standing down for it costs a protection we could
-     * have applied; getting it wrong costs the only one an administrator has.
-     *
      * @param string $label
      *
      * @return bool
@@ -168,7 +148,7 @@ class CompatibilityGuard
                     return $this->isReallySimpleSecurityEnforcing();
             }
         } catch (\Throwable $exception) {
-            return true;
+            return false;
         }
 
         return true;
@@ -181,10 +161,9 @@ class CompatibilityGuard
     {
         if (!class_exists('\WordfenceLS\Controller_WordfenceLS', false)
             || !class_exists('\WordfenceLS\Controller_Settings', false)) {
-            return true;
+            return false;
         }
 
-        // Defining this one at all is enough for Wordfence, whatever its value.
         if (defined('WORDFENCE_LS_VERSIONONLY_MODE')) {
             return false;
         }
@@ -228,10 +207,6 @@ class CompatibilityGuard
     }
 
     /**
-     * Nobody has to be required for someone to already be enrolled: the other
-     * plugin challenges that account on its own, and a second challenge on top
-     * is what locks a person out of their site.
-     *
      * @return bool
      */
     protected function hasWordfenceEnrolledUser()
@@ -254,8 +229,8 @@ class CompatibilityGuard
      */
     protected function isDefenderEnforcing()
     {
-        if (!function_exists('get_site_option')) {
-            return true;
+        if (!defined('DEFENDER_VERSION')) {
+            return false;
         }
 
         $settings = get_site_option('wd_2auth_settings');
@@ -272,8 +247,6 @@ class CompatibilityGuard
             return false;
         }
 
-        // Defender reads its own state as enabled plus at least one role, and
-        // the role list ships empty.
         $roles = isset($settings['user_roles']) ? $settings['user_roles'] : null;
 
         if (!is_array($roles)) {
@@ -289,7 +262,7 @@ class CompatibilityGuard
     protected function isReallySimpleSecurityEnforcing()
     {
         if (!function_exists('rsssl_get_option')) {
-            return true;
+            return false;
         }
 
         if (!rsssl_get_option('login_protection_enabled')) {
@@ -324,9 +297,6 @@ class CompatibilityGuard
     }
 
     /**
-     * The option can be on with no role picked, and the plugin then challenges
-     * nobody. Every role list ships empty except the premium one.
-     *
      * @return bool
      */
     protected function hasReallySimpleSecurityRole()

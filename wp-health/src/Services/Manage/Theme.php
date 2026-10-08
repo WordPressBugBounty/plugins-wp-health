@@ -6,6 +6,7 @@ use Exception;
 use Theme_Upgrader;
 use WP_Error;
 use WP_Ajax_Upgrader_Skin;
+use WPUmbrella\Services\Plugin\UpdateLock;
 
 class Theme
 {
@@ -84,7 +85,8 @@ class Theme
         $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
             'slug' => $theme,
             'src' => get_theme_root($theme),
-            'dir' => 'themes'
+            'dir' => 'themes',
+            'main_file' => 'style.css',
         ]);
 
         wp_umbrella_debug_log("Theme '{$theme}' temp backup result: " . ($result['success'] ? 'success' : ($result['code'] ?? 'failed')));
@@ -117,6 +119,8 @@ class Theme
         $maintenanceMode = wp_umbrella_get_service('MaintenanceMode');
         $stateManager = wp_umbrella_get_service('UpdateStateManager');
         $trace = wp_umbrella_get_service('RequestTrace');
+        $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
+        $lockToken = null;
 
         try {
             $trace->addTrace('theme_update_started', ['theme' => $theme]);
@@ -135,6 +139,26 @@ class Theme
                 ];
             }
             set_transient($lockKey, true, 300); // 5 minutes TTL
+
+            if (isset($options['lock_token']) && is_string($options['lock_token']) && $options['lock_token'] !== '') {
+                $lock = wp_umbrella_get_service('UpdateLock');
+                $lockSlug = $lock->themeSlug($theme);
+                $acquired = $lock->acquire($lockSlug, $options['lock_token'], UpdateLock::PHASE_UPDATING);
+                if ($acquired !== UpdateLock::ACQUIRED) {
+                    delete_transient($lockKey);
+                    wp_umbrella_debug_log("Theme update lock active for '{$theme}', returning " . $lock->refusalCode($acquired));
+                    $trace->addTrace('update_lock_held');
+                    return [
+                        'status' => 'in_progress',
+                        'code' => $lock->refusalCode($acquired),
+                        'message' => sprintf('An update is already in progress for theme %s', $theme),
+                        'holder' => $lock->holderFingerprint($lockSlug),
+                        'data' => ''
+                    ];
+                }
+                $lockToken = $options['lock_token'];
+                $lock->finishOnShutdown($lockSlug, $lockToken);
+            }
 
             include_once ABSPATH . 'wp-admin/includes/plugin-install.php';
             require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -162,6 +186,7 @@ class Theme
                 wp_umbrella_debug_log("Theme '{$theme}' has no update available in update_themes transient, aborting");
                 $trace->addTrace('update_available_check_failed', ['code' => 'no_update_available']);
                 delete_transient($lockKey);
+                $this->finishUpdateLock($theme, $lockToken, !$requireBackup);
 
                 return [
                     'status' => 'error',
@@ -179,17 +204,23 @@ class Theme
             // Skip backup if already done by /prepare-update endpoint (separate HTTP request)
             $backupDone = isset($options['backup_done']) && $options['backup_done'];
 
+            if ($backupDone && !wp_umbrella_get_service('UpgraderTempBackup')->hasTempBackup(['slug' => $theme, 'dir' => 'themes'])) {
+                $trace->addTrace('temp_backup_prepared_missing');
+                $backupDone = false;
+            }
+
             if ($backupDone) {
                 wp_umbrella_debug_log("Theme '{$theme}' backup already done by /prepare-update");
+                $trace->addTrace('temp_backup_prepared');
             } else {
                 wp_umbrella_debug_log("Theme '{$theme}' creating temp backup");
                 $backupResult = $this->generateSafeUpdateBackupTheme($theme);
 
-                $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
                 if ($requireBackup && !$backupResult['success']) {
                     wp_umbrella_debug_log("Theme '{$theme}' backup failed: " . ($backupResult['code'] ?? 'unknown'));
                     $trace->addTrace('backup_failed', ['code' => $backupResult['code'] ?? 'unknown']);
                     delete_transient($lockKey);
+                    $this->finishUpdateLock($theme, $lockToken, false);
                     $maintenanceMode->toggleMaintenanceMode(false);
 
                     return [
@@ -236,8 +267,6 @@ class Theme
 
             $result = $this->processUpgradeResult($theme, $response, $skin, $oldVersion);
             $trace->addTrace('upgrade_result', ['status' => $result['status'], 'code' => $result['code'] ?? 'unknown']);
-
-            $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
 
             if ($result['status'] === 'error') {
                 wp_umbrella_debug_log("Theme '{$theme}' update failed: " . ($result['code'] ?? 'unknown') . ' - ' . ($result['message'] ?? ''));
@@ -310,12 +339,12 @@ class Theme
 
             // Cleanup lock and maintenance mode in all cases (success or error)
             delete_transient($lockKey);
+            $this->finishUpdateLock($theme, $lockToken, $result['status'] === 'error' && !$requireBackup);
             $maintenanceMode->toggleMaintenanceMode(false);
             $trace->addTrace('maintenance_mode_disabled');
 
             return $result;
         } catch (\Throwable $e) {
-            delete_transient($lockKey);
             $trace->addTrace('exception', ['message' => $e->getMessage()]);
             wp_umbrella_debug_log("Theme '{$theme}' update exception: " . $e->getMessage());
 
@@ -332,6 +361,8 @@ class Theme
                     'exception' => $e->getMessage(),
                 ], 'theme');
 
+                delete_transient($lockKey);
+                $this->finishUpdateLock($theme, $lockToken, false);
                 $maintenanceMode->toggleMaintenanceMode(false);
 
                 return [
@@ -341,8 +372,6 @@ class Theme
                     'data' => true,
                 ];
             }
-
-            $requireBackup = isset($options['require_backup']) ? (bool) $options['require_backup'] : true;
 
             if ($requireBackup) {
                 $trace->addTrace('rollback_started', ['reason' => 'exception']);
@@ -355,6 +384,9 @@ class Theme
                 $rollback = ['status' => 'not_needed', 'reason' => null];
                 wp_umbrella_debug_log("Theme '{$theme}' quick update exception, skipping rollback");
             }
+
+            delete_transient($lockKey);
+            $this->finishUpdateLock($theme, $lockToken, !$requireBackup);
 
             $stateManager->updateStatus($theme, $stateManager::STATUS_FAILED, [
                 'error_code' => 'exception',
@@ -374,6 +406,28 @@ class Theme
                 'data' => ''
             ];
         }
+    }
+
+    /**
+     * @param string $theme
+     * @param string|null $lockToken
+     * @param bool $release
+     */
+    protected function finishUpdateLock($theme, $lockToken, $release)
+    {
+        if ($lockToken === null) {
+            return;
+        }
+
+        $lock = wp_umbrella_get_service('UpdateLock');
+        $lockSlug = $lock->themeSlug($theme);
+
+        if ($release) {
+            $lock->release($lockSlug, $lockToken);
+            return;
+        }
+
+        $lock->markPhase($lockSlug, $lockToken, UpdateLock::PHASE_UPDATED);
     }
 
     /**

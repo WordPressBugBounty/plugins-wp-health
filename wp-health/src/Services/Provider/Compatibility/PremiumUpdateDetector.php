@@ -4,15 +4,9 @@ namespace WPUmbrella\Services\Provider\Compatibility;
 class PremiumUpdateDetector
 {
     /**
-     * Detect premium plugin/theme updates via pre_set_site_transient filter.
-     *
-     * Premium plugins (Elementor Pro, YITH, ACF Pro, Divi, Avada, etc.) inject
-     * their update info via `pre_set_site_transient_update_*` when the transient
-     * is saved. We simulate this to capture updates not in WordPress.org.
-     *
-     * @param object|false $transient The current update transient
+     * @param object|false $transient
      * @param string $type 'plugins' or 'themes'
-     * @return object The enriched transient
+     * @return object
      */
     public function enrich($transient, $type)
     {
@@ -42,13 +36,6 @@ class PremiumUpdateDetector
         return $transient;
     }
 
-    /**
-     * Cache update transients to wp_options as fallback.
-     *
-     * Sites with ext_object_cache enabled but no persistent backend (e.g. Redis
-     * without persistence) lose transients between requests. This saves a copy
-     * so we can restore it later via `restoreTransients()`.
-     */
     public function cacheTransients()
     {
         foreach (['plugins', 'themes'] as $type) {
@@ -62,12 +49,24 @@ class PremiumUpdateDetector
         }
     }
 
+    public function cacheAdminPluginUpdates()
+    {
+        $transient = get_site_transient('update_plugins');
+        $response = is_object($transient) && isset($transient->response) && is_array($transient->response) ? $transient->response : [];
+
+        update_option('wp_umbrella_admin_update_plugins', $response, false);
+    }
+
     /**
-     * Restore cached update transients when WordPress returns empty data.
-     *
-     * Hooks into `site_transient_update_*` to provide our cached copy when
-     * the real transient is missing (common on unreliable object cache setups).
+     * @return array
      */
+    public function getAdminPluginUpdates()
+    {
+        $response = get_option('wp_umbrella_admin_update_plugins', []);
+
+        return is_array($response) ? $response : [];
+    }
+
     public function restoreTransients()
     {
         foreach (['plugins', 'themes'] as $type) {

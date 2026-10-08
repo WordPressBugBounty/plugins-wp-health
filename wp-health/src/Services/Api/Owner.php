@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Api;
 
+use WPUmbrella\Services\Tls\CertificateFallback;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -32,6 +34,10 @@ class Owner extends BaseClient
             $verify = wp_umbrella_should_verify_ssl();
             curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $verify ? 2 : 0);
             curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $verify ? 1 : 0);
+            $bundlePath = $verify ? wp_umbrella_get_service('CertificateFallback')->getBundlePath() : null;
+            if ($bundlePath !== null) {
+                curl_setopt($ch, CURLOPT_CAINFO, $bundlePath);
+            }
             curl_setopt($ch, CURLOPT_HTTPHEADER, [
                 'Content-Type: application/json', $authorization
             ]);
@@ -60,6 +66,7 @@ class Owner extends BaseClient
             $response = wp_remote_get(WP_UMBRELLA_NEW_API_URL . '/v1/external/me', [
                 'headers' => $this->getHeadersV2($apiKey),
                 'sslverify' => wp_umbrella_should_verify_ssl(),
+                CertificateFallback::CONNECTION_ARG => true,
                 'timeout' => 40,
             ]);
         } catch (\Exception $e) {

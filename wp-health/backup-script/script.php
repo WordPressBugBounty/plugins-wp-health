@@ -50,10 +50,28 @@ if (hash_equals(UMBRELLA_BACKUP_KEY, '[[UMBRELLA_BACKUP_KEY]]')) {
     return;
 }
 
+if (!function_exists('umbrellaDiscardFile')) {
+    function umbrellaDiscardFile($path)
+    {
+        if (is_link($path)) {
+            @unlink($path);
+            return;
+        }
+
+        $handle = @fopen($path, 'r+');
+        if ($handle !== false) {
+            @ftruncate($handle, 0);
+            @fclose($handle);
+        }
+
+        @unlink($path);
+    }
+}
+
 if (!function_exists('removeScript')) {
     function removeScript()
     {
-        @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
+        umbrellaDiscardFile(__DIR__ . DIRECTORY_SEPARATOR . 'cloner.php');
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_attempts');
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_error_log');
         @unlink(__DIR__ . DIRECTORY_SEPARATOR . 'cloner_error_log.php');
@@ -352,7 +370,9 @@ try {
         'host' => $host,
         'port' => $request['port'],
         'transport' => $transport,
-        'context' => $context
+        'context' => $context,
+        // Files kept in flight before waiting for the mirror's ACKs; 1 = one at a time.
+        'ack_window' => $request['ack_window'] ?? null,
     ]);
 
     $socket->connect();
@@ -672,9 +692,15 @@ try {
     if (isset($socket) && $socket instanceof UmbrellaWebSocket) {
         $socket->sendTelemetryCounter('backup.websocket.disconnected', [
             'request_id' => $context->getRequestId(),
-            'origin' => 'plugin'
+            'origin' => 'plugin',
+            'ack_window' => $socket->getAckWindow(),
+            'ack_window_limit' => $socket->getAckWindowLimit(),
         ]);
-        sleep(3); // Wait for the last message to be sent
+        if ($socket->supportsBatchEnd()) {
+            $socket->endBatch(max(3, min(30, $safeTimeLimit + $preventTimeout - (time() - $startTimer) - 1)));
+        } else {
+            sleep(3); // Wait for the last message to be sent
+        }
         $socket->close();
     }
 

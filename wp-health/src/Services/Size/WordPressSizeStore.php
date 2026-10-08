@@ -19,11 +19,6 @@ class WordPressSizeStore
 
     const RUN_WINDOW_SECONDS = 900;
 
-    /**
-     * Measures the install and stores the result. Walking the whole tree can
-     * take tens of seconds on a large site, so this is meant to run from the
-     * scheduled action rather than from a request someone is waiting on.
-     */
     public function refresh()
     {
         if ($this->isRunning()) {
@@ -36,8 +31,6 @@ class WordPressSizeStore
 
         $record = $this->getRecord();
 
-        // Stamped before the walk, so an install too large to finish measuring
-        // itself still leaves a trace of having tried.
         $record['attempted_at'] = gmdate('c');
         update_option(self::OPTION_KEY, $record, false);
 
@@ -60,9 +53,6 @@ class WordPressSizeStore
     }
 
     /**
-     * add_option() does not overwrite, so only one caller takes the claim. A
-     * claim older than the run window belongs to a walk that never ended.
-     *
      * @return bool
      */
     protected function claimRun()
@@ -111,14 +101,6 @@ class WordPressSizeStore
         return (time() - $computedAt) > self::STALE_AFTER_SECONDS;
     }
 
-    /**
-     * A measurement is in flight when an attempt was stamped recently and no
-     * result has been stored since. The marker lives in the option rather than
-     * in a transient because the two contexts that can start a walk do not
-     * share a transient backend: a persistent object cache keeps transients out
-     * of the database entirely, while our own requests run with the external
-     * object cache turned off and only ever see the database.
-     */
     public function isRunning()
     {
         $record = $this->getRecord();
@@ -142,11 +124,6 @@ class WordPressSizeStore
         return !$computedAt || $computedAt < $attemptedAt;
     }
 
-    /**
-     * Whether a measurement is worth queueing. An install that never manages to
-     * finish stores no result, so the age of the last attempt decides, not the
-     * age of the last result.
-     */
     public function shouldScan()
     {
         $record = $this->getRecord();
@@ -172,13 +149,6 @@ class WordPressSizeStore
         return (time() - $attemptedAt) > self::RETRY_AFTER_SECONDS;
     }
 
-    /**
-     * WP_Debug_Data::get_sizes() stops itself when it runs out of execution
-     * budget, or when a directory cannot be read, and still answers an array:
-     * the entries it could not measure carry no `raw`, and so does the total.
-     * Storing that would replace a good measurement with a partial one and
-     * stamp it fresh for a week, on exactly the installs too large to measure.
-     */
     protected function isComplete($sizes)
     {
         return is_array($sizes)

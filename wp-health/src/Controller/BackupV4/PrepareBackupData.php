@@ -30,6 +30,12 @@ class PrepareBackupData extends AbstractController
             if (!file_exists($file)) {
                 continue;
             }
+
+            if ($file === $source . 'cloner.php') {
+                wp_umbrella_discard_file($file);
+                continue;
+            }
+
             @unlink($file);
         }
 

@@ -1,393 +1,1165 @@
-# Copyright (C) 2021 WP Umbrella
-# This file is distributed under the same license as the WP Umbrella plugin.
+# Copyright (C) 2026 WP Umbrella - Backup & Manage WordPress
+# This file is distributed under the GPLv2.
 msgid ""
 msgstr ""
-"Project-Id-Version: WP Umbrella 1.2.0\n"
+"Project-Id-Version: WP Umbrella 2.27.4\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/wp-health\n"
 "Last-Translator: WP Umbrella <contact@wp-umbrella.com>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language-Team: WP Umbrella <contact@wp-umbrella.com>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2021-02-14T18:35:35+00:00\n"
+"POT-Creation-Date: 2026-09-21T05:44:43+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.4.0\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: wp-health\n"
 
 #. Plugin Name of the plugin
-#. Author of the plugin
+#: wp-health.php
+#: src/Actions/TwoFactor/ConflictNotice.php:74
+#: src/Services/WhiteLabel.php:14
 msgid "WP Umbrella"
 msgstr ""
 
 #. Description of the plugin
-msgid "WP Umbrella Monitors the uptime, performance, health and security of your WordPress website! If anything goes wrong, you'll be alerted !"
+#: wp-health.php
+#: src/Services/WhiteLabel.php:15
+msgid "WP Umbrella is the ultimate all-in-one solution to manage, maintain and monitor one, or multiple WordPress websites."
+msgstr ""
+
+#. Author of the plugin
+#: wp-health.php
+msgid "WP Umbrella - Backup & Manage WordPress"
 msgstr ""
 
 #. Author URI of the plugin
+#: wp-health.php
 msgid "https://wp-umbrella.com/"
 msgstr ""
 
-#: app/react/components/current-loading/index.js:17
-msgid "Oops!"
+#: src/Actions/Admin/Option.php:173
+msgid "Forbidden."
 msgstr ""
 
-#: app/react/components/current-loading/index.js:19
-msgid "You don't have any data yet. Think about adding one!"
+#: src/Actions/Admin/Option.php:181
+msgid "On a WordPress network, only a network administrator can reconnect this site."
 msgstr ""
 
-#: app/react/components/current-loading/index.js:25
-msgid "We may also have had trouble connecting to the API."
+#: src/Actions/Admin/Option.php:193
+msgid "Reconnection did not complete. The site stays connected via the legacy path; you can retry."
 msgstr ""
 
-#: app/react/components/current-loading/index.js:31
-msgid "We continue to check"
+#: src/Actions/Admin/PrepareErrorHandler.php:102
+msgid "We have detected that it is impossible to write to your \"mu-plugins\" folder in your installation. In order for us to work properly, you need to change the rights to this folder. You can contact us at support for more information: support@wp-umbrella.com"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:104
-#: app/react/components/forms/register/index.js:187
-#: app/react/modules/overview/index.js:223
-#: app/react/modules/overview/index.js:301
+#: src/Actions/Admin/PrepareErrorHandler.php:110
+msgid "An error occurred while trying to create a mu-plugin. Your host seems to restrict write permissions. Please contact: support@wp-umbrella.com"
+msgstr ""
+
+#: src/Actions/Admin/PrepareErrorHandler.php:117
+msgid "An error was caused when WP Umbrella attempted to create a file in your directory mu-plugins. Please contact: support@wp-umbrella.com"
+msgstr ""
+
+#: src/Actions/Admin/TestPingWorker.php:32
+msgid "Missing security nonce on the request. Reload the page and try again."
+msgstr ""
+
+#: src/Actions/Admin/TestPingWorker.php:42
+msgid "Security nonce expired or invalid. Reload the page and try again."
+msgstr ""
+
+#: src/Actions/Admin/TestPingWorker.php:57
+msgid "This site is connected through signed communication. WP Umbrella reaches the site directly, so there is no outbound token to ping."
+msgstr ""
+
+#: src/Actions/Admin/TestPingWorker.php:66
+msgid "Site not connected to WP Umbrella. Configure the plugin before running the ping."
+msgstr ""
+
+#: src/Actions/Hardening/LoginIpBlocklist.php:69
+msgid "Access from your network is temporarily restricted."
+msgstr ""
+
+#: src/Actions/Hardening/LoginRateLimit.php:147
+msgid "Too many failed login attempts. Please try again later."
+msgstr ""
+
+#: src/Actions/Hardening/MaskLoginErrors.php:33
+msgid "The username or password is incorrect."
+msgstr ""
+
+#: src/Actions/TwoFactor/AdminReset.php:170
+msgid "Two-factor authentication has been reset for this user. They will be asked to set it up again the next time they log in."
+msgstr ""
+
+#: src/Actions/TwoFactor/AdminReset.php:198
+msgid "You are not allowed to reset two-factor authentication for this user."
+msgstr ""
+
+#: src/Actions/TwoFactor/AuthChannelGuard.php:47
+msgid "This account requires two-factor authentication, which XML-RPC cannot ask for. Log in from the site instead."
+msgstr ""
+
+#. translators: 1: name of this plugin. 2: name of the plugin that already handles two-factor authentication.
+#: src/Actions/TwoFactor/ConflictNotice.php:79
+#, php-format
+msgid "%1$s two-factor authentication is turned on for this site but is not being applied, because %2$s already handles two-factor authentication. Deactivate it if you want %1$s to take over."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:146
+msgid "Two-factor authentication could not be saved on this site. Contact your host or WP Umbrella support."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:151
+msgid "That code did not match. Check the time on your phone and try again."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:177
+msgid "Too many attempts. Wait a few minutes before trying again."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:199
+msgid "That recovery code is not valid or has already been used."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:206
+msgid "That code is not valid."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:213
+msgid "Your second factor cannot be read on this site right now. Use one of your recovery codes to log in, then set up your authenticator app again."
+msgstr ""
+
+#: src/Actions/TwoFactor/LoginInterceptor.php:388
+#: templates/two-factor/admin-reset-section.php:8
+#: templates/two-factor/profile-section.php:10
+msgid "Two-factor authentication"
+msgstr ""
+
+#: src/Actions/TwoFactor/ProfileSection.php:193
+msgid "You have no WP Umbrella recovery codes left. Generate a new set from your profile so you can still get in if you lose your phone."
+msgstr ""
+
+#. translators: %d: number of recovery codes left.
+#: src/Actions/TwoFactor/ProfileSection.php:196
+#, php-format
+msgid "You have %d WP Umbrella recovery code left. Generate a new set from your profile."
+msgid_plural "You have %d WP Umbrella recovery codes left. Generate a new set from your profile."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Actions/TwoFactor/ProfileSection.php:210
+msgid "Go to my profile"
+msgstr ""
+
+#: src/Controller/Login.php:56
+#: src/Core/Kernel.php:344
+msgid "Redirection in progress..."
+msgstr ""
+
+#: src/Controller/Plugin/DataSingle.php:30
+#: src/Controller/Plugin/DataSingle.php:54
+#: src/Core/Kernel.php:665
+#: src/Core/Kernel.php:678
+msgid "Required parameters are missing"
+msgstr ""
+
+#: src/Controller/Plugin/DataSingle.php:43
+#: src/Core/Kernel.php:688
+msgid "Admin request nonce check failed"
+msgstr ""
+
+#: src/Core/Kernel.php:699
+msgid "Plugin not exist"
+msgstr ""
+
+#: src/Services/WhiteLabel.php:19
+#: templates/admin/components/no-configuration.php:34
+msgid "Helping Agencies and Freelancers with their WordPress Maintenance Business 🚀"
+msgstr ""
+
+#: src/Services/WhiteLabel.php:20
+msgid "Now go to WP Umbrella’s application to make the most of our features (automatic backups, uptime monitoring, safe update, php error monitoring, maintenance report, etc).  You can white label the plugin at any moment!"
+msgstr ""
+
+#: templates/admin/components/connected.php:9
 msgid "Great!"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:105
-msgid "Your monitor is updated"
+#: templates/admin/components/connected.php:10
+msgid "Your settings have been updated."
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:107
-#: app/react/components/forms/register/index.js:179
-#: app/react/components/forms/register/index.js:193
-#: app/react/modules/overview/index.js:216
-#: app/react/modules/overview/index.js:226
-#: app/react/modules/overview/index.js:307
+#: templates/admin/components/connected.php:11
+#: templates/admin/components/forms/register.php:10
+#: templates/admin/components/forms/validate-api-key.php:25
 msgid "Close"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:125
-msgid "Ping interval"
+#: templates/admin/components/connected.php:30
+msgid "Email Support"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:143
-msgid "Go premium to increase the monitoring frequency"
+#: templates/admin/components/connected.php:43
+msgid "Company details"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:151
-msgid "Choose the regions"
+#: templates/admin/components/connected.php:86
+msgid "Enable Error Monitoring"
 msgstr ""
 
-#: app/react/components/forms/edit-monitor/index.js:205
-msgid "Update settings"
+#: templates/admin/components/connected.php:88
+msgid "What information will we collect?"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:176
-#: app/react/modules/overview/index.js:213
-msgid "Error!"
+#: templates/admin/components/connected.php:122
+msgid "Enable 1-Click Access"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:188
-msgid "You are registered and we have configured your API key"
+#: templates/admin/components/connected.php:124
+msgid "What is the 1-Click Admin Access?"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:202
-msgid "First name"
+#: templates/admin/components/forms/register.php:3
+msgid "Your session expired or you are not allowed to do this. Reload the page and try again."
 msgstr ""
 
-#: app/react/components/forms/register/index.js:215
-msgid "It's nicer if we have your first name :)"
+#: templates/admin/components/forms/register.php:4
+msgid "On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to create the account for this site."
 msgstr ""
 
-#: app/react/components/forms/register/index.js:224
-msgid "Last name"
+#: templates/admin/components/forms/register.php:5
+msgid "Registration is not possible!"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:237
-msgid "You must enter your name"
+#: templates/admin/components/forms/register.php:6
+msgid "Please check that you do not already have an account."
 msgstr ""
 
-#: app/react/components/forms/register/index.js:258
-msgid "No email, no chocolate."
+#: templates/admin/components/forms/register.php:7
+#: templates/admin/components/forms/validate-api-key.php:116
+msgid "Great, Your website is connected!"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:264
-msgid "Hosting provider"
+#: templates/admin/components/forms/register.php:8
+#: templates/admin/components/forms/validate-api-key.php:117
+msgid "Head to your dashboard to manage your WordPress sites more efficiently and start exploring the features that WP Umbrella has to offer. 🙂"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:276
-msgid "To help you best in your monitoring, it is important for us to know your hosting provider."
+#: templates/admin/components/forms/register.php:9
+#: templates/admin/components/forms/validate-api-key.php:118
+msgid "Go to the Dashboard"
 msgstr ""
 
-#: app/react/components/forms/register/index.js:329
-msgid "You need to have a password."
-msgstr ""
-
-#: app/react/components/forms/register/index.js:339
-msgid "Who's your hosting ?"
-msgstr ""
-
-#: app/react/components/forms/register/index.js:363
-msgid "I agree to WP"
-msgstr ""
-
-#: app/react/components/forms/register/index.js:365
-msgid "Umbrella's Terms of Service"
-msgstr ""
-
-#: app/react/components/forms/register/index.js:379
-msgid "News and features updates, as well as occasional company announcements."
-msgstr ""
-
-#: app/react/components/forms/register/index.js:388
-msgid "The registration form is not complete."
-msgstr ""
-
-#: app/react/components/forms/register/index.js:394
-msgid "This email is not available"
-msgstr ""
-
-#: app/react/components/forms/register/index.js:408
-msgid "Register"
-msgstr ""
-
-#: app/react/components/issues/chart-date-error/index.js:32
-#: app/react/components/issues/chart-error-php-version/index.js:28
-#: app/react/components/issues/chart-error-version/index.js:28
-#: app/react/components/issues/chart-error-wordpress-version/index.js:28
-msgid "error"
-msgstr ""
-
-#: app/react/components/issues/pagination-issues/index.js:20
-msgid "Previous"
-msgstr ""
-
-#: app/react/components/issues/pagination-issues/index.js:39
-msgid "Next"
-msgstr ""
-
-#: app/react/layouts/need-register/index.js:23
-msgid "You must register"
-msgstr ""
-
-#: app/react/layouts/need-register/index.js:25
-msgid "To access our features, you must register"
-msgstr ""
-
-#: app/react/layouts/need-register/index.js:31
-msgid "by going to the 'Overview'"
-msgstr ""
-
-#: app/react/layouts/need-register/index.js:33
-msgid "tab. All of our features are free to test."
-msgstr ""
-
-#: app/react/modules/healthcheck/index.js:24
-msgid "At WP Umbrella we take your privacy very seriously."
-msgstr ""
-
-#: app/react/modules/healthcheck/index.js:30
-msgid "To make the plugin work properly, we need your consent."
-msgstr ""
-
-#: app/react/modules/healthcheck/index.js:37
-msgid "In order to identify the errors generated by your plugins, themes and hosting provider (such as downtimes and performance) we need to collect some informations."
-msgstr ""
-
-#: app/react/modules/healthcheck/index.js:43
-msgid "These information help us to offer you patches, tutorials and adapted help. The complete list of data we use and our terms and conditions are available here. We never use your data for advertising purposes."
-msgstr ""
-
-#: app/react/modules/healthcheck/index.js:57
-msgid "I agree"
-msgstr ""
-
-#: app/react/modules/healthcheck/server.js:11
-msgid "Server information"
-msgstr ""
-
-#: app/react/modules/overview/index.js:58
-msgid "Account info"
-msgstr ""
-
-#: app/react/modules/overview/index.js:72
-msgid "View my account"
-msgstr ""
-
-#: app/react/modules/overview/index.js:88
-msgid "Free Trial"
-msgstr ""
-
-#: app/react/modules/overview/index.js:111
-msgid "Upgrade to WP Umbrella Premium"
-msgstr ""
-
-#: app/react/modules/overview/index.js:117
-msgid "Your trial is over. Go premium (10% off with the promo code 'PREMIUM')"
-msgstr ""
-
-#: app/react/modules/overview/index.js:127
-msgid "+ PHP Errors Monitoring"
-msgstr ""
-
-#: app/react/modules/overview/index.js:132
-msgid "+ Uptime Monitoring"
-msgstr ""
-
-#: app/react/modules/overview/index.js:137
-msgid "+ Performance Monitoring"
-msgstr ""
-
-#: app/react/modules/overview/index.js:145
-msgid "+ Instant Alerts"
-msgstr ""
-
-#: app/react/modules/overview/index.js:150
-msgid "+ Weekly Performance Report "
-msgstr ""
-
-#: app/react/modules/overview/index.js:158
-msgid "+ Premium Support"
-msgstr ""
-
-#: app/react/modules/overview/index.js:163
-msgid "+ Monitor several websites from one place"
-msgstr ""
-
-#: app/react/modules/overview/index.js:175
-msgid "Get WP Umbrella Premium"
-msgstr ""
-
-#: app/react/modules/overview/index.js:214
-msgid "Your API key is not valid"
-msgstr ""
-
-#: app/react/modules/overview/index.js:224
-msgid "Your API key is registered"
-msgstr ""
-
-#: app/react/modules/overview/index.js:234
-msgid "Your API Key"
-msgstr ""
-
-#: app/react/modules/overview/index.js:253
-#: app/react/modules/overview/index.js:264
-msgid "Validate your API KEY"
-msgstr ""
-
-#: app/react/modules/overview/index.js:273
-msgid "WordPress Health Check"
-msgstr ""
-
-#: app/react/modules/overview/index.js:280
-msgid "Read our Privacy Policy"
-msgstr ""
-
-#: app/react/modules/overview/index.js:302
-msgid "We have saved the change"
-msgstr ""
-
-#: app/react/modules/overview/index.js:311
-msgid "Enable WordPress Health Check"
-msgstr ""
-
-#: app/react/modules/overview/index.js:407
-msgid "Welcome on board!"
-msgstr ""
-
-#: app/react/modules/overview/index.js:411
-msgid "Take a look at"
-msgstr ""
-
-#: app/react/modules/overview/index.js:420
-msgid "the notification tab"
-msgstr ""
-
-#: app/react/modules/overview/index.js:425
-msgid "to complete the plugin configuration."
-msgstr ""
-
-#: app/react/modules/overview/index.js:454
-msgid "Congratulations"
-msgstr ""
-
-#: app/react/modules/overview/index.js:458
-msgid "Your website is monitored and you will be alerted at"
-msgstr ""
-
-#: app/react/modules/overview/index.js:463
-msgid "if something bad happens."
-msgstr ""
-
-#: app/react/modules/overview/index.js:475
-msgid "Go to notifications"
-msgstr ""
-
-#: app/react/modules/overview/index.js:477
-msgid "to edit your contact information and to"
-msgstr ""
-
-#: app/react/modules/overview/index.js:490
-msgid "'Monitor Settings'"
-msgstr ""
-
-#: app/react/modules/overview/index.js:492
-msgid "to modify the monitoring region."
-msgstr ""
-
-#: app/react/modules/overview/index.js:517
+#: templates/admin/components/forms/register.php:15
 msgid "Create an account to get your API Key - It's free !"
 msgstr ""
 
-#: app/react/modules/overview/index.js:523
-msgid "You need to register so we can alert you if downtime or problems happen."
+#: templates/admin/components/forms/register.php:18
+msgid "Start your 14-day free trial"
 msgstr ""
 
-#: app/react/modules/overview/index.js:555
-msgid "Getting Started"
+#: templates/admin/components/forms/register.php:24
+msgid "First name"
 msgstr ""
 
-#: app/react/modules/overview/index.js:566
-msgid "How to activate WordPress health check?"
+#: templates/admin/components/forms/register.php:26
+msgid "John"
 msgstr ""
 
-#: app/react/modules/overview/index.js:579
-msgid "Set up the monitor"
+#: templates/admin/components/forms/register.php:31
+msgid "Last name"
 msgstr ""
 
-#: app/react/modules/overview/index.js:592
-msgid "Understanding the PHP errors monitoring"
+#: templates/admin/components/forms/register.php:31
+msgid "Doe"
 msgstr ""
 
-#: app/react/modules/overview/index.js:603
-msgid "Frequently Ask Questions"
+#: templates/admin/components/forms/register.php:36
+msgid "Email"
 msgstr ""
 
-#: app/react/modules/overview/index.js:624
-msgid "Why is uptime and performance monitoring important ?"
+#: templates/admin/components/forms/register.php:38
+msgid "johndoe@domain.com"
 msgstr ""
 
-#: app/react/modules/overview/index.js:630
-msgid "Downtime occurs more often than people think. Being aware of the situation will allow you to mitigate their impact."
+#: templates/admin/components/forms/register.php:40
+msgid "Password"
 msgstr ""
 
-#: app/react/modules/overview/index.js:650
-msgid "Why do I need to use the health check?"
+#: templates/admin/components/forms/register.php:42
+msgid "Use a password"
 msgstr ""
 
-#: app/react/modules/overview/index.js:656
-msgid "Better safe than sorry: Follow our advices to improve your WordPress website performance, security and SEO."
+#. translators: %s is a link to the WP Umbrella Terms of Service.
+#: templates/admin/components/forms/register.php:51
+#, php-format
+msgid "I agree to %s."
 msgstr ""
 
-#: app/react/modules/overview/index.js:676
-msgid "Can WP Umbrella slow or overload your website?"
+#: templates/admin/components/forms/register.php:52
+msgid "WP Umbrella's Terms of Service"
 msgstr ""
 
-#: app/react/modules/overview/index.js:682
-msgid "No, we use our own external servers  so your website performance is not impacted. "
+#: templates/admin/components/forms/register.php:83
+msgid "Register"
 msgstr ""
 
-#: app/react/modules/overview/index.js:702
-msgid "Is it possible to monitor several websites?"
+#: templates/admin/components/forms/validate-api-key.php:17
+msgid "Copied!"
 msgstr ""
 
-#: app/react/modules/overview/index.js:708
-msgid "Yes, our web application is ideal to manage hundreds of websites from a single place!"
+#: templates/admin/components/forms/validate-api-key.php:18
+#: templates/admin/components/forms/validate-api-key.php:349
+msgid "Establishing a secure connection"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:19
+msgid "Pairing your site with WP Umbrella"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:20
+msgid "Generating your encryption keys"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:21
+msgid "Signing and sealing the connection"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:22
+msgid "Finalizing your setup"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:23
+msgid "Your site is connected"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:24
+#: templates/admin/components/forms/validate-api-key.php:299
+msgid "Select a workspace"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:26
+msgid "You are not authorized to perform this action."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:27
+msgid "On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to enter the API key for this site."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:28
+msgid "The API key is invalid."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:29
+msgid "Bad API Key"
+msgstr ""
+
+#. translators: %1$s is an opening link tag to the support mailbox, %2$s is the closing link tag.
+#: templates/admin/components/forms/validate-api-key.php:33
+#, php-format
+msgid "The API key seems to be invalid. Please check it and try again. If the problem persists, %1$splease contact our support.%2$s"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:39
+msgid "Limit excedeed"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:40
+msgid "You have reached the maximum number of sites allowed by your plan. (5 sites for the free plan)"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:41
+msgid "You have reached the maximum number of sites allowed by your plan. (5 sites during the trial)"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:42
+msgid "No answer from WP Umbrella"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:43
+msgid "Your site could not get an answer from WP Umbrella in time. Your settings have been kept, so simply try again in a moment. If it keeps happening, contact our support."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:44
+msgid "HTTP Auth credentials needed"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:45
+msgid "Your site is protected by HTTP Basic Authentication. Please fill in the HTTP Auth User and Password fields above."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:46
+msgid "HTTP Auth credentials invalid"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:47
+msgid "The HTTP Auth User and Password you entered were rejected by your site. Please check them and try again."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:48
+msgid "Unknown PHP error"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:49
+msgid "WordPress critical error detected"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:50
+msgid "Your WordPress site is currently throwing a PHP fatal error, which prevents WP Umbrella from connecting. This is not an issue with WP Umbrella itself: any plugin or external tool calling your site's REST API would fail the same way."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:51
+msgid "Error reported by your site:"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:52
+msgid "How to resolve it:"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:53
+msgid "Open your hosting control panel (cPanel, Plesk, etc.) or connect via FTP/SFTP."
+msgstr ""
+
+#. translators: %1$s is an opening HTML tag, %2$s is the matching closing tag.
+#: templates/admin/components/forms/validate-api-key.php:57
+#, php-format
+msgid "Navigate to the file shown above and either fix it or rename it (for example, append %1$s.disabled%2$s to the filename) to disable it."
+msgstr ""
+
+#. translators: %1$s is an opening HTML tag, %2$s is the matching closing tag.
+#: templates/admin/components/forms/validate-api-key.php:66
+#, php-format
+msgid "Reload your WordPress admin to confirm the error is gone, then click %1$sValidate%2$s again here."
+msgstr ""
+
+#. translators: %1$s is an opening link tag to the support mailbox, %2$s is the closing link tag.
+#: templates/admin/components/forms/validate-api-key.php:75
+#, php-format
+msgid "If you do not have access to your site's files, please forward this message to your hosting provider or developer. If you need help, our team is available at %1$ssupport@wp-umbrella.com%2$s."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:81
+msgid "Connection Issue: Action Required"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:82
+msgid "We're currently unable to connect to your site. This is often due to the site's hosting firewall or security plugin mistakenly blocking WP Umbrella."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:83
+msgid "To Resolve This:"
+msgstr ""
+
+#. translators: %1$s is an opening HTML tag, %2$s is the matching closing tag.
+#: templates/admin/components/forms/validate-api-key.php:87
+#, php-format
+msgid "%1$s1. Whitelist Our Server IPs:%2$s Please ensure the following IPs are allowed access by your hosting provider or security settings:"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:93
+msgid "IPv4:"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:94
+msgid "IPv6:"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:95
+msgid "Copy all IPs v4"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:96
+msgid "Copy this IP"
+msgstr ""
+
+#. translators: %1$s is an opening HTML tag, %2$s is the matching closing tag.
+#: templates/admin/components/forms/validate-api-key.php:100
+#, php-format
+msgid "%1$s2. Check WordPress REST API Access%2$s: Confirm that access to the WordPress REST API is not being restricted, as this is crucial for communication with WP Umbrella."
+msgstr ""
+
+#. translators: %1$s is an opening link tag to the support guide, %2$s is the closing link tag.
+#: templates/admin/components/forms/validate-api-key.php:109
+#, php-format
+msgid "For more details, feel free to check out our guide, \"%1$sWe Can't Communicate with Your WordPress Site%2$s\"."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:115
+msgid "If you need extra help, feel free to reach out to our support team at:"
+msgstr ""
+
+#. translators: %1$s is the .htpasswd file name, in bold.
+#: templates/admin/components/forms/validate-api-key.php:238
+#, php-format
+msgid "We have detected the %1$s file on your site. If this is the case, you will need to specify the credentials so that we can communicate with your site."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:242
+#: templates/admin/components/forms/validate-api-key.php:243
+msgid "HTTP Auth User"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:248
+#: templates/admin/components/forms/validate-api-key.php:249
+msgid "HTTP Auth Password"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:256
+msgid "Your API Key"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:279
+msgid "My API KEY"
+msgstr ""
+
+#. translators: %1$s is an opening HTML tag, %2$s is the matching closing tag.
+#: templates/admin/components/forms/validate-api-key.php:293
+#, php-format
+msgid "%1$sYour API key is valid!%2$s Click on Save. At the time of saving, we'll need to check communication with your site for security reasons."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:297
+msgid "Choose a workspace"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:302
+msgid "Please, select a workspace"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:305
+msgid "Choose the workspace to which you wish to link your site."
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:334
+msgid "Save"
+msgstr ""
+
+#: templates/admin/components/forms/validate-api-key.php:348
+msgid "Securing your site"
+msgstr ""
+
+#: templates/admin/components/no-configuration.php:18
+msgid "Changelog"
+msgstr ""
+
+#: templates/admin/components/no-configuration.php:27
+msgid "Documentation"
+msgstr ""
+
+#: templates/admin/components/no-configuration.php:37
+msgid "Thousands of agencies use WP Umbrella to manage multiple WordPress sites from a single place, save considerable time and effectively demonstrate their work value to clients."
+msgstr ""
+
+#: templates/admin/components/no-configuration.php:45
+msgid "You already have an account ? Add your API KEY"
+msgstr ""
+
+#: templates/admin/components/no-configuration.php:52
+msgid "Log into your account in our app"
+msgstr ""
+
+#. translators: %s is a link labelled "Log into your account in our app".
+#: templates/admin/components/no-configuration.php:57
+#, php-format
+msgid "%s to locate your API key."
+msgstr ""
+
+#. translators: 1 HTML Tag, 2 HTML Tag
+#: templates/admin/notices/no-configuration.php:12
+#, php-format
+msgid "WP Umbrella is installed but not configured yet. %s Go to the settings.%s It only takes 1 minute! "
+msgstr ""
+
+#. translators: 1 HTML Tag, 2 HTML Tag
+#: templates/admin/notices/no-curl.php:12
+msgid "WP Umbrella: You need to activate cURL. If you need help, just ask us directly at support@wp-umbrella.com"
+msgstr ""
+
+#. translators: 1 is a plugin name, 2 is WP Umbrella version, 3 is current php version.
+#: templates/admin/notices/php-min.php:12
+#, php-format
+msgid "%1$s  requires PHP %2$s minimum, your website is actually running version %3$s."
+msgstr ""
+
+#: templates/admin/pages/_support.php:41
+msgid "Hide WordPress version"
+msgstr ""
+
+#: templates/admin/pages/_support.php:42
+msgid "Removes the WordPress version from the site markup and feeds."
+msgstr ""
+
+#: templates/admin/pages/_support.php:45
+msgid "Block user enumeration"
+msgstr ""
+
+#: templates/admin/pages/_support.php:46
+msgid "Blocks author scans that try to list your usernames. Author archives redirect to the homepage for logged-out visitors."
+msgstr ""
+
+#: templates/admin/pages/_support.php:49
+msgid "Mask login errors"
+msgstr ""
+
+#: templates/admin/pages/_support.php:50
+msgid "Returns a generic message instead of revealing whether the username or the password was wrong."
+msgstr ""
+
+#: templates/admin/pages/_support.php:53
+msgid "Disable file editor"
+msgstr ""
+
+#: templates/admin/pages/_support.php:54
+msgid "Turns off the built-in theme and plugin file editor in wp-admin."
+msgstr ""
+
+#: templates/admin/pages/_support.php:57
+msgid "Security headers"
+msgstr ""
+
+#: templates/admin/pages/_support.php:58
+msgid "Adds recommended HTTP security headers to responses."
+msgstr ""
+
+#: templates/admin/pages/_support.php:61
+msgid "Login rate limiting"
+msgstr ""
+
+#: templates/admin/pages/_support.php:62
+msgid "Temporarily blocks an IP address after 8 failed login attempts within 5 minutes."
+msgstr ""
+
+#: templates/admin/pages/_support.php:65
+msgid "Community login IP blocklist"
+msgstr ""
+
+#: templates/admin/pages/_support.php:66
+msgid "Blocks IP addresses flagged for brute-forcing logins across the WP Umbrella network from reaching your login page."
+msgstr ""
+
+#: templates/admin/pages/_support.php:69
+msgid "Block plugin and theme changes"
+msgstr ""
+
+#: templates/admin/pages/_support.php:70
+msgid "Blocks installing, updating or editing plugins and themes from wp-admin. Manage updates through WP Umbrella instead."
+msgstr ""
+
+#: templates/admin/pages/_support.php:73
+msgid "Disable XML-RPC"
+msgstr ""
+
+#: templates/admin/pages/_support.php:74
+msgid "Turns off XML-RPC and pingbacks. Leave disabled unless this site uses the WordPress mobile app or Jetpack."
+msgstr ""
+
+#: templates/admin/pages/_support.php:77
+msgid "Require two-factor authentication for administrators"
+msgstr ""
+
+#: templates/admin/pages/_support.php:78
+msgid "Every administrator must set up an authenticator app before reaching wp-admin, then enter a code at each login. While this is on, administrators cannot log in through XML-RPC or with an application password, since neither can ask for a code. Unchecking this box and saving turns the requirement off for every administrator on this site."
+msgstr ""
+
+#: templates/admin/pages/_support.php:152
+msgid "WP Umbrella — Support"
+msgstr ""
+
+#: templates/admin/pages/_support.php:156
+msgid "The connection fields were not saved. On a WordPress network, only a network administrator can change the Secret Token, the Project ID and the Request Token of a site. Every other setting on this page was saved."
+msgstr ""
+
+#: templates/admin/pages/_support.php:162
+msgid "The credentials were not regenerated. On a WordPress network, only a network administrator can rotate the credentials of a site."
+msgstr ""
+
+#: templates/admin/pages/_support.php:170
+msgid "Settings"
+msgstr ""
+
+#: templates/admin/pages/_support.php:174
+#: templates/admin/pages/_support.php:470
+msgid "Secret Token"
+msgstr ""
+
+#: templates/admin/pages/_support.php:177
+#: templates/admin/pages/_support.php:184
+#: templates/admin/pages/_support.php:205
+msgid "Do not change this value unless you know what you are doing."
+msgstr ""
+
+#: templates/admin/pages/_support.php:177
+msgid "Per-site secret used to verify requests coming from WP Umbrella. Auto-generated when the site is connected."
+msgstr ""
+
+#: templates/admin/pages/_support.php:181
+msgid "Project ID"
+msgstr ""
+
+#: templates/admin/pages/_support.php:184
+msgid "Unique identifier of this site in your WP Umbrella account. Auto-assigned when the site is connected."
+msgstr ""
+
+#: templates/admin/pages/_support.php:189
+msgid "Public Key"
+msgstr ""
+
+#: templates/admin/pages/_support.php:193
+msgid "This site verifies that requests genuinely come from WP Umbrella using this public key. It is issued and managed automatically, there is nothing to configure here."
+msgstr ""
+
+#: templates/admin/pages/_support.php:195
+#, php-format
+msgid "Key ID: %s"
+msgstr ""
+
+#: templates/admin/pages/_support.php:202
+msgid "Request Token"
+msgstr ""
+
+#: templates/admin/pages/_support.php:205
+msgid "Per-site bearer token used to authenticate plugin requests to WP Umbrella after pairing. Auto-issued by WP Umbrella; leave blank to clear and trigger a new pairing."
+msgstr ""
+
+#: templates/admin/pages/_support.php:210
+msgid "Allow tracking errors"
+msgstr ""
+
+#: templates/admin/pages/_support.php:213
+msgid "Sends PHP errors and warnings detected on this site to your WP Umbrella dashboard for monitoring and debugging."
+msgstr ""
+
+#: templates/admin/pages/_support.php:217
+msgid "Allow 1-click access"
+msgstr ""
+
+#: templates/admin/pages/_support.php:220
+msgid "Lets your WP Umbrella account open the WordPress admin of this site with a single click from the dashboard, without typing a password."
+msgstr ""
+
+#: templates/admin/pages/_support.php:224
+msgid "Enable activity log"
+msgstr ""
+
+#: templates/admin/pages/_support.php:227
+msgid "Records meaningful WordPress events (logins, content changes, plugin/theme/user lifecycle, option changes) and syncs them to your WP Umbrella dashboard."
+msgstr ""
+
+#: templates/admin/pages/_support.php:231
+msgid "Activity log sync interval (minutes)"
+msgstr ""
+
+#: templates/admin/pages/_support.php:234
+#, php-format
+msgid "How often the plugin sends buffered events to WP Umbrella. Default: 5 minutes. Min: %1$d, max: %2$d."
+msgstr ""
+
+#: templates/admin/pages/_support.php:247
+msgid "Hardening"
+msgstr ""
+
+#: templates/admin/pages/_support.php:248
+msgid "Current state of the security hardening options on this site. Uncheck an option and save to disable it if it is causing trouble."
+msgstr ""
+
+#: templates/admin/pages/_support.php:260
+msgid "Enabled"
+msgstr ""
+
+#: templates/admin/pages/_support.php:260
+msgid "Disabled"
+msgstr ""
+
+#: templates/admin/pages/_support.php:263
+msgid "This setting applies to the whole network, so only a network administrator can change it."
+msgstr ""
+
+#: templates/admin/pages/_support.php:268
+msgid "Two-factor status"
+msgstr ""
+
+#: templates/admin/pages/_support.php:275
+msgid "Can be enforced"
+msgstr ""
+
+#: templates/admin/pages/_support.php:275
+msgid "Cannot be enforced"
+msgstr ""
+
+#. translators: %s: name of the conflicting plugin.
+#: templates/admin/pages/_support.php:281
+#, php-format
+msgid "%s already handles two-factor authentication on this site, so WP Umbrella stays out of the login form."
+msgstr ""
+
+#: templates/admin/pages/_support.php:286
+msgid "The WP_UMBRELLA_DISABLE_2FA constant is set in wp-config.php, which turns the requirement off whatever the option above says."
+msgstr ""
+
+#: templates/admin/pages/_support.php:288
+msgid "Read-only diagnostic: nothing on this site prevents WP Umbrella from enforcing two-factor authentication."
+msgstr ""
+
+#: templates/admin/pages/_support.php:294
+msgid "File editor constant"
+msgstr ""
+
+#: templates/admin/pages/_support.php:297
+msgid "DISALLOW_FILE_EDIT active"
+msgstr ""
+
+#: templates/admin/pages/_support.php:297
+msgid "DISALLOW_FILE_EDIT not set"
+msgstr ""
+
+#: templates/admin/pages/_support.php:298
+msgid "Read-only diagnostic: whether the DISALLOW_FILE_EDIT constant is currently active on this site."
+msgstr ""
+
+#: templates/admin/pages/_support.php:305
+msgid "Save hardening options"
+msgstr ""
+
+#: templates/admin/pages/_support.php:319
+msgid ".htaccess"
+msgstr ""
+
+#: templates/admin/pages/_support.php:320
+msgid "Read-only view of this site's .htaccess. You can remove the WP Umbrella block when one is present; the rest of the file is never touched."
+msgstr ""
+
+#: templates/admin/pages/_support.php:327
+msgid "The WP Umbrella block was removed from .htaccess."
+msgstr ""
+
+#: templates/admin/pages/_support.php:329
+msgid "No .htaccess file to clean."
+msgstr ""
+
+#: templates/admin/pages/_support.php:331
+msgid "No WP Umbrella block was present."
+msgstr ""
+
+#: templates/admin/pages/_support.php:333
+msgid "The .htaccess file is not writable. Remove the block manually or fix the file permissions."
+msgstr ""
+
+#: templates/admin/pages/_support.php:335
+msgid "Could not update the .htaccess file."
+msgstr ""
+
+#: templates/admin/pages/_support.php:348
+msgid "File"
+msgstr ""
+
+#: templates/admin/pages/_support.php:351
+#: templates/admin/pages/_support.php:357
+msgid "Present"
+msgstr ""
+
+#: templates/admin/pages/_support.php:351
+msgid "Missing"
+msgstr ""
+
+#: templates/admin/pages/_support.php:355
+msgid "WP Umbrella block"
+msgstr ""
+
+#: templates/admin/pages/_support.php:357
+msgid "Not present"
+msgstr ""
+
+#: templates/admin/pages/_support.php:363
+msgid "This file is shared by the whole network, so only a network administrator can view and edit it."
+msgstr ""
+
+#: templates/admin/pages/_support.php:367
+msgid "No .htaccess file found. This is expected on Nginx."
+msgstr ""
+
+#: templates/admin/pages/_support.php:372
+msgid "Clean WP Umbrella block"
+msgstr ""
+
+#: templates/admin/pages/_support.php:379
+msgid "Diagnostics"
+msgstr ""
+
+#: templates/admin/pages/_support.php:382
+msgid "Test ping"
+msgstr ""
+
+#: templates/admin/pages/_support.php:384
+msgid "Send a signed request to WP Umbrella and report the HTTP status and round-trip time. Useful when you suspect a connection or authentication issue."
+msgstr ""
+
+#: templates/admin/pages/_support.php:397
+msgid "Connected (signed communication)"
+msgstr ""
+
+#: templates/admin/pages/_support.php:399
+#, php-format
+msgid "OK — HTTP %1$d in %2$d ms"
+msgstr ""
+
+#: templates/admin/pages/_support.php:401
+msgid "Not connected"
+msgstr ""
+
+#: templates/admin/pages/_support.php:403
+msgid "Network error"
+msgstr ""
+
+#: templates/admin/pages/_support.php:405
+msgid "Request rejected"
+msgstr ""
+
+#: templates/admin/pages/_support.php:407
+#, php-format
+msgid "HTTP %1$d in %2$d ms"
+msgstr ""
+
+#: templates/admin/pages/_support.php:422
+#, php-format
+msgid "Ran %s ago"
+msgstr ""
+
+#: templates/admin/pages/_support.php:428
+msgid "No ping run yet."
+msgstr ""
+
+#: templates/admin/pages/_support.php:436
+msgid "Run ping"
+msgstr ""
+
+#: templates/admin/pages/_support.php:444
+msgid "Maintenance"
+msgstr ""
+
+#: templates/admin/pages/_support.php:447
+msgid "Reconnect to WP Umbrella"
+msgstr ""
+
+#: templates/admin/pages/_support.php:450
+#: templates/admin/pages/_support.php:570
+msgid "This site is connected to WP Umbrella."
+msgstr ""
+
+#: templates/admin/pages/_support.php:452
+msgid "This site has a valid API key but is not yet connected. Click to retry the connection."
+msgstr ""
+
+#: templates/admin/pages/_support.php:454
+msgid "This site is not connected to WP Umbrella. Regenerate the connection credentials below to reconnect it."
+msgstr ""
+
+#: templates/admin/pages/_support.php:456
+msgid "This site has no API key configured. Reinstall WP Umbrella from your account dashboard."
+msgstr ""
+
+#: templates/admin/pages/_support.php:462
+#: templates/admin/pages/_support.php:569
+msgid "Connected"
+msgstr ""
+
+#: templates/admin/pages/_support.php:462
+msgid "Reconnect"
+msgstr ""
+
+#: templates/admin/pages/_support.php:471
+msgid "This site uses signed requests (signature-only), so the secret token no longer controls the connection and regenerating it has no effect. To rotate credentials, regenerate the signing key from your WP Umbrella account."
+msgstr ""
+
+#: templates/admin/pages/_support.php:474
+#: templates/admin/pages/_support.php:485
+msgid "Regenerate"
+msgstr ""
+
+#: templates/admin/pages/_support.php:478
+msgid "Regenerate connection credentials"
+msgstr ""
+
+#: templates/admin/pages/_support.php:479
+msgid "Rotates all of this site's security credentials: a brand-new secret token AND a brand-new signing key are generated, then the site is reconnected to WP Umbrella. Use this if you suspect the credentials were leaked. Your data and settings are untouched."
+msgstr ""
+
+#: templates/admin/pages/_support.php:492
+msgid "Clean redirects"
+msgstr ""
+
+#: templates/admin/pages/_support.php:494
+msgid "Remove all redirect rules. They will be re-synced from WP Umbrella."
+msgstr ""
+
+#: templates/admin/pages/_support.php:495
+#, php-format
+msgid "%d redirect rules"
+msgstr ""
+
+#: templates/admin/pages/_support.php:502
+#: templates/admin/pages/_support.php:518
+msgid "Clean"
+msgstr ""
+
+#: templates/admin/pages/_support.php:508
+msgid "Clean activity log buffer"
+msgstr ""
+
+#: templates/admin/pages/_support.php:510
+msgid "Drop all events currently buffered on this site that have not been synced to WP Umbrella yet. Cleared events are lost."
+msgstr ""
+
+#: templates/admin/pages/_support.php:511
+#, php-format
+msgid "%d buffered events"
+msgstr ""
+
+#: templates/admin/pages/_support.php:524
+msgid "Clear WP Umbrella cache"
+msgstr ""
+
+#: templates/admin/pages/_support.php:526
+msgid "Clear cached data stored by WP Umbrella (white label settings, etc) and refresh WordPress' cached PHP version check. Useful when your white label customisations are not reflected, or when the PHP version recommendation looks out of date."
+msgstr ""
+
+#: templates/admin/pages/_support.php:533
+msgid "Clear cache"
+msgstr ""
+
+#: templates/admin/pages/_support.php:558
+msgid "Connecting..."
+msgstr ""
+
+#: templates/admin/pages/_support.php:575
+msgid "Reconnection failed. The site stays connected via the legacy path; you can retry."
+msgstr ""
+
+#: templates/admin/pages/_support.php:583
+msgid "Network error during reconnection."
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:12
+#: templates/two-factor/profile-section.php:14
+msgid "Status"
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:15
+#: templates/two-factor/profile-section.php:17
+msgid "Enabled with an authenticator app."
+msgstr ""
+
+#. translators: %d: number of recovery codes left.
+#: templates/two-factor/admin-reset-section.php:20
+#: templates/two-factor/profile-section.php:22
+#, php-format
+msgid "%d recovery code left."
+msgid_plural "%d recovery codes left."
+msgstr[0] ""
+msgstr[1] ""
+
+#: templates/two-factor/admin-reset-section.php:26
+msgid "Required on this site. This user will be asked to set it up the next time they log in."
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:28
+#: templates/two-factor/profile-section.php:30
+msgid "Not set up. This site does not require it."
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:35
+msgid "Reset"
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:42
+msgid "Reset two-factor authentication"
+msgstr ""
+
+#: templates/two-factor/admin-reset-section.php:50
+msgid "Use this when the user has lost their phone and their recovery codes. Their authenticator app and every remaining recovery code stop working right away."
+msgstr ""
+
+#: templates/two-factor/challenge.php:16
+msgid "Six-digit code from your authenticator app"
+msgstr ""
+
+#: templates/two-factor/challenge.php:21
+msgid "Lost your phone? Use a recovery code instead"
+msgstr ""
+
+#: templates/two-factor/challenge.php:29
+msgid "Log in"
+msgstr ""
+
+#: templates/two-factor/profile-section.php:28
+msgid "Required on this site. You will be asked to set it up the next time you log in."
+msgstr ""
+
+#: templates/two-factor/profile-section.php:37
+msgid "New recovery codes"
+msgstr ""
+
+#: templates/two-factor/profile-section.php:39
+msgid "Save these now. They are shown once and each one works a single time."
+msgstr ""
+
+#: templates/two-factor/profile-section.php:51
+msgid "Recovery codes"
+msgstr ""
+
+#: templates/two-factor/profile-section.php:56
+msgid "Generate a new set"
+msgstr ""
+
+#: templates/two-factor/profile-section.php:57
+msgid "Generating a new set invalidates every code you have now."
+msgstr ""
+
+#: templates/two-factor/profile-section.php:64
+msgid "Turn off"
+msgstr ""
+
+#: templates/two-factor/profile-section.php:69
+msgid "Turn off two-factor authentication"
+msgstr ""
+
+#: templates/two-factor/recovery-codes.php:11
+msgid "Two-factor authentication is on. Save these recovery codes now: they are shown once, and each one works a single time if you lose your phone."
+msgstr ""
+
+#: templates/two-factor/recovery-codes.php:22
+msgid "I saved these codes somewhere safe"
+msgstr ""
+
+#: templates/two-factor/recovery-codes.php:31
+msgid "Continue to the dashboard"
+msgstr ""
+
+#: templates/two-factor/setup.php:16
+msgid "This site requires two-factor authentication for administrators. Set up an authenticator app to continue."
+msgstr ""
+
+#: templates/two-factor/setup.php:18
+msgid "QR code for two-factor setup"
+msgstr ""
+
+#: templates/two-factor/setup.php:19
+msgid "Scan this code with your authenticator app."
+msgstr ""
+
+#: templates/two-factor/setup.php:24
+msgid "Setup key"
+msgstr ""
+
+#: templates/two-factor/setup.php:26
+msgid "Add this key to Google Authenticator, 1Password, Bitwarden or any other authenticator app."
+msgstr ""
+
+#: templates/two-factor/setup.php:30
+msgid "Six-digit code from the app"
+msgstr ""
+
+#: templates/two-factor/setup.php:39
+msgid "Confirm and continue"
 msgstr ""

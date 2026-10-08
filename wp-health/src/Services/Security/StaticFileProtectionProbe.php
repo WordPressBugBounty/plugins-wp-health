@@ -193,7 +193,7 @@ class StaticFileProtectionProbe
         $response = wp_remote_get($url, [
             'timeout' => 10,
             'redirection' => 0,
-            'sslverify' => wp_umbrella_should_verify_ssl(),
+            'sslverify' => apply_filters('https_local_ssl_verify', false),
         ]);
 
         if (is_wp_error($response)) {

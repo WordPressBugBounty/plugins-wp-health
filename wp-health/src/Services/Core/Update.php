@@ -20,15 +20,18 @@ class Update extends BaseManageUpdate
         $this->updateResults = $results;
     }
 
-    /**
-     * Reported rather than answered with a success. WordPress offering nothing
-     * to upgrade to is not the same as having upgraded, and saying otherwise is
-     * what let a site sit on an old version while the dashboard showed it as up
-     * to date.
-     */
-    protected function nothingToApply($offers)
+    protected function nothingToApply($offers, $target = null)
     {
         $responses = $offers->responses();
+
+        if ($target !== null) {
+            wp_umbrella_debug_log("Core update: version {$target} is not offered to this site");
+
+            return [
+                'status' => 'error',
+                'code' => 'version_unavailable',
+            ];
+        }
 
         if (empty($responses)) {
             wp_umbrella_debug_log("Core update: no update transient found");
@@ -58,7 +61,10 @@ class Update extends BaseManageUpdate
         ];
     }
 
-    public function upgradeByCoreUpgrader()
+    /**
+     * @param string|null $target The version to move to, the latest one when null.
+     */
+    public function upgradeByCoreUpgrader($target = null)
     {
         wp_umbrella_debug_log("Core update (Core_Upgrader) started");
 
@@ -72,10 +78,14 @@ class Update extends BaseManageUpdate
         @ob_end_clean();
 
         $offers = new UpdateOffers();
-        $current_update = $offers->resolve();
+        $current_update = $offers->resolve($target);
 
         if ($current_update === null) {
-            return $this->nothingToApply($offers);
+            return $this->nothingToApply($offers, $target);
+        }
+
+        if ($blocked = (new UpdateEligibility())->server($current_update)) {
+            return $blocked;
         }
 
         global $wp_filesystem, $wp_version;

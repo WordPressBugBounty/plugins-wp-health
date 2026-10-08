@@ -72,6 +72,7 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
 
                         if ($fileHandle->isInError()) {
                             $this->socket->sendLog('File handle in error: ' . $table['name'], true);
+                            $this->socket->sendDatabaseErrorDump($table['name'], 'File handle in error');
                             $this->socket->sendTelemetryCounter('backup.db.table.file_handle_error', [
                                 'requestId' => $this->context->getRequestId(),
                                 'origin' => 'plugin',
@@ -83,6 +84,7 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                         $fileHandle = new UmbrellaFileHandle($tablePath, 'wb');
                         if ($fileHandle->isInError()) {
                             $this->socket->sendLog('File handle in error: ' . $table['name'], true);
+                            $this->socket->sendDatabaseErrorDump($table['name'], 'File handle in error');
                             $this->socket->sendTelemetryCounter('backup.db.table.file_handle_error', [
                                 'requestId' => $this->context->getRequestId(),
                                 'origin' => 'plugin',
@@ -149,7 +151,7 @@ if (!class_exists('UmbrellaDatabaseBackup', false)):
                     }
                 } catch (Exception $e) {
                     $this->socket->sendLog($e->getMessage(), true);
-                    //TODO: send error dump data
+                    $this->socket->sendDatabaseErrorDump($table['name'], $e->getMessage());
                 }
 
                 $this->socket->sendDatabaseDumpCursor($key);

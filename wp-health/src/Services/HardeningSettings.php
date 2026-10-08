@@ -21,6 +21,13 @@ class HardeningSettings
 
     const HTACCESS_BLOCK_KEY = 'htaccess_umbrella_block';
 
+    const NETWORK_WIDE_KEYS = [
+        self::TWO_FACTOR_KEY,
+        'login_rate_limit',
+        'login_ip_blocklist',
+        'mask_login_errors',
+    ];
+
     protected $lastHtaccessResult = null;
 
     /**
@@ -104,10 +111,15 @@ class HardeningSettings
      */
     protected function getNetworkOptionKeys()
     {
-        return [
-            self::TWO_FACTOR_KEY => self::NETWORK_TWO_FACTOR_OPTION_KEY,
-            self::HTACCESS_BLOCK_KEY => self::NETWORK_HTACCESS_BLOCK_OPTION_KEY,
-        ];
+        $keys = [];
+
+        foreach (self::NETWORK_WIDE_KEYS as $key) {
+            $keys[$key] = 'wp_umbrella_hardening_' . $key;
+        }
+
+        $keys[self::HTACCESS_BLOCK_KEY] = self::NETWORK_HTACCESS_BLOCK_OPTION_KEY;
+
+        return $keys;
     }
 
     /**
@@ -149,8 +161,12 @@ class HardeningSettings
         // before it is written. A failed write reverts its own option below.
         update_option(self::OPTION_KEY, $settings);
 
-        if ($this->isNetwork() && isset($params[self::TWO_FACTOR_KEY])) {
-            update_site_option(self::NETWORK_TWO_FACTOR_OPTION_KEY, $settings[self::TWO_FACTOR_KEY] ? 1 : 0);
+        if ($this->isNetwork()) {
+            foreach (self::NETWORK_WIDE_KEYS as $key) {
+                if (isset($params[$key])) {
+                    update_site_option('wp_umbrella_hardening_' . $key, $settings[$key] ? 1 : 0);
+                }
+            }
         }
 
         $settings = $this->syncHtaccessUmbrellaBlock($previous, $settings);

@@ -28,7 +28,7 @@ class RedirectRouter implements ExecuteHooks
     protected const MAX_PATH_LENGTH = 2048;
 
     /** Rules evaluated per request. */
-    protected const MAX_REDIRECTS = 1000;
+    const MAX_REDIRECTS = 1000;
 
     const MAX_REGEX_PATTERN_LENGTH = 512;
 
@@ -57,7 +57,7 @@ class RedirectRouter implements ExecuteHooks
             return;
         }
 
-        if ($this->isProtectedPath($currentPath)) {
+        if (self::isProtectedPath($currentPath)) {
             return;
         }
 
@@ -104,7 +104,7 @@ class RedirectRouter implements ExecuteHooks
         return $match;
     }
 
-    protected function isProtectedPath($path)
+    public static function isProtectedPath($path)
     {
         foreach (self::PROTECTED_PATHS as $protected) {
             if (strpos($path, $protected) === 0) {
@@ -139,7 +139,7 @@ class RedirectRouter implements ExecuteHooks
         $tableName = RedirectTableManager::getTableName();
 
         $tableExists = $wpdb->get_var(
-            $wpdb->prepare("SHOW TABLES LIKE %s", $tableName)
+            $wpdb->prepare('SHOW TABLES LIKE %s', $tableName)
         );
 
         if ($tableExists !== $tableName) {

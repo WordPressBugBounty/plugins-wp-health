@@ -4,6 +4,7 @@ namespace WPUmbrella\Actions\Hardening;
 use WPUmbrella\Core\Hooks\ActivationHook;
 use WPUmbrella\Core\Hooks\DeactivationHook;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
+use WPUmbrella\Services\Hardening\TransientLock;
 use WPUmbrella\Services\Security\HtaccessFile;
 
 if (!defined('ABSPATH')) {
@@ -15,6 +16,18 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
     const PENDING_WRITE_OPTION = 'wp_umbrella_htaccess_pending_write';
     const BACKFILL_RETRY_LOCK = 'wp_umbrella_htaccess_uploads_backfill_lock';
     const RECONCILE_RETRY_LOCK = 'wp_umbrella_htaccess_block_reconcile_lock';
+
+    const RETRY_LOCK_TTL = 12 * HOUR_IN_SECONDS;
+
+    /**
+     * @var TransientLock
+     */
+    protected $lock;
+
+    public function __construct()
+    {
+        $this->lock = new TransientLock();
+    }
 
     public function hooks()
     {
@@ -48,24 +61,18 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
             return;
         }
 
-        if (get_transient(self::RECONCILE_RETRY_LOCK)) {
+        if (!$this->lock->acquire(self::RECONCILE_RETRY_LOCK, self::RETRY_LOCK_TTL)) {
             return;
         }
-
-        set_transient(self::RECONCILE_RETRY_LOCK, 1, 12 * HOUR_IN_SECONDS);
 
         $result = $htaccess->writeUmbrellaBlock();
 
         if (isset($result['status']) && $result['status'] === 'ok') {
-            delete_transient(self::RECONCILE_RETRY_LOCK);
+            $this->lock->release(self::RECONCILE_RETRY_LOCK);
         }
     }
 
     /**
-     * The option is the source of truth and the file follows it, in both
-     * directions. The path is wp_upload_dir(), one per site of a network, so
-     * this is where a subsite both gets its block and loses it.
-     *
      * Ordered by cost: an autoloaded option, then one small file read, and only
      * on a block that has to move the write and its verification requests.
      */
@@ -85,20 +92,18 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
             return;
         }
 
-        if ($htaccess->hasUploadsBlock()) {
+        if ($htaccess->hasCurrentUploadsBlock()) {
             return;
         }
 
-        if (get_transient(self::BACKFILL_RETRY_LOCK)) {
+        if (!$this->lock->acquire(self::BACKFILL_RETRY_LOCK, self::RETRY_LOCK_TTL)) {
             return;
         }
-
-        set_transient(self::BACKFILL_RETRY_LOCK, 1, 12 * HOUR_IN_SECONDS);
 
         $result = $htaccess->writeUploadsBlock();
 
         if (isset($result['status']) && $result['status'] === 'ok') {
-            delete_transient(self::BACKFILL_RETRY_LOCK);
+            $this->lock->release(self::BACKFILL_RETRY_LOCK);
         }
     }
 

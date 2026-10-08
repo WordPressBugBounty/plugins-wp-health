@@ -255,7 +255,7 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
             'rest_url' => rest_url(),
             'secret_token' => $secretToken,
             'save' => true,
-            'rotate_signing_key' => true
+            'rotate_signing_key' => wp_umbrella_is_api_channel_verified()
         ], wp_umbrella_get_api_key());
 
         if (!is_array($responseValidateSecret) || !isset($responseValidateSecret['success'])) {
@@ -279,7 +279,7 @@ class Option implements ExecuteHooksBackend, ActivationHook, DeactivationHook
         }
 
         $signingKey = wp_umbrella_signing_key_from_response($responseValidateSecret);
-        if ($signingKey) {
+        if ($signingKey && wp_umbrella_is_api_channel_verified()) {
             $options['public_key'] = $signingKey['public_key'];
             $options['key_id'] = $signingKey['key_id'];
             if (!isset($options['key_state']) || $options['key_state'] !== 'new') {

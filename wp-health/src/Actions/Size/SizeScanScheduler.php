@@ -19,11 +19,6 @@ class SizeScanScheduler implements ExecuteHooks, DeactivationHook
         add_action(self::ACTION_HOOK, [$this, 'execute']);
     }
 
-    /**
-     * Nothing is scheduled on init: the scan only runs when the size route has
-     * been asked for a value it does not hold, so a site nobody watches never
-     * walks its own filesystem.
-     */
     public function schedule()
     {
         if (!function_exists('as_next_scheduled_action') || !function_exists('as_schedule_single_action')) {

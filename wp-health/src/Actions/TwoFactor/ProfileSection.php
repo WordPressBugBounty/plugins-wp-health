@@ -17,11 +17,22 @@ class ProfileSection implements ExecuteHooksBackend
 
     const ACTION_DISABLE = 'wp_umbrella_2fa_disable';
 
-    const NONCE = 'wp_umbrella_2fa_profile';
-
     const TRANSIENT_CODES = 'wp_umbrella_2fa_shown_codes_';
 
     const QUERY_CODES = 'wpu_2fa_codes';
+
+    /**
+     * Ids shared by the buttons rendered in the profile screen and the forms
+     * rendered in the footer, which the HTML5 form attribute ties together.
+     */
+    const FORM_ID_REGENERATE = 'wp-umbrella-2fa-regenerate';
+
+    const FORM_ID_DISABLE = 'wp-umbrella-2fa-disable';
+
+    /**
+     * @var array
+     */
+    protected $pendingForms = [];
 
     /**
      * @var TwoFactorPolicy
@@ -79,8 +90,44 @@ class ProfileSection implements ExecuteHooksBackend
         $policyOn = $this->policy->isActive();
         $canDisable = $this->policy->canSelfDisable($user);
         $codes = $this->takeShownCodes($user->ID);
+        $formIdRegenerate = self::FORM_ID_REGENERATE;
+        $formIdDisable = self::FORM_ID_DISABLE;
+
+        // show_user_profile fires inside the profile <form>, and a nested form
+        // is invalid HTML. The buttons stay here, the forms go to the footer.
+        if ($enrolled) {
+            $this->pendingForms[] = [
+                'id' => self::FORM_ID_REGENERATE,
+                'action' => self::ACTION_REGENERATE,
+            ];
+
+            if ($canDisable) {
+                $this->pendingForms[] = [
+                    'id' => self::FORM_ID_DISABLE,
+                    'action' => self::ACTION_DISABLE,
+                ];
+            }
+
+            add_action('admin_footer', [$this, 'renderProfileForms']);
+        }
 
         include WP_UMBRELLA_TEMPLATES_TWO_FACTOR . '/profile-section.php';
+    }
+
+    /**
+     * @return void
+     */
+    public function renderProfileForms()
+    {
+        if (empty($this->pendingForms)) {
+            return;
+        }
+
+        $forms = $this->pendingForms;
+
+        $this->pendingForms = [];
+
+        include WP_UMBRELLA_TEMPLATES_TWO_FACTOR . '/profile-forms.php';
     }
 
     /**
@@ -121,7 +168,7 @@ class ProfileSection implements ExecuteHooksBackend
      */
     public function handleRegenerate()
     {
-        $this->assertProfileRequest();
+        $this->assertProfileRequest(self::ACTION_REGENERATE);
 
         $userId = get_current_user_id();
 
@@ -152,7 +199,7 @@ class ProfileSection implements ExecuteHooksBackend
      */
     public function handleDisable()
     {
-        $this->assertProfileRequest();
+        $this->assertProfileRequest(self::ACTION_DISABLE);
 
         $userId = get_current_user_id();
         $user = get_user_by('id', $userId);
@@ -212,9 +259,11 @@ class ProfileSection implements ExecuteHooksBackend
     }
 
     /**
+     * @param string $action
+     *
      * @return void
      */
-    protected function assertProfileRequest()
+    protected function assertProfileRequest($action)
     {
         if (!is_user_logged_in()) {
             $this->bounceToProfile();
@@ -222,7 +271,7 @@ class ProfileSection implements ExecuteHooksBackend
 
         $nonce = isset($_POST['_wpnonce']) ? (string) $_POST['_wpnonce'] : '';
 
-        if (!wp_verify_nonce($nonce, self::NONCE)) {
+        if (!wp_verify_nonce($nonce, $action)) {
             $this->bounceToProfile();
         }
     }

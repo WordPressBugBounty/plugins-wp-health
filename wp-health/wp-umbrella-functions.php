@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.27.4');
+    define('WP_UMBRELLA_VERSION', '2.28.0');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -250,13 +250,27 @@ function wp_umbrella_verify_admin_request(array $fields, $signature, $timestamp)
 }
 
 /**
+ * @param string $kind
+ * @param string $timestamp
+ * @return string Empty when no token could be issued
+ */
+function wp_umbrella_issue_loopback_token($kind, $timestamp)
+{
+    try {
+        return (string) wp_umbrella_get_service('LoopbackToken')->issue($kind, $timestamp);
+    } catch (\Throwable $e) {
+        return '';
+    }
+}
+
+/**
  * @return array
  */
 function wp_umbrella_snapshot_request_body()
 {
     $timestamp = (string) time();
 
-    return [
+    $body = [
         'action' => 'wp_umbrella_snapshot_data',
         'nonce' => wp_create_nonce('wp_umbrella_snapshot_data'),
         'timestamp' => $timestamp,
@@ -265,6 +279,13 @@ function wp_umbrella_snapshot_request_body()
             'timestamp' => $timestamp,
         ]),
     ];
+
+    $token = wp_umbrella_issue_loopback_token(\WPUmbrella\Services\Loopback\SignedLoopback::SNAPSHOT, $timestamp);
+    if ($token !== '') {
+        $body[\WPUmbrella\Services\Loopback\SignedLoopback::TOKEN_FIELD] = $token;
+    }
+
+    return $body;
 }
 
 function wp_umbrella_request_token_from_response($response)
@@ -370,8 +391,7 @@ function wp_umbrella_safe_unserialize($value)
 /**
  * Whether outbound requests must validate the TLS certificate.
  *
- * Define WP_UMBRELLA_SSL_VERIFY to true, or hook wp_umbrella_ssl_verify, to
- * turn verification on for a site.
+ * Define WP_UMBRELLA_SSL_VERIFY, or hook wp_umbrella_ssl_verify, to force it.
  *
  * @return boolean
  */
@@ -381,7 +401,23 @@ function wp_umbrella_should_verify_ssl()
         return (bool) WP_UMBRELLA_SSL_VERIFY;
     }
 
-    return (bool) apply_filters('wp_umbrella_ssl_verify', false);
+    $verify = !is_array(get_option(\WPUmbrella\Services\Tls\CertificateFallback::OPTION_KEY));
+
+    return (bool) apply_filters('wp_umbrella_ssl_verify', $verify);
+}
+
+/**
+ * Whether the WP Umbrella API is reached with a validated TLS certificate.
+ *
+ * @return boolean
+ */
+function wp_umbrella_is_api_channel_verified()
+{
+    if (is_array(get_option(\WPUmbrella\Services\Tls\CertificateFallback::OPTION_KEY))) {
+        return false;
+    }
+
+    return wp_umbrella_should_verify_ssl();
 }
 
 /**
@@ -441,4 +477,20 @@ function wp_umbrella_remove_file($file)
         }
     }
     return true;
+}
+
+function wp_umbrella_discard_file($path)
+{
+    if (is_link($path)) {
+        @unlink($path);
+        return;
+    }
+
+    $handle = @fopen($path, 'r+');
+    if ($handle !== false) {
+        @ftruncate($handle, 0);
+        @fclose($handle);
+    }
+
+    @unlink($path);
 }

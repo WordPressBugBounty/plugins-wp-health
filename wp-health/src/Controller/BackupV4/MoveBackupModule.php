@@ -9,11 +9,6 @@ use WPUmbrella\Helpers\Opcache;
 class MoveBackupModule extends AbstractController
 {
     /**
-     * The file list and its order come from the manifest, the same one the
-     * developer entry point reads. They used to be two arrays kept in two
-     * files, which had already drifted: the same sources compiled into two
-     * different scripts depending on which path deployed them.
-     *
      * @param string $generation
      * @param string $outputFilePath
      */
@@ -61,9 +56,32 @@ class MoveBackupModule extends AbstractController
         return $this->executeGet($params);
     }
 
+    /**
+     * @param array $params
+     * @return string|null
+     */
+    protected function requestedGeneration($params)
+    {
+        if (!isset($params['generation']) || $params['generation'] === '') {
+            return BackupScriptManifest::GENERATION_V4;
+        }
+
+        $generation = sanitize_text_field($params['generation']);
+
+        return array_key_exists($generation, BackupScriptManifest::generations()) ? $generation : null;
+    }
+
     public function executeGet($params)
     {
-        $generation = BackupScriptManifest::GENERATION_BACKUP_V4;
+        $generation = $this->requestedGeneration($params);
+
+        if ($generation === null) {
+            return $this->returnResponse([
+                'success' => false,
+                'code' => 'unknown_generation',
+            ]);
+        }
+
         $source = wp_umbrella_get_service('BackupFinderConfiguration')->getRootBackupModule();
         $filename = BackupScriptManifest::generation($generation)['output'];
         $requestId = sanitize_text_field($params['requestId'] ?? null);
@@ -143,6 +161,7 @@ class MoveBackupModule extends AbstractController
             'success' => true,
             'code' => 'success',
             'module_url' => untrailingslashit(site_url()) . '/' . $filename,
+            'generation' => $generation,
         ]);
     }
 }

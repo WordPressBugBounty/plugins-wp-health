@@ -9,7 +9,11 @@ class UpgraderTempBackup
 
     protected $dirName = 'umbrella-upgrade-temp-backup';
 
+    const MANIFEST_FILE = '.umbrella-backup-manifest.json';
+
     protected static $staleBackupsSwept = false;
+
+    protected $copyRetryBudget = 20;
 
     public function rollbackBackupDir($args)
     {
@@ -27,6 +31,11 @@ class UpgraderTempBackup
             ];
         }
 
+        $invalid = $this->validateTarget($args);
+        if ($invalid !== null) {
+            return $invalid;
+        }
+
         if (!$wp_filesystem->wp_content_dir()) {
             return [
                 'code' => 'fs_no_content_dir',
@@ -39,64 +48,173 @@ class UpgraderTempBackup
         if (!$wp_filesystem->is_dir($srcDirectory)) {
             return [
                 'code' => 'temp_backup_not_found',
+                'success' => false,
+                'diagnostic' => $this->notFoundDiagnostic($srcDirectory, $args),
+            ];
+        }
+
+        $trace = wp_umbrella_get_service('RequestTrace');
+
+        $incompleteReason = $this->backupIncompleteReason($srcDirectory);
+        if ($incompleteReason === 'no_manifest') {
+            $trace->addTrace('temp_backup_unverified', ['slug' => $args['slug'], 'dir' => $args['dir']]);
+        } elseif ($incompleteReason !== null) {
+            $trace->addTrace('temp_backup_incomplete', ['slug' => $args['slug'], 'dir' => $args['dir'], 'stage' => 'rollback', 'reason' => $incompleteReason]);
+            return [
+                'code' => 'temp_backup_incomplete',
                 'success' => false
             ];
         }
 
         $baseDirectory = $args['dir'] === 'plugins' ? WP_PLUGIN_DIR : get_theme_root($args['slug']);
         $destDirectory = $baseDirectory . DIRECTORY_SEPARATOR . $args['slug'];
-        $trace = wp_umbrella_get_service('RequestTrace');
 
-        // Move the current version aside instead of deleting it: if the restore
-        // dies mid-way, the site still has a directory to put back. The aside
-        // copy lives in the temp backup tree, so the stale sweep cleans up any
-        // leftover and WordPress never scans it as an installed plugin.
         $asideDirectory = $wp_filesystem->wp_content_dir() . $this->dirName . DIRECTORY_SEPARATOR . $args['dir'] . DIRECTORY_SEPARATOR . $args['slug'] . '-replaced';
         $movedAside = false;
+        $restored = false;
 
-        if ($wp_filesystem->is_dir($destDirectory)) {
-            if ($wp_filesystem->is_dir($asideDirectory)) {
-                $wp_filesystem->delete($asideDirectory, true);
+        try {
+            if ($wp_filesystem->is_dir($destDirectory)) {
+                if ($wp_filesystem->is_dir($asideDirectory)) {
+                    $wp_filesystem->delete($asideDirectory, true);
+                }
+
+                $trace->addTrace('rollback_move_dest_aside', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+                $aside = move_dir($destDirectory, $asideDirectory, true);
+                if (is_wp_error($aside)) {
+                    $trace->addTrace('rollback_move_dest_aside_failed', ['error' => $aside->get_error_message()]);
+                    return [
+                        'code' => 'fs_temp_backup_move_aside',
+                        'success' => false
+                    ];
+                }
+                $movedAside = true;
+                $wp_filesystem->touch($asideDirectory);
             }
 
-            $trace->addTrace('rollback_move_dest_aside', ['dest' => $args['slug'], 'dir' => $args['dir']]);
-            $aside = move_dir($destDirectory, $asideDirectory, true);
-            if (is_wp_error($aside)) {
-                $trace->addTrace('rollback_move_dest_aside_failed', ['error' => $aside->get_error_message()]);
+            // Use move_dir() for an atomic rename — same approach as WP core's restore_temp_backup().
+            // Falls back to copy_dir + delete internally if rename() is not possible.
+            $trace->addTrace('rollback_move_dir', ['src' => $args['slug'], 'dir' => $args['dir']]);
+            $result = move_dir($srcDirectory, $destDirectory, true);
+
+            if (is_wp_error($result)) {
+                $trace->addTrace('rollback_move_dir_failed', ['error' => $result->get_error_message(), 'code' => $result->get_error_code()]);
                 return [
-                    'code' => 'fs_temp_backup_move_aside',
+                    'code' => 'fs_temp_backup_move',
                     'success' => false
                 ];
             }
-            $movedAside = true;
-        }
 
-        // Use move_dir() for an atomic rename — same approach as WP core's restore_temp_backup().
-        // Falls back to copy_dir + delete internally if rename() is not possible.
-        $trace->addTrace('rollback_move_dir', ['src' => $args['slug'], 'dir' => $args['dir']]);
-        $result = move_dir($srcDirectory, $destDirectory, true);
-        if (is_wp_error($result)) {
-            $trace->addTrace('rollback_move_dir_failed', ['error' => $result->get_error_message()]);
-
-            if ($movedAside && !$wp_filesystem->is_dir($destDirectory)) {
-                $trace->addTrace('rollback_restore_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
-                move_dir($asideDirectory, $destDirectory, true);
+            $restored = true;
+        } finally {
+            if ($movedAside && !$restored) {
+                $this->putAsideBack($asideDirectory, $destDirectory, $srcDirectory, $args, $trace);
             }
-
-            return [
-                'code' => 'fs_temp_backup_move',
-                'success' => false
-            ];
         }
 
         if ($movedAside) {
             $wp_filesystem->delete($asideDirectory, true);
         }
 
+        $manifestPath = $destDirectory . DIRECTORY_SEPARATOR . self::MANIFEST_FILE;
+        if ($wp_filesystem->exists($manifestPath)) {
+            $wp_filesystem->delete($manifestPath);
+        }
+
         $trace->addTrace('rollback_move_dir_success');
         return [
             'success' => true
         ];
+    }
+
+    protected function putAsideBack($asideDirectory, $destDirectory, $srcDirectory, $args, $trace)
+    {
+        global $wp_filesystem;
+
+        try {
+            if ($wp_filesystem->is_dir($destDirectory) && $this->isWholeBackup($destDirectory, $args, !$wp_filesystem->is_dir($srcDirectory))) {
+                $trace->addTrace('rollback_dest_kept', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+
+                $manifestPath = $destDirectory . DIRECTORY_SEPARATOR . self::MANIFEST_FILE;
+                if ($wp_filesystem->exists($manifestPath)) {
+                    $wp_filesystem->delete($manifestPath);
+                }
+
+                return;
+            }
+
+            if ($wp_filesystem->is_dir($destDirectory)) {
+                $trace->addTrace('rollback_partial_dest_removed', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+                $wp_filesystem->delete($destDirectory, true);
+            }
+
+            $trace->addTrace('rollback_restore_dest', ['dest' => $args['slug'], 'dir' => $args['dir']]);
+            $restore = move_dir($asideDirectory, $destDirectory, true);
+
+            if (is_wp_error($restore)) {
+                $trace->addTrace('rollback_restore_dest_failed', ['dest' => $args['slug'], 'error' => $restore->get_error_message()]);
+            }
+        } catch (\Throwable $e) {
+            $trace->addTrace('rollback_restore_dest_failed', ['dest' => $args['slug'], 'error' => $e->getMessage()]);
+        }
+    }
+
+    protected function isWholeBackup($directory, $args, $sourceGone)
+    {
+        global $wp_filesystem;
+
+        $reason = $this->backupIncompleteReason($directory);
+
+        if ($reason === null) {
+            return true;
+        }
+
+        if ($reason !== 'no_manifest' || !$sourceGone) {
+            return false;
+        }
+
+        $mainFile = $this->mainFileFromArgs($args);
+
+        if ($mainFile === null) {
+            return $this->extractVersionFromDir($directory) !== null;
+        }
+
+        return $wp_filesystem->exists($directory . '/' . $mainFile);
+    }
+
+    protected function mainFileFromArgs($args)
+    {
+        if (!empty($args['main_file']) && is_string($args['main_file'])) {
+            return basename($args['main_file']);
+        }
+
+        return $args['dir'] === 'themes' ? 'style.css' : null;
+    }
+
+    protected function notFoundDiagnostic($srcDirectory, $args)
+    {
+        global $wp_filesystem;
+
+        $diagnostic = [
+            'fs_method' => is_object($wp_filesystem) && isset($wp_filesystem->method) ? $wp_filesystem->method : null,
+            'fs_class' => is_object($wp_filesystem) ? get_class($wp_filesystem) : null,
+            'src' => $srcDirectory,
+        ];
+
+        if (!defined('WP_CONTENT_DIR')) {
+            return $diagnostic;
+        }
+
+        $nativeDirectory = WP_CONTENT_DIR . '/' . $this->dirName . '/' . $args['dir'] . '/' . $args['slug'];
+        @clearstatcache(true, $nativeDirectory);
+        $diagnostic['native_path'] = $nativeDirectory;
+        $diagnostic['native_is_dir'] = @is_dir($nativeDirectory);
+
+        if (!empty($args['main_file'])) {
+            $diagnostic['native_main_file_exists'] = @file_exists($nativeDirectory . '/' . basename($args['main_file']));
+        }
+
+        return $diagnostic;
     }
 
     /**
@@ -107,6 +225,8 @@ class UpgraderTempBackup
      *  @type string $slug Plugin or theme slug.
      *  @type string $src Source directory.
      * 	@type string $dir Destination directory.
+     *  @type string $main_file Optional. Plugin main file basename, or style.css for a theme.
+     *  @type string $expected_version Optional. Version the caller expects to be installed.
      * }
      */
     public function moveToTempBackupDir($args)
@@ -125,18 +245,9 @@ class UpgraderTempBackup
             ];
         }
 
-        /*
-         * Skip any plugin that has "." as its slug.
-         * A slug of "." will result in a `$src` value ending in a period.
-         *
-         * On Windows, this will cause the 'plugins' folder to be moved,
-         * and will cause a failure when attempting to call `mkdir()`.
-         */
-        if ('.' === $args['slug']) {
-            return [
-                'code' => 'invalid_plugin_slug',
-                'success' => false
-            ];
+        $invalid = $this->validateTarget($args);
+        if ($invalid !== null) {
+            return $invalid;
         }
 
         if (!$wp_filesystem->wp_content_dir()) {
@@ -188,31 +299,164 @@ class UpgraderTempBackup
             ];
         }
 
-        // If a backup already exists, check if it matches the currently installed version.
-        // Same version → backup is from the current update cycle (retry scenario) → preserve it.
-        // Different version → stale backup from a previous update → overwrite with current version.
-        if ($wp_filesystem->is_dir($dest)) {
-            $backupVersion = $this->getVersionFromBackup($dest, $args['slug']);
-            $currentVersion = $this->getVersionFromSource($src, $args['slug']);
+        $trace = wp_umbrella_get_service('RequestTrace');
+        $mainFile = !empty($args['main_file']) && is_string($args['main_file']) ? basename($args['main_file']) : null;
+        $expectedVersion = isset($args['expected_version']) && is_string($args['expected_version']) && trim($args['expected_version']) !== ''
+            ? trim($args['expected_version'])
+            : null;
+        $sourceVersion = $this->readVersion($src, $mainFile);
+        $replacing = $wp_filesystem->is_dir($dest);
 
-            if ($backupVersion !== null && $currentVersion !== null && $backupVersion === $currentVersion) {
+        if ($replacing) {
+            $incompleteReason = $this->backupIncompleteReason($dest);
+            $backupVersion = $incompleteReason === null ? $this->readVersion($dest, $mainFile) : null;
+
+            if ($backupVersion !== null && $backupVersion === $sourceVersion) {
+                $wp_filesystem->touch($dest);
+                $this->recordManifestUse($dest);
+                $trace->addTrace('temp_backup_preserved', ['slug' => $args['slug'], 'version' => $backupVersion]);
                 return [
                     'success' => true,
                     'code' => 'backup_already_exists',
+                    'verified' => true,
                 ];
             }
 
-            // Stale backup or version mismatch — delete and recreate
+            if ($backupVersion !== null && $backupVersion === $expectedVersion) {
+                $trace->addTrace('temp_backup_preserved', [
+                    'slug' => $args['slug'],
+                    'version' => $backupVersion,
+                    'installed_version' => $sourceVersion,
+                ]);
+                return [
+                    'code' => 'fs_temp_backup_source_version_mismatch',
+                    'success' => false,
+                    'message' => sprintf('Installed version %s differs from the expected version %s, the existing backup is kept.', $sourceVersion === null ? 'unknown' : $sourceVersion, $expectedVersion),
+                    'src' => $src,
+                ];
+            }
+
+            if ($incompleteReason !== null) {
+                $trace->addTrace('temp_backup_incomplete', ['slug' => $args['slug'], 'stage' => 'existing', 'reason' => $incompleteReason]);
+            }
+
+            $sourceMainFileMissing = $mainFile !== null && !$wp_filesystem->exists($src . '/' . $mainFile);
+
+            if ($sourceMainFileMissing || ($sourceVersion === null && $incompleteReason === null)) {
+                return [
+                    'code' => 'fs_temp_backup_source_unreadable',
+                    'success' => false,
+                    'message' => 'The installed version cannot be read, the existing backup is kept.',
+                    'src' => $src,
+                ];
+            }
+        }
+
+        for ($attempt = 1; $attempt <= 2; $attempt++) {
+            $sourceListing = $this->contentListing($src);
+
+            if ($sourceListing === null) {
+                return [
+                    'code' => 'fs_temp_backup_incomplete',
+                    'success' => false,
+                    'message' => 'Backup incomplete: the installed files cannot be listed.',
+                ];
+            }
+
+            $startedAt = microtime(true);
+            $copy = $this->copyToStaging($src, $dest);
+            $elapsed = microtime(true) - $startedAt;
+
+            if (!$copy['success']) {
+                return $copy;
+            }
+
+            $staging = $copy['staging'];
+            $stagingListing = $this->contentListing($staging);
+            $missing = $this->missingFromCopy($sourceListing, $stagingListing);
+
+            if ($missing === []) {
+                break;
+            }
+
+            $wp_filesystem->delete($staging, true);
+            $trace->addTrace('temp_backup_incomplete', [
+                'slug' => $args['slug'],
+                'stage' => 'copy',
+                'attempt' => $attempt,
+                'copy_seconds' => round($elapsed, 1),
+                'missing' => $missing === null ? null : array_slice($missing, 0, 10),
+            ]);
+
+            if ($attempt === 2 || $elapsed >= $this->copyRetryBudget) {
+                return [
+                    'code' => 'fs_temp_backup_incomplete',
+                    'success' => false,
+                    'message' => 'Backup incomplete: the copy does not match the installed files.',
+                ];
+            }
+        }
+
+        $stagingStats = $this->statsFromListing($stagingListing);
+        $manifest = wp_json_encode([
+            'version' => $sourceVersion,
+            'files' => $stagingStats['files'],
+            'bytes' => $stagingStats['bytes'],
+            'created_at' => time(),
+        ]);
+
+        if (!is_string($manifest) || $manifest === '' || !$wp_filesystem->put_contents($staging . '/' . self::MANIFEST_FILE, $manifest, FS_CHMOD_FILE)) {
+            $wp_filesystem->delete($staging, true);
+
+            return [
+                'code' => 'fs_temp_backup_manifest',
+                'success' => false,
+                'dest' => $staging,
+            ];
+        }
+
+        if ($replacing) {
             $wp_filesystem->delete($dest, true);
         }
 
-        // copy_dir() does not create the top-level destination — its inner mkdir() is non-recursive,
-        // so the first sub-directory in $src would fail with "Could not create directory."
-        if (!$wp_filesystem->mkdir($dest, FS_CHMOD_DIR)) {
+        if ($wp_filesystem->is_dir($dest) || !$wp_filesystem->move($staging, $dest)) {
+            $wp_filesystem->delete($staging, true);
+
+            return [
+                'code' => 'fs_temp_backup_publish',
+                'success' => false,
+                'dest' => $dest,
+            ];
+        }
+
+        if ($replacing) {
+            $trace->addTrace('temp_backup_replaced', ['slug' => $args['slug'], 'version' => $sourceVersion]);
+        }
+
+        return [
+            'success' => true,
+            'verified' => true,
+        ];
+    }
+
+    /**
+     * Copy the source into a fresh staging directory next to the final backup.
+     *
+     * @return array ['success' => true, 'staging' => string] or a failure result.
+     */
+    protected function copyToStaging($src, $dest)
+    {
+        global $wp_filesystem;
+
+        $this->deleteOrphanStagings($dest);
+
+        $staging = $dest . '.partial-' . uniqid();
+
+        if (!$wp_filesystem->mkdir($staging, FS_CHMOD_DIR)) {
             return [
                 'code' => 'fs_temp_backup_mkdir_dest',
                 'success' => false,
-                'dest' => $dest,
+                'dest' => $staging,
             ];
         }
 
@@ -225,17 +469,14 @@ class UpgraderTempBackup
             return true;
         }, E_WARNING);
 
-        $result = copy_dir($src, $dest);
-
-        restore_error_handler();
+        try {
+            $result = copy_dir($src, $staging);
+        } finally {
+            restore_error_handler();
+        }
 
         if (is_wp_error($result)) {
-            // copy_dir() stops on the first file it cannot copy, so what it left
-            // behind is a partial plugin. Keeping it is worse than having no
-            // backup at all: a later rollback would restore it as if it were
-            // whole. Seen on WP Engine, where a directory held nothing but the
-            // plugin's readme.txt.
-            $wp_filesystem->delete($dest, true);
+            $wp_filesystem->delete($staging, true);
 
             return [
                 'code' => 'fs_temp_backup_move',
@@ -243,12 +484,12 @@ class UpgraderTempBackup
                 'errors' => $copyFailures,
                 'wp_error' => $result->get_error_message(),
                 'src' => $src,
-                'dest' => $dest,
+                'dest' => $staging,
             ];
         }
 
         if (!empty($copyFailures)) {
-            $wp_filesystem->delete($dest, true);
+            $wp_filesystem->delete($staging, true);
 
             return [
                 'code' => 'fs_temp_backup_incomplete',
@@ -262,8 +503,28 @@ class UpgraderTempBackup
         }
 
         return [
-            'success' => true
+            'success' => true,
+            'staging' => $staging,
         ];
+    }
+
+    protected function deleteOrphanStagings($dest)
+    {
+        global $wp_filesystem;
+
+        $entries = $wp_filesystem->dirlist(dirname($dest));
+
+        if (!is_array($entries)) {
+            return;
+        }
+
+        $prefix = basename($dest) . '.partial-';
+
+        foreach ($entries as $name => $entry) {
+            if (isset($entry['type']) && $entry['type'] === 'd' && strpos($name, $prefix) === 0) {
+                $wp_filesystem->delete(dirname($dest) . '/' . $name, true);
+            }
+        }
     }
 
     /**
@@ -275,6 +536,22 @@ class UpgraderTempBackup
      * 	@type string $dir Destination directory.
      * }.
     */
+    public function hasTempBackup($args)
+    {
+        global $wp_filesystem;
+
+        if ($wp_filesystem === null) {
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            WP_Filesystem();
+        }
+
+        if (empty($args['slug']) || empty($args['dir']) || $this->validateTarget($args) !== null || !$wp_filesystem->wp_content_dir()) {
+            return false;
+        }
+
+        return $wp_filesystem->is_dir($wp_filesystem->wp_content_dir() . $this->dirName . DIRECTORY_SEPARATOR . $args['dir'] . DIRECTORY_SEPARATOR . $args['slug']);
+    }
+
     public function deleteTempBackup($args)
     {
         global $wp_filesystem;
@@ -291,6 +568,11 @@ class UpgraderTempBackup
                 'code' => 'missing_parameters',
                 'success' => false
             ];
+        }
+
+        $invalid = $this->validateTarget($args);
+        if ($invalid !== null) {
+            return $invalid;
         }
 
         if (!$wp_filesystem->wp_content_dir()) {
@@ -315,6 +597,25 @@ class UpgraderTempBackup
             'code' => 'success',
             'success' => true
         ];
+    }
+
+    protected function validateTarget($args)
+    {
+        if (!in_array($args['dir'], ['plugins', 'themes'], true)) {
+            return [
+                'code' => 'invalid_parameters',
+                'success' => false
+            ];
+        }
+
+        if (!is_string($args['slug']) || rtrim($args['slug'], ' .') === '' || preg_match('/[\/\\\\\x00-\x1f\x7f]/', $args['slug'])) {
+            return [
+                'code' => 'invalid_plugin_slug',
+                'success' => false
+            ];
+        }
+
+        return null;
     }
 
     /**
@@ -376,10 +677,23 @@ class UpgraderTempBackup
                     continue;
                 }
 
-                $lastModified = isset($entry['lastmodunix']) ? (int) $entry['lastmodunix'] : 0;
+                $entryPath = $typeDir . DIRECTORY_SEPARATOR . $name;
+                $lastModified = $this->lastUsedAt($entryPath, $entry);
 
                 if ($lastModified <= 0 || $lastModified > $threshold) {
                     continue;
+                }
+
+                if (substr($name, -9) === '-replaced') {
+                    $slug = substr($name, 0, -9);
+                    $installedDirectory = ($type === 'plugins' ? WP_PLUGIN_DIR : get_theme_root($slug)) . DIRECTORY_SEPARATOR . $slug;
+
+                    $lock = wp_umbrella_get_service('UpdateLock');
+                    $lockSlug = $type === 'themes' ? $lock->themeSlug($slug) : $slug;
+
+                    if (!$wp_filesystem->is_dir($installedDirectory) || $lock->phase($lockSlug) !== null) {
+                        continue;
+                    }
                 }
 
                 if ($wp_filesystem->delete($typeDir . DIRECTORY_SEPARATOR . $name, true)) {
@@ -402,19 +716,188 @@ class UpgraderTempBackup
     }
 
     /**
-     * Read the plugin/theme version from a backup directory.
+     * @return string|null
      */
-    protected function getVersionFromBackup($backupDir, $slug)
+    protected function backupIncompleteReason($dir)
     {
-        return $this->extractVersionFromDir($backupDir);
+        global $wp_filesystem;
+
+        $manifestPath = $dir . '/' . self::MANIFEST_FILE;
+
+        if (!$wp_filesystem->exists($manifestPath)) {
+            return 'no_manifest';
+        }
+
+        $manifest = json_decode((string) $wp_filesystem->get_contents($manifestPath), true);
+
+        if (!is_array($manifest) || !isset($manifest['files'], $manifest['bytes'])) {
+            return 'unreadable_manifest';
+        }
+
+        $stats = $this->contentStats($dir);
+
+        if ($stats === null || $stats['files'] !== (int) $manifest['files'] || $stats['bytes'] !== (int) $manifest['bytes']) {
+            return 'content_mismatch';
+        }
+
+        return null;
+    }
+
+    protected function recordManifestUse($dir)
+    {
+        global $wp_filesystem;
+
+        $manifestPath = $dir . '/' . self::MANIFEST_FILE;
+        $manifest = json_decode((string) $wp_filesystem->get_contents($manifestPath), true);
+
+        if (!is_array($manifest)) {
+            return;
+        }
+
+        $manifest['used_at'] = time();
+        $encoded = wp_json_encode($manifest);
+
+        if (is_string($encoded) && $encoded !== '') {
+            $wp_filesystem->put_contents($manifestPath, $encoded, FS_CHMOD_FILE);
+        }
     }
 
     /**
-     * Read the plugin/theme version from the currently installed source.
+     * @return int
      */
-    protected function getVersionFromSource($sourceDir, $slug)
+    protected function lastUsedAt($dir, $entry)
     {
-        return $this->extractVersionFromDir($sourceDir);
+        global $wp_filesystem;
+
+        $lastModified = isset($entry['lastmodunix']) ? (int) $entry['lastmodunix'] : 0;
+        $manifestPath = $dir . '/' . self::MANIFEST_FILE;
+
+        if (!$wp_filesystem->exists($manifestPath)) {
+            return $lastModified;
+        }
+
+        $manifest = json_decode((string) $wp_filesystem->get_contents($manifestPath), true);
+
+        if (!is_array($manifest)) {
+            return $lastModified;
+        }
+
+        foreach (['created_at', 'used_at'] as $key) {
+            if (isset($manifest[$key])) {
+                $lastModified = max($lastModified, (int) $manifest[$key]);
+            }
+        }
+
+        return $lastModified;
+    }
+
+    protected function contentListing($dir, $prefix = '')
+    {
+        global $wp_filesystem;
+
+        $entries = $wp_filesystem->dirlist($dir);
+
+        if (!is_array($entries)) {
+            return null;
+        }
+
+        $listing = [];
+
+        foreach ($entries as $name => $entry) {
+            if ($prefix === '' && $name === self::MANIFEST_FILE) {
+                continue;
+            }
+
+            $type = isset($entry['type']) ? $entry['type'] : '';
+
+            if ($type === 'f') {
+                $listing[$prefix . $name] = isset($entry['size']) ? (int) $entry['size'] : 0;
+                continue;
+            }
+
+            if ($type !== 'd') {
+                continue;
+            }
+
+            $child = $this->contentListing(trailingslashit($dir) . $name, $prefix . $name . '/');
+
+            if ($child === null) {
+                return null;
+            }
+
+            $listing += $child;
+        }
+
+        return $listing;
+    }
+
+    /**
+     * @return array|null ['files' => int, 'bytes' => int]
+     */
+    protected function contentStats($dir)
+    {
+        $listing = $this->contentListing($dir);
+
+        return $listing === null ? null : $this->statsFromListing($listing);
+    }
+
+    protected function statsFromListing($listing)
+    {
+        return [
+            'files' => count($listing),
+            'bytes' => (int) array_sum($listing),
+        ];
+    }
+
+    /**
+     * @return array|null
+     */
+    protected function missingFromCopy($sourceListing, $copyListing)
+    {
+        if ($copyListing === null) {
+            return null;
+        }
+
+        $missing = [];
+
+        foreach ($sourceListing as $path => $size) {
+            if (!isset($copyListing[$path]) || $copyListing[$path] !== $size) {
+                $missing[] = $path;
+            }
+        }
+
+        return $missing;
+    }
+
+    protected function readVersion($dir, $mainFile = null)
+    {
+        global $wp_filesystem;
+
+        if ($mainFile === null) {
+            return $this->extractVersionFromDir($dir);
+        }
+
+        $path = $dir . '/' . $mainFile;
+
+        if (!$wp_filesystem->exists($path)) {
+            return null;
+        }
+
+        $content = $wp_filesystem->get_contents($path);
+
+        if (!is_string($content) || $content === '') {
+            return null;
+        }
+
+        $content = str_replace("\r", "\n", substr($content, 0, 8192));
+
+        if (!preg_match('/^(?:[ \t]*<\?php)?[ \t\/*#@]*Version:(.*)$/mi', $content, $matches)) {
+            return null;
+        }
+
+        $version = trim(preg_replace('/\s*(?:\*\/|\?>).*/', '', $matches[1]));
+
+        return $version === '' ? null : $version;
     }
 
     /**

@@ -8,6 +8,15 @@ if (!defined('ABSPATH')) {
 
 class MaintenanceMode
 {
+	protected static $loopbackToken = null;
+
+	/**
+	 * @var string|null
+	 */
+	protected static $bypassContent = null;
+
+	protected static $upgraderHooksRegistered = false;
+
 	public function toggleMaintenanceMode($enable = false)
 	{
 		global $wp_filesystem;
@@ -19,15 +28,77 @@ class MaintenanceMode
 
 		$file = $wp_filesystem->abspath() . '.maintenance';
 		if ($enable) {
-			$content = $this->generateSmartMaintenanceContent();
+			self::$loopbackToken = bin2hex(random_bytes(32));
+			self::$bypassContent = $this->generateBypassContent();
 			$wp_filesystem->delete($file);
-			$wp_filesystem->put_contents($file, $content, FS_CHMOD_FILE);
+			$wp_filesystem->put_contents($file, $this->buildMaintenanceContent(), FS_CHMOD_FILE);
+			$this->registerUpgraderHooks();
 		} else {
+			self::$loopbackToken = null;
+			self::$bypassContent = null;
 			$wp_filesystem->delete($file);
 		}
 	}
 
-	private function generateSmartMaintenanceContent()
+	/**
+	 * @param mixed $value
+	 * @return mixed
+	 */
+	public function restoreMaintenanceContent($value)
+	{
+		global $wp_filesystem;
+
+		if (!is_string(self::$bypassContent) || self::$bypassContent === '' || !is_object($wp_filesystem)) {
+			return $value;
+		}
+
+		$file = $wp_filesystem->abspath() . '.maintenance';
+		if (!$wp_filesystem->exists($file)) {
+			return $value;
+		}
+
+		$current = $wp_filesystem->get_contents($file);
+		if (is_string($current) && strpos($current, self::$bypassContent) !== false) {
+			return $value;
+		}
+
+		$wp_filesystem->put_contents($file, $this->buildMaintenanceContent(), FS_CHMOD_FILE);
+
+		return $value;
+	}
+
+	protected function registerUpgraderHooks()
+	{
+		if (self::$upgraderHooksRegistered) {
+			return;
+		}
+
+		self::$upgraderHooksRegistered = true;
+		add_filter('upgrader_package_options', [$this, 'restoreMaintenanceContent'], PHP_INT_MAX);
+		add_filter('upgrader_pre_install', [$this, 'restoreMaintenanceContent'], PHP_INT_MAX);
+	}
+
+	/**
+	 * @return string
+	 */
+	protected function buildMaintenanceContent()
+	{
+		return '<?php' . "\n" . '$upgrading = ' . time() . ';' . "\n" . (string) self::$bypassContent;
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	public function getLoopbackHeaders()
+	{
+		if (!is_string(self::$loopbackToken)) {
+			return [];
+		}
+
+		return ['X-Umbrella-Maintenance' => self::$loopbackToken];
+	}
+
+	private function generateBypassContent()
 	{
 		$bearer = \WPUmbrella\Core\UmbrellaRequest::createFromGlobals()->getAuthorizationBearer();
 		$publicKey = wp_umbrella_get_public_key();
@@ -39,7 +110,7 @@ class MaintenanceMode
 			. ' signature=' . ($hasSignature ? 'on' : 'off')
 			. ' key_state=' . wp_umbrella_get_key_state());
 
-		$content = '<?php' . "\n" . '$upgrading = ' . time() . ';' . "\n";
+		$content = '';
 
 		if ($hasBearer) {
 			$content .= $this->bearerBypassSnippet(hash('sha256', $bearer));
@@ -47,6 +118,10 @@ class MaintenanceMode
 
 		if ($hasSignature) {
 			$content .= $this->signatureBypassSnippet($publicKey);
+		}
+
+		if (is_string(self::$loopbackToken)) {
+			$content .= $this->loopbackBypassSnippet(hash('sha256', self::$loopbackToken));
 		}
 
 		return $content;
@@ -68,6 +143,13 @@ class MaintenanceMode
 			. '    foreach ($wpum_cands as $wpum_c) {' . "\n"
 			. '        if (stripos($wpum_c, \'Bearer \') === 0 && hash_equals(\'' . $expected . '\', hash(\'sha256\', substr($wpum_c, 7)))) { $upgrading = 0; break; }' . "\n"
 			. '    }' . "\n"
+			. '}' . "\n";
+	}
+
+	protected function loopbackBypassSnippet($expected)
+	{
+		return 'if ($upgrading && function_exists(\'hash_equals\') && function_exists(\'hash\') && isset($_SERVER[\'HTTP_X_UMBRELLA_MAINTENANCE\']) && is_string($_SERVER[\'HTTP_X_UMBRELLA_MAINTENANCE\'])) {' . "\n"
+			. '    if (hash_equals(\'' . $expected . '\', hash(\'sha256\', $_SERVER[\'HTTP_X_UMBRELLA_MAINTENANCE\']))) { $upgrading = 0; }' . "\n"
 			. '}' . "\n";
 	}
 

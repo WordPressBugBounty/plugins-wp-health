@@ -1,6 +1,7 @@
 <?php
-
 namespace WPUmbrella\Actions\Hardening\AttackerIps;
+
+use WPUmbrella\Services\Hardening\TransientLock;
 
 defined('ABSPATH') or die('Cheatin&#8217; uh?');
 
@@ -10,11 +11,21 @@ class CommunityIpFilter
 
     const ORACLE_TIMEOUT_MS = 800;
 
+    const FETCH_LOCK = 'wp_umbrella_login_guard_filter_fetch';
+
+    const FETCH_LOCK_TTL = 30;
+
     protected $storage;
+
+    /**
+     * @var TransientLock
+     */
+    protected $lock;
 
     public function __construct(?FilterStorage $storage = null)
     {
         $this->storage = $storage !== null ? $storage : new FilterStorage();
+        $this->lock = new TransientLock();
     }
 
     public function isBlocked($ip)
@@ -47,7 +58,13 @@ class CommunityIpFilter
             return $blob;
         }
 
+        if (!$this->lock->acquire(self::FETCH_LOCK, self::FETCH_LOCK_TTL)) {
+            return $blob;
+        }
+
         $fresh = $this->fetchFilter();
+
+        $this->lock->release(self::FETCH_LOCK);
 
         if ($fresh === null) {
             $this->storage->markFailure();

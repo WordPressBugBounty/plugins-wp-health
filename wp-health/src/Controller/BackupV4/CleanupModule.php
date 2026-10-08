@@ -41,6 +41,11 @@ class CleanupModule extends AbstractController
                     continue;
                 }
 
+                if ($name === 'cloner.php' || $name === 'restore.php') {
+                    wp_umbrella_discard_file($file);
+                    continue;
+                }
+
                 @unlink($file);
             }
         }

@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Pairing;
 
+use WPUmbrella\Services\Tls\CertificateFallback;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -76,7 +78,9 @@ class PairingService
             return false;
         }
 
-        $this->clearSigningKeyOnProjectChange($projectId);
+        if (!$this->clearSigningKeyOnProjectChange($projectId)) {
+            return false;
+        }
 
         $persisted = $this->persistRequestToken($requestToken, $projectId);
         if (!$persisted) {
@@ -119,12 +123,20 @@ class PairingService
         $storedProjectId = isset($options['project_id']) ? $options['project_id'] : '';
 
         if (!$pairingSigningKey->isProjectChanged($storedProjectId, $projectId)) {
-            return;
+            return true;
+        }
+
+        if (!$pairingSigningKey->canClearSigningKey($options)) {
+            wp_umbrella_debug_log('pairing: project change refused');
+
+            return false;
         }
 
         $optionService->setOptions(
             $pairingSigningKey->clearWhenProjectChanged($options, $storedProjectId, $projectId)
         );
+
+        return true;
     }
 
     public function persistRequestToken($requestToken, $projectId = null)
@@ -152,11 +164,12 @@ class PairingService
                 'Content-Type' => 'application/json',
                 'Authorization' => sprintf('Bearer %s', $apiKey),
             ],
-            'body' => wp_json_encode([
+            'body' => wp_json_encode(array_merge([
                 'site_url' => site_url(),
                 'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
-            ]),
+            ], wp_umbrella_get_service('NetworkIdentity')->getData())),
             'sslverify' => wp_umbrella_should_verify_ssl(),
+            CertificateFallback::CONNECTION_ARG => true,
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
 
@@ -194,6 +207,7 @@ class PairingService
                 'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
             ]),
             'sslverify' => wp_umbrella_should_verify_ssl(),
+            CertificateFallback::CONNECTION_ARG => true,
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
 

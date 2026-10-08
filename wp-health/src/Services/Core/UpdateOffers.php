@@ -8,6 +8,11 @@ namespace WPUmbrella\Services\Core;
  * ones marked `upgrade` are real updates: `latest` is the version the site
  * already runs, and `autoupdate` describes a background minor update, which
  * wp-admin leaves out of a user-requested upgrade too.
+ *
+ * Asked for a given version, the `autoupdate` entries do count: they are how
+ * wordpress.org lists the last release of every branch behind the newest one,
+ * which is what lets a site on 6.8 take the security release of its branch
+ * without being moved to the next major.
  */
 class UpdateOffers
 {
@@ -24,19 +29,30 @@ class UpdateOffers
      * dropped it, and both look exactly like a site that is up to date. Asking
      * WordPress again is the only way to tell them apart, and it is only worth
      * the round trip once nothing was found.
+     *
+     * @param string|null $target The version to move to, the highest `upgrade`
+     *                            offer when null.
      */
-    public function resolve()
+    public function resolve($target = null)
     {
-        $offer = $this->find($this->load());
+        $offer = $this->pick($target);
 
         if ($offer !== null || !function_exists('wp_version_check')) {
             return $offer;
         }
 
-        wp_umbrella_debug_log("Core update: no upgrade offer, refreshing the transient");
+        wp_umbrella_debug_log("Core update: no offer found, refreshing the transient");
         wp_version_check([], true);
 
-        return $this->find($this->load());
+        return $this->pick($target);
+    }
+
+    /**
+     * Every version the site can move up to, keyed by version.
+     */
+    public function available()
+    {
+        return $this->above($this->load(), $this->installedVersion());
     }
 
     /**
@@ -59,6 +75,24 @@ class UpdateOffers
         }
 
         return $responses;
+    }
+
+    protected function pick($target)
+    {
+        $updates = $this->load();
+
+        if ($target === null) {
+            return $this->find($updates);
+        }
+
+        $available = $this->above($updates, $this->installedVersion());
+
+        return isset($available[$target]) ? $available[$target] : null;
+    }
+
+    protected function installedVersion()
+    {
+        return wp_umbrella_get_service('WordPressProvider')->getWordPressVersion();
     }
 
     protected function load()
@@ -87,5 +121,34 @@ class UpdateOffers
         }
 
         return $found;
+    }
+
+    /**
+     * One offer per version strictly above the installed one, so a stale
+     * transient can never walk the site back to an older release.
+     *
+     * wordpress.org lists the localized `upgrade` ahead of the en_US one and the
+     * `upgrade` ahead of the `autoupdate` entries, so the first offer met for a
+     * version is the one to keep.
+     */
+    protected function above($updates, $installed)
+    {
+        $available = [];
+
+        foreach ($updates as $offer) {
+            if (!isset($offer->response, $offer->current) || !in_array($offer->response, ['upgrade', 'autoupdate'], true)) {
+                continue;
+            }
+
+            $version = (string) $offer->current;
+
+            if (isset($available[$version]) || !version_compare($version, $installed, '>')) {
+                continue;
+            }
+
+            $available[$version] = $offer;
+        }
+
+        return $available;
     }
 }

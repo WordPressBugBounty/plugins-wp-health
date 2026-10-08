@@ -76,7 +76,7 @@ class DataSingle extends AbstractController
         $args = [
             'timeout' => 45,
             'cookies' => [],
-            'sslverify' => wp_umbrella_should_verify_ssl(),
+            'sslverify' => apply_filters('https_local_ssl_verify', false),
             'body' => [
                 'action' => self::NONCE_ACTION,
                 'nonce' => $nonce,

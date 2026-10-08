@@ -58,6 +58,12 @@ class PairingSigningKey
             return $options;
         }
 
+        if (!wp_umbrella_is_api_channel_verified()) {
+            wp_umbrella_debug_log($context . ': signing key not stored');
+
+            return $options;
+        }
+
         $existingPublicKey = isset($options['public_key']) ? $options['public_key'] : '';
         $hasExistingPublicKey = is_string($existingPublicKey) && $existingPublicKey !== '';
 
@@ -79,6 +85,20 @@ class PairingSigningKey
 
     /**
      * @param array $options
+     *
+     * @return bool
+     */
+    public function canClearSigningKey($options)
+    {
+        $keyState = isset($options['key_state']) ? $options['key_state'] : '';
+        $publicKey = isset($options['public_key']) ? $options['public_key'] : '';
+        $signatureOnly = $keyState === 'new' && is_string($publicKey) && $publicKey !== '';
+
+        return !$signatureOnly || wp_umbrella_is_api_channel_verified();
+    }
+
+    /**
+     * @param array $options
      * @param mixed $storedProjectId
      * @param mixed $projectId
      *
@@ -90,19 +110,24 @@ class PairingSigningKey
             return $options;
         }
 
+        if (!$this->canClearSigningKey($options)) {
+            return $options;
+        }
+
         return $this->clearSigningKey($options);
     }
 
     /**
-     * A project that does not exist yet has no key to be reached with, so the
-     * site starts this one over from nothing.
-     *
      * @param array $options
      *
      * @return array
      */
     public function clearForNewProject($options)
     {
+        if (!$this->canClearSigningKey($options)) {
+            return $options;
+        }
+
         return $this->clearSigningKey($options);
     }
 

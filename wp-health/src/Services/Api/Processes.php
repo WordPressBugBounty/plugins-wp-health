@@ -31,6 +31,17 @@ class Processes extends BaseClient
      *        "old_version" => string,
      * 		  "version" => string,
      *     ]
+     * ] |
+     * [
+     *    "type" => "translation"
+     *    "action" => "update",
+     *    "values => [
+     *        "type" => string,
+     *        "slug" => string,
+     *        "language" => string,
+     *        "version" => string,
+     *        "updated" => string,
+     *    ]
      * ]
      *
      * @return array

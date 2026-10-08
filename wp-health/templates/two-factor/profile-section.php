@@ -1,7 +1,5 @@
 <?php
 
-use WPUmbrella\Actions\TwoFactor\ProfileSection;
-
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -50,12 +48,19 @@ if (!defined('ABSPATH')) {
 			<tr>
 				<th scope="row"><?php echo esc_html__('Recovery codes', 'wp-health'); ?></th>
 				<td>
-					<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-						<?php wp_nonce_field(ProfileSection::NONCE); ?>
-						<input type="hidden" name="action" value="<?php echo esc_attr(ProfileSection::ACTION_REGENERATE); ?>" />
-						<?php submit_button(esc_html__('Generate a new set', 'wp-health'), 'secondary', 'submit', false); ?>
-						<p class="description"><?php echo esc_html__('Generating a new set invalidates every code you have now.', 'wp-health'); ?></p>
-					</form>
+					<?php
+                        // The form itself lives in the footer, outside the
+                        // profile form. Only the button is here, tied to it by
+                        // the HTML5 form attribute.
+                        submit_button(
+                            esc_html__('Generate a new set', 'wp-health'),
+                            'secondary',
+                            'wp-umbrella-2fa-regenerate-submit',
+                            false,
+                            ['form' => $formIdRegenerate]
+                        );
+					?>
+					<p class="description"><?php echo esc_html__('Generating a new set invalidates every code you have now.', 'wp-health'); ?></p>
 				</td>
 			</tr>
 
@@ -63,11 +68,15 @@ if (!defined('ABSPATH')) {
 				<tr>
 					<th scope="row"><?php echo esc_html__('Turn off', 'wp-health'); ?></th>
 					<td>
-						<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
-							<?php wp_nonce_field(ProfileSection::NONCE); ?>
-							<input type="hidden" name="action" value="<?php echo esc_attr(ProfileSection::ACTION_DISABLE); ?>" />
-							<?php submit_button(esc_html__('Turn off two-factor authentication', 'wp-health'), 'delete', 'submit', false); ?>
-						</form>
+						<?php
+                            submit_button(
+                                esc_html__('Turn off two-factor authentication', 'wp-health'),
+                                'delete',
+                                'wp-umbrella-2fa-disable-submit',
+                                false,
+                                ['form' => $formIdDisable]
+                            );
+						?>
 					</td>
 				</tr>
 			<?php endif; ?>

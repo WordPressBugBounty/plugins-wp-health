@@ -57,6 +57,7 @@ class UmbrellaInformations
             'options' => wp_umbrella_get_options(),
             'memory_limit' => wp_umbrella_get_service('WordPressProvider')->getMemoryLimitBytes(),
             'tls_probe' => $this->getTlsProbeState(),
+            'tls_fallback' => $this->getTlsFallbackState(),
         ];
     }
 
@@ -69,5 +70,16 @@ class UmbrellaInformations
         }
 
         return $probe->getState();
+    }
+
+    protected function getTlsFallbackState()
+    {
+        $fallback = wp_umbrella_get_service('CertificateFallback');
+
+        if (!$fallback) {
+            return null;
+        }
+
+        return $fallback->getState();
     }
 }

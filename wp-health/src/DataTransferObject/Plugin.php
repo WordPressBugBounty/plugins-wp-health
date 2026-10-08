@@ -7,6 +7,7 @@ class Plugin
     public $name;
     public $slug;
     public $is_active;
+    public $activation_status;
     public $key;
     public $version;
     public $require_wp_version;
@@ -25,6 +26,7 @@ class Plugin
             'changelog' => $this->changelog,
             'changelog_truncated' => $this->changelog_truncated,
             'is_active' => $this->is_active,
+            'activation_status' => $this->activation_status,
             'key' => $this->key,
             'version' => $this->version,
             'require_wp_version' => $this->require_wp_version,

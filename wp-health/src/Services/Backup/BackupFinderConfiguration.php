@@ -52,7 +52,6 @@ class BackupFinderConfiguration
 
             case Host::PANTHEON:
                 // Pantheon: codebase is read-only, uploads is the only writable path.
-                // The module is then reached through the mu-plugin/routing strategies (included by WP).
                 $source = untrailingslashit(WP_CONTENT_DIR) . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR;
                 break;
         }
@@ -69,9 +68,6 @@ class BackupFinderConfiguration
     }
 
     /**
-     * Glob patterns matching every scratch directory the backup module can create,
-     * whatever base it fell back to.
-     *
      * @return string[]
      */
     public function getScratchDirectoryPatterns()
@@ -88,8 +84,6 @@ class BackupFinderConfiguration
     }
 
     /**
-     * The bases a module can live under, trailing separator included.
-     *
      * @return string[]
      */
     public function getModuleRoots()

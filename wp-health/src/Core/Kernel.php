@@ -11,9 +11,13 @@ use WPUmbrella\Core\Hooks\ExecuteHooksFrontend;
 use WPUmbrella\Core\Controllers;
 use WPUmbrella\Core\UmbrellaRequest;
 use WPUmbrella\Services\HostResolver;
+use WPUmbrella\Services\Loopback\SignedLoopback;
+use WPUmbrella\Services\Loopback\LoopbackToken;
 use WPUmbrella\Helpers\Host;
 use WPUmbrella\Helpers\Controller as ControllerHelper;
 use WPUmbrella\Services\Provider\Compatibility\DiviUpdater;
+use WPUmbrella\Services\Provider\Compatibility\PremiumUpdateDetector;
+use WPUmbrella\Services\Provider\Compatibility\SeedProdUpdater;
 use WPUmbrella\Actions\TwoFactor\ActivityLogEvents as TwoFactorActivityLogEvents;
 use WPUmbrella\Services\TwoFactor\TwoFactorPolicy;
 
@@ -450,9 +454,7 @@ abstract class Kernel
 
     public static function execute($data)
     {
-        if (!class_exists('ActionScheduler')) {
-            require_once WP_UMBRELLA_DIR . '/thirds/action-scheduler/action-scheduler.php';
-        }
+        require_once WP_UMBRELLA_DIR . '/thirds/action-scheduler/action-scheduler.php';
 
         self::setSettings($data);
         self::buildContainer();
@@ -499,6 +501,7 @@ abstract class Kernel
         if (self::$universalProcess['load'] || self::$apiLoad) {
             add_action('after_setup_theme', function () {
                 (new DiviUpdater())->register();
+                (new SeedProdUpdater())->register();
             }, PHP_INT_MAX);
         }
 
@@ -541,6 +544,7 @@ abstract class Kernel
         add_action('wp_ajax_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
         add_action('wp_ajax_nopriv_wp_umbrella_update_admin_request', [__CLASS__, 'updateAdminRequest']);
 
+        add_action('init', [__CLASS__, 'maybePrepareSnapshotContext'], PHP_INT_MAX);
         add_action('init', [__CLASS__, 'maybePrepareForceCheckContext'], PHP_INT_MAX);
 
         add_action('plugins_loaded', [__CLASS__, 'handleHooksPlugin'], 10);
@@ -565,11 +569,26 @@ abstract class Kernel
         ], $signature, $timestamp);
     }
 
+    /**
+     * @param string $kind
+     * @return array|null
+     */
+    protected static function prepareSignedLoopback($kind)
+    {
+        try {
+            return wp_umbrella_get_service('SignedLoopback')->prepare($kind);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public static function snapshot()
     {
         if (!self::snapshotRequestIsSigned()) {
             return;
         }
+
+        self::prepareSignedLoopback(SignedLoopback::SNAPSHOT);
 
         $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
         if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_snapshot_data')) {
@@ -580,10 +599,45 @@ abstract class Kernel
         wp_umbrella_get_service('RequestSettings')->setupAdmin();
 
         wp_update_plugins([]);
+        (new PremiumUpdateDetector())->cacheAdminPluginUpdates();
         wp_umbrella_get_service('ManagePlugin')->clearUpdates();
 
         wp_umbrella_get_service('SessionStore')->removeUmbrellaSessions();
         return;
+    }
+
+    /**
+     * Premium updaters that hook in on admin_init may check the current user
+     * there, so it is set before core fires admin_init.
+     */
+    public static function maybePrepareSnapshotContext()
+    {
+        if (!defined('DOING_AJAX') || !DOING_AJAX) {
+            return;
+        }
+
+        $action = isset($_POST['action']) ? $_POST['action'] : '';
+        if ($action !== 'wp_umbrella_snapshot_data') {
+            return;
+        }
+
+        if (!self::snapshotRequestIsSigned()) {
+            return;
+        }
+
+        $loopback = self::prepareSignedLoopback(SignedLoopback::SNAPSHOT);
+
+        if (!is_array($loopback) || $loopback['token'] !== LoopbackToken::CONSUMED || !empty($loopback['stripped'])) {
+            return;
+        }
+
+        wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
+        wp_umbrella_get_service('RequestSettings')->setupAdminUser();
+
+        $nonce = isset($_POST['nonce']) ? $_POST['nonce'] : '';
+        if (!$nonce || !wp_verify_nonce($nonce, 'wp_umbrella_snapshot_data')) {
+            wp_set_current_user(0);
+        }
     }
 
     public static function maybePrepareForceCheckContext()
@@ -604,6 +658,8 @@ abstract class Kernel
         if (!self::adminRequestIsSigned()) {
             return;
         }
+
+        self::prepareSignedLoopback(SignedLoopback::UPDATE);
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdminUser();
@@ -640,16 +696,60 @@ abstract class Kernel
         return isset($_POST['plugin']) ? (string) wp_unslash($_POST['plugin']) : '';
     }
 
+    protected static function adminRequestLockToken()
+    {
+        return isset($_POST['lock_token']) && is_string($_POST['lock_token']) ? (string) wp_unslash($_POST['lock_token']) : '';
+    }
+
+    protected static function adminRequestOperation()
+    {
+        return isset($_POST['operation']) && is_string($_POST['operation']) ? (string) wp_unslash($_POST['operation']) : '';
+    }
+
     protected static function adminRequestIsSigned()
     {
         $timestamp = isset($_POST['timestamp']) ? $_POST['timestamp'] : '';
         $signature = isset($_POST['signature']) ? $_POST['signature'] : '';
 
-        return wp_umbrella_verify_admin_request([
+        $fields = [
             'action' => 'wp_umbrella_update_admin_request',
             'plugin' => self::adminRequestPlugin(),
             'timestamp' => (string) $timestamp,
-        ], $signature, $timestamp);
+        ];
+
+        if (self::adminRequestLockToken() !== '' || self::adminRequestOperation() !== '') {
+            $fields['lock_token'] = self::adminRequestLockToken();
+            $fields['operation'] = self::adminRequestOperation();
+        }
+
+        return wp_umbrella_verify_admin_request($fields, $signature, $timestamp);
+    }
+
+    /**
+     * @param string $plugin
+     * @param mixed $result
+     * @return array
+     */
+    protected static function delegationResult($plugin, $result)
+    {
+        if (!is_array($result)) {
+            return ['status' => 'error', 'code' => 'unknown_error', 'data' => []];
+        }
+
+        $data = [];
+        if (isset($result['data']) && is_array($result['data'])) {
+            foreach ($result['data'] as $key => $value) {
+                if (is_string($key) && strpos($key, $plugin) === 0 && (is_scalar($value) || $value === null)) {
+                    $data[$key] = $value;
+                }
+            }
+        }
+
+        return [
+            'status' => isset($result['status']) && is_string($result['status']) ? $result['status'] : 'error',
+            'code' => isset($result['code']) && is_string($result['code']) ? $result['code'] : 'unknown_error',
+            'data' => $data,
+        ];
     }
 
     public static function updateAdminRequest()
@@ -666,6 +766,8 @@ abstract class Kernel
                 ]
             );
         }
+
+        self::prepareSignedLoopback(SignedLoopback::UPDATE);
 
         wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
         wp_umbrella_get_service('RequestSettings')->setupAdminUser();
@@ -703,6 +805,25 @@ abstract class Kernel
 
         $plugins = [$plugin];
 
+        $lockToken = self::adminRequestLockToken();
+        $operation = self::adminRequestOperation();
+        $delegated = $lockToken !== '' && $operation !== '';
+        $lock = wp_umbrella_get_service('UpdateLock');
+        $lockSlug = dirname($plugin);
+
+        if ($delegated) {
+            if (!$lock->claimDelegation($lockSlug, $lockToken, $operation)) {
+                wp_send_json([
+                    'status' => 'in_progress',
+                    'code' => 'update_in_progress',
+                    'message' => sprintf('An update is already in progress for plugin %s', $lockSlug),
+                    'data' => '',
+                ]);
+            }
+
+            $lock->completeDelegationOnShutdown($lockSlug, $lockToken, $operation);
+        }
+
         wp_umbrella_debug_log(sprintf(
             "admin-ajax fallback for '%s': logged_in=%s can_update_plugins=%s pagenow=%s force_check=%s",
             $plugin,
@@ -724,6 +845,10 @@ abstract class Kernel
 
             wp_umbrella_debug_log("admin-ajax fallback for '{$plugin}' result: " . (isset($result['code']) ? $result['code'] : 'unknown'));
 
+            if ($delegated) {
+                $lock->completeDelegation($lockSlug, $lockToken, $operation, self::delegationResult($plugin, $result));
+            }
+
             if (is_array($result)) {
                 $childTrace = wp_umbrella_get_service('RequestTrace')->getTrace();
                 if (!empty($childTrace)) {
@@ -735,6 +860,10 @@ abstract class Kernel
 
             wp_send_json($result);
         } catch (\Exception $e) {
+            if ($delegated) {
+                $lock->completeDelegation($lockSlug, $lockToken, $operation, self::delegationResult($plugin, null));
+            }
+
             wp_send_json([
                 'code' => 'unknown_error',
                 'message' => $e->getMessage(),

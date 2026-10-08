@@ -24,6 +24,7 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\StackCache",
             "\WPUmbrella\Thirds\Cache\SiteGround",
             "\WPUmbrella\Thirds\Cache\RedisObjectCache",
+            "\WPUmbrella\Thirds\Cache\FlyingPress",
         ]);
     }
 }

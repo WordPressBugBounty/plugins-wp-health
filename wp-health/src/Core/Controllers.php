@@ -91,6 +91,27 @@ abstract class Controllers
                     ],
                 ]
             ],
+            '/v1/release-update-lock' => [
+                'route' => '/release-update-lock',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\ReleaseUpdateLock::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\ReleaseUpdateLock::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
             '/v1/cleanup-theme-safe-update' => [
                 'route' => '/cleanup-theme-safe-update',
                 'methods' => [
@@ -522,6 +543,19 @@ abstract class Controllers
                     [
                         'method' => 'GET',
                         'class' => \WPUmbrella\Controller\Plugin\DataSingle::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/network' => [
+                'route' => '/network',
+                'methods' => [
+                    [
+                        'method' => 'GET',
+                        'class' => \WPUmbrella\Controller\Network\Data::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
@@ -987,6 +1021,19 @@ abstract class Controllers
                     [
                         'method' => 'POST',
                         'class' => \WPUmbrella\Controller\Core\Update::class,
+                        'options' => [
+                            'prevent_active' => true,
+                            'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                        ]
+                    ],
+                ]
+            ],
+            '/v1/update-translations' => [
+                'route' => '/update-translations',
+                'methods' => [
+                    [
+                        'method' => 'POST',
+                        'class' => \WPUmbrella\Controller\Translation\Update::class,
                         'options' => [
                             'prevent_active' => true,
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,

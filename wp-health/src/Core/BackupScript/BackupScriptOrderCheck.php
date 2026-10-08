@@ -4,14 +4,6 @@ namespace WPUmbrella\Core\BackupScript;
 
 /**
  * Proves the manifest order is loadable.
- *
- * The compiled output is one PHP file, so a class whose parent, interface or
- * trait is declared further down fatals the moment the site loads it. This is
- * the check that makes the manifest order safe to edit: it is what the
- * directory scan and its partial sort used to approximate, and never proved.
- *
- * A developer tool, called by `bin/backup-script.php` and by the test suite.
- * Nothing on a customer site loads it.
  */
 class BackupScriptOrderCheck
 {
@@ -40,10 +32,6 @@ class BackupScriptOrderCheck
     }
 
     /**
-     * The check itself, on any order. Kept separate from the manifest so a test
-     * can hand it a deliberately broken order and watch it bite: a guard that
-     * has only ever been seen returning an empty array is not a proven guard.
-     *
      * @param string $sourceDirectory
      * @param array $files
      * @return array
@@ -146,11 +134,6 @@ class BackupScriptOrderCheck
 
         foreach ($lists as $list) {
             foreach (explode(',', $list) as $symbol) {
-                // The capture runs up to the opening brace, so the last symbol
-                // of an implements list carries the line break with it. Without
-                // \r\n here every interface came back one byte too long, never
-                // matched a declaration, and the check was silently blind to
-                // every implements clause.
                 $symbols[] = trim($symbol, " \t\r\n\\{");
             }
         }

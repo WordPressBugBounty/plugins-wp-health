@@ -8,11 +8,6 @@ class Plugins
 {
     const NAME_SERVICE = 'PluginsProvider';
 
-    /**
-     * A changelog is the whole history of a plugin, not the pending release.
-     * WooCommerce Subscriptions alone answers with 319 KB, which then crosses
-     * the admin-ajax loopback, our API and the dashboard to render one modal.
-     */
     const CHANGELOG_MAX_LENGTH = 30000;
 
     protected function checkSecupressUpdates($transient)
@@ -83,16 +78,16 @@ class Plugins
             }
 
             $data[$i]['active'] = is_plugin_active($key);
+            $data[$i]['activation_status'] = $this->getActivationStatus($key);
             ++$i;
         }
 
         $current = wp_umbrella_get_service('WordPressContext')->getTransient('update_plugins');
 
-        // Enrich with premium plugin updates (Divi, Elementor Pro, YITH, etc.)
         $current = (new PremiumUpdateDetector())->enrich($current, 'plugins');
 
-        // Really Simple SSL Pro guards its updater behind admin checks.
-        // Manually check for updates when running in our non-admin context.
+        $current = $this->addAdminContextUpdates($current, $data);
+
         $current = $this->checkReallySimpleSSLProUpdates($current);
 
         if (!empty($current->response)) {
@@ -195,6 +190,38 @@ class Plugins
     }
 
     /**
+     * @param object $transient
+     * @param array $data
+     * @return object
+     */
+    protected function addAdminContextUpdates($transient, $data)
+    {
+        $installedVersions = array_column($data, 'Version', 'key');
+
+        foreach ((new PremiumUpdateDetector())->getAdminPluginUpdates() as $pluginPath => $entry) {
+            if (isset($transient->response[$pluginPath]) || !isset($installedVersions[$pluginPath])) {
+                continue;
+            }
+
+            if (!$this->isUsableUpdateEntry($entry) || !isset($entry->new_version)) {
+                continue;
+            }
+
+            if (!$this->isVersionString($entry->new_version) || !$this->isVersionString($installedVersions[$pluginPath])) {
+                continue;
+            }
+
+            if (version_compare($entry->new_version, $installedVersions[$pluginPath], '<=')) {
+                continue;
+            }
+
+            $transient->response[$pluginPath] = $entry;
+        }
+
+        return $transient;
+    }
+
+    /**
      * An updater that only loads its classes in the admin leaves an incomplete
      * object behind when the transient is unserialized outside of it. Reading a
      * property on one raises a warning, writing to one is fatal, so an entry
@@ -271,6 +298,7 @@ class Plugins
 
         $data['slug'] = $slugExplode[0];
         $data['active'] = is_plugin_active($plugin);
+        $data['activation_status'] = $this->getActivationStatus($plugin);
 
         $needUpdates = [];
         $needUpdates = get_plugin_updates();
@@ -314,6 +342,7 @@ class Plugins
         $plugin->name = $this->readField($data, 'Name');
         $plugin->slug = $this->readField($data, 'slug');
         $plugin->is_active = $this->readField($data, 'active');
+        $plugin->activation_status = $this->readField($data, 'activation_status');
         $plugin->key = $this->readField($data, 'key');
         $plugin->version = $this->readField($data, 'Version');
         $plugin->require_wp_version = $this->readField($data, 'RequiresWP');
@@ -326,9 +355,76 @@ class Plugins
         }
 
         $plugin->changelog_truncated = $this->readField($data, 'changelog_truncated');
-        $plugin->need_update = $this->hydrateUpdate($this->readField($data, 'update'));
+        $plugin->need_update = $this->hydrateUpdate($this->readNewerUpdate($data));
 
         return $plugin;
+    }
+
+    /**
+     * @param array $data
+     * @return object|false
+     */
+    protected function readNewerUpdate(array $data)
+    {
+        $update = $this->readField($data, 'update');
+        if (!$this->isUsableUpdateEntry($update)) {
+            return false;
+        }
+
+        $newVersion = isset($update->new_version) ? $update->new_version : null;
+        if (!$this->isNewerVersion($newVersion, $this->readField($data, 'Version'))) {
+            return false;
+        }
+
+        return $update;
+    }
+
+    /**
+     * @param mixed $newVersion
+     * @param mixed $installedVersion
+     * @return bool
+     */
+    protected function isNewerVersion($newVersion, $installedVersion)
+    {
+        if (is_int($newVersion) || is_float($newVersion)) {
+            $newVersion = (string) $newVersion;
+        }
+
+        if (!$this->isVersionString($newVersion)) {
+            return false;
+        }
+
+        if (!$this->isVersionString($installedVersion)) {
+            return true;
+        }
+
+        if (!$this->isNumericVersion($newVersion) || !$this->isNumericVersion($installedVersion)) {
+            return $newVersion !== $installedVersion;
+        }
+
+        return version_compare(trim($newVersion), trim($installedVersion), '>');
+    }
+
+    /**
+     * @param string $version
+     * @return bool
+     */
+    protected function isNumericVersion($version)
+    {
+        return preg_match('/^\d+(\.\d+)*$/', trim($version)) === 1;
+    }
+
+    /**
+     * @param string $key
+     * @return string
+     */
+    protected function getActivationStatus($key)
+    {
+        if (is_multisite() && is_plugin_active_for_network($key)) {
+            return 'network_active';
+        }
+
+        return is_plugin_active($key) ? 'active' : 'inactive';
     }
 
     /**
@@ -351,7 +447,7 @@ class Plugins
             return false;
         }
 
-        return [
+        $data = [
             'id' => \property_exists($update, 'id') ? $update->id : '',
             'slug' => \property_exists($update, 'slug') ? $update->slug : '',
             'plugin' => \property_exists($update, 'plugin') ? $update->plugin : '',
@@ -366,6 +462,12 @@ class Plugins
             'is_blocked' => \property_exists($update, 'is_blocked') ? (bool) $update->is_blocked : false,
             'blocked_reason' => \property_exists($update, 'blocked_reason') ? $update->blocked_reason : '',
         ];
+
+        if (\property_exists($update, 'wp_umbrella_normalized') && \is_array($update->wp_umbrella_normalized)) {
+            $data['normalized'] = $update->wp_umbrella_normalized;
+        }
+
+        return $data;
     }
 
     /**

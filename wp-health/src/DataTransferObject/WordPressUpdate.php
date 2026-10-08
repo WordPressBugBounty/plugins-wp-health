@@ -26,6 +26,7 @@ class WordPressUpdate
     public $web_server;
     public $base_directory;
     public $latest;
+    public $available_versions;
     public $wp_content_directory;
     public $wp_plugin_directory;
 }

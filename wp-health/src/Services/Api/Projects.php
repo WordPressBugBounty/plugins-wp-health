@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Api;
 
+use WPUmbrella\Services\Tls\CertificateFallback;
+
 class Projects extends BaseClient
 {
     /**
@@ -18,6 +20,7 @@ class Projects extends BaseClient
                 'headers' => $this->getHeadersV2($token),
                 'body' => json_encode($data),
                 'sslverify' => wp_umbrella_should_verify_ssl(),
+                CertificateFallback::CONNECTION_ARG => true,
                 'timeout' => 50,
             ]));
         } catch (\Exception $e) {
@@ -39,6 +42,7 @@ class Projects extends BaseClient
                 'headers' => $this->getHeadersV2($token),
                 'body' => json_encode($data),
                 'sslverify' => wp_umbrella_should_verify_ssl(),
+                CertificateFallback::CONNECTION_ARG => true,
                 'timeout' => 50,
             ]));
         } catch (\Exception $e) {

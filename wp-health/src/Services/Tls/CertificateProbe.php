@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Tls;
 
+use WPUmbrella\Actions\Tls\ApiCertificateRetry;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -28,6 +30,10 @@ class CertificateProbe
 
         update_option(self::OPTION_KEY, $result, false);
 
+        if ($result['verdict'] === 'verified') {
+            $this->clearFallback();
+        }
+
         return $result;
     }
 
@@ -43,6 +49,17 @@ class CertificateProbe
         }
 
         return $state;
+    }
+
+    protected function clearFallback()
+    {
+        $fallback = wp_umbrella_get_service('CertificateFallback');
+
+        if (!$fallback) {
+            return;
+        }
+
+        $fallback->clear();
     }
 
     /**
@@ -81,13 +98,18 @@ class CertificateProbe
     {
         $url = WP_UMBRELLA_NEW_API_URL . self::ENDPOINT_PATH;
 
+        ApiCertificateRetry::consumeLastRung();
+
         $start = microtime(true);
         $response = wp_remote_get($url, $this->checkedRequestArgs());
         $durationMs = (int) round((microtime(true) - $start) * 1000);
 
+        $rung = ApiCertificateRetry::consumeLastRung();
+
         if (!is_wp_error($response)) {
             return $this->buildResult([
                 'verdict' => 'verified',
+                'verified_with' => $rung,
                 'http_code' => (int) wp_remote_retrieve_response_code($response),
                 'duration_ms' => $durationMs,
                 'clock_skew_seconds' => $this->clockSkew($response),
@@ -210,15 +232,34 @@ class CertificateProbe
             'error' => null,
             'error_kind' => null,
             'clock_skew_seconds' => null,
+            'verified_with' => null,
         ];
+
+        $fallback = $this->fallbackState();
 
         $context = [
             'checked_at' => gmdate('c'),
             'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : null,
             'ssl_backend' => $this->sslBackend(),
+            'fallback_active' => $fallback !== null,
+            'fallback_recorded_at' => $fallback !== null && !empty($fallback['recorded_at']) ? (string) $fallback['recorded_at'] : null,
         ];
 
         return array_merge($defaults, $result, $context);
+    }
+
+    /**
+     * @return array|null
+     */
+    protected function fallbackState()
+    {
+        $fallback = wp_umbrella_get_service('CertificateFallback');
+
+        if (!$fallback) {
+            return null;
+        }
+
+        return $fallback->getState();
     }
 
     /**

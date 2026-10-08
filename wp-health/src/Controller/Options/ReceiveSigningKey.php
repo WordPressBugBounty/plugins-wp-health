@@ -24,9 +24,12 @@ class ReceiveSigningKey extends AbstractController
         $currentState = isset($options['key_state']) ? $options['key_state'] : null;
         $existingPublicKey = isset($options['public_key']) ? $options['public_key'] : '';
 
-        $replacesExistingKey = is_string($existingPublicKey)
-            && $existingPublicKey !== ''
-            && $existingPublicKey !== $signingKey['public_key'];
+        $hasExistingPublicKey = is_string($existingPublicKey) && $existingPublicKey !== '';
+        $replacesExistingKey = $hasExistingPublicKey && $existingPublicKey !== $signingKey['public_key'];
+
+        if (!$hasExistingPublicKey && !wp_umbrella_is_api_channel_verified()) {
+            return $this->returnResponse(['success' => false, 'code' => 'unverified_channel'], 409);
+        }
 
         if ($replacesExistingKey && ($currentState === 'new' || !$this->isSignedByStoredKey())) {
             return $this->returnResponse(['success' => false, 'code' => 'key_locked'], 409);

@@ -38,7 +38,7 @@ class Register
             'headers' => [
                 'Content-Type' => 'application/json',
             ],
-            'body' => json_encode([
+            'body' => json_encode(array_merge([
                 'email' => $data['email'],
                 'password' => $data['password'],
                 'firstname' => $data['firstname'],
@@ -51,7 +51,7 @@ class Register
                 'secret_token' => $secretToken,
                 'project_name' => get_bloginfo('name'),
                 'terms' => true,
-            ]),
+            ], wp_umbrella_get_service('NetworkIdentity')->getData())),
             'timeout' => 50,
         ]);
 

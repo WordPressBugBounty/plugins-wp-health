@@ -26,6 +26,13 @@ class AutoInstallByConstant implements ExecuteHooks, ActivationHook
 
         $optionService = wp_umbrella_get_service('Option');
 
+        if (!wp_umbrella_get_service('PairingSigningKey')->canClearSigningKey($optionService->getOptions(['secure' => false]))) {
+            wp_umbrella_debug_log('auto install: project change refused');
+            set_transient(self::RETRY_LOCK, 1, HOUR_IN_SECONDS);
+
+            return;
+        }
+
         $optionService->setOptions([
             'allowed' => true,
             'api_key' => WP_UMBRELLA_API_KEY,

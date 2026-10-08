@@ -35,10 +35,12 @@ class Update extends AbstractController
 
             $requireBackup = isset($params['require_backup']) ? (bool) $params['require_backup'] : true;
             $backupDone = isset($params['backup_done']) ? (bool) $params['backup_done'] : false;
+            $lockToken = isset($params['lock_token']) && is_string($params['lock_token']) ? $params['lock_token'] : null;
 
             $data = $manageTheme->update($theme, [
                 'require_backup' => $requireBackup,
                 'backup_done' => $backupDone,
+                'lock_token' => $lockToken,
             ]);
 
             return $this->returnResponse($data);

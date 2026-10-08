@@ -8,6 +8,7 @@ use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
 use WPUmbrella\Services\Hardening\TransientCounter;
+use WPUmbrella\Services\Hardening\TransientLock;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -48,9 +49,15 @@ class LoginRateLimit implements ExecuteHooks
      */
     protected $counter;
 
+    /**
+     * @var TransientLock
+     */
+    protected $lock;
+
     public function __construct()
     {
         $this->counter = new TransientCounter();
+        $this->lock = new TransientLock();
     }
 
     public function hooks()
@@ -96,29 +103,39 @@ class LoginRateLimit implements ExecuteHooks
             return;
         }
 
-        $this->block($ip);
+        if (!$this->block($ip)) {
+            return;
+        }
+
         $this->recordBlockEvent($username);
     }
 
+    /**
+     * @return bool
+     */
     protected function block($ip)
     {
         $strikes = $this->getStrikes($ip) + 1;
 
-        set_transient($this->strikesKey($ip), $strikes, self::STRIKES_TTL);
-
         $durations = self::BLOCK_DURATIONS;
         $duration = $durations[min($strikes, count($durations)) - 1];
 
-        set_transient($this->blockKey($ip), 1, $duration);
+        if (!$this->lock->acquire($this->blockKey($ip), $duration)) {
+            return false;
+        }
+
+        set_transient($this->strikesKey($ip), $strikes, self::STRIKES_TTL);
 
         $this->rememberBlock($ip, $duration);
 
         delete_transient($this->key($ip));
+
+        return true;
     }
 
     protected function isBlocked($ip)
     {
-        return get_transient($this->blockKey($ip)) !== false;
+        return $this->lock->isHeld($this->blockKey($ip));
     }
 
     protected function deny($username)

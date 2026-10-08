@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: v2.27.4
+Stable tag: v2.28.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -82,6 +82,24 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 
 == Changelog ==
 
+= 2.28.0 (10-06-2026) =
+- New: WP Umbrella can now detect and install your translation updates, for every language or for one language at a time.
+- New: a WordPress core update can now install the security release of your current branch instead of the latest major version.
+- New: the WP Umbrella onboarding and settings screens are now available in French.
+- New: WP Umbrella now recognizes every site of your WordPress Multisite network.
+- Improved: backups send your files much faster.
+- Improved: the FlyingPress cache is now cleared after an update.
+- Fixed: available updates of some premium plugins, such as PixelYourSite Pro and SeedProd Pro, were not shown in your dashboard.
+- Fixed: a plugin update that WordPress refused before changing anything no longer triggers a rollback and now shows the real reason.
+- Fixed: an update that WordPress did not offer at that moment could be reported as already done.
+- Fixed: a slow plugin update could be rolled back while it was still being installed.
+- Fixed: a WordPress core update now stops with a clear message when your server cannot run the new version.
+- Fixed: a redirect rule pointing to its own source could send your whole site into a redirect loop.
+- Fixed: a redirect rule leading to the login page was deleted at the next sync.
+- Fixed: the two-factor authentication section could stop your profile from saving.
+- Fixed: clearing the cache ended on a fatal error when LiteSpeed Cache was deactivated but its object cache was still in place.
+- Fixed: a fatal error could occur alongside plugins that ship their own copy of Action Scheduler, such as Popup Maker Pro.
+
 = 2.27.4 (09-18-2026) =
 - Fixed: the white label settings could stay on an outdated value and keep showing the plugin in your admin.
 - Fixed: a site whose WordPress folder layout changed could no longer be reconnected.
@@ -89,8 +107,10 @@ You can report security bugs through the Patchstack Vulnerability Disclosure Pro
 - Fixed: deleting WP Umbrella now removes everything it leaves behind, on every site of a network.
 - Fixed: the activity log could stop updating on some sites.
 - Fixed: the connection form now tells you when the page has been left open too long, instead of doing nothing.
+- Fixed: two-factor authentication stayed off on sites running Wordfence, Defender or Really Simple Security, even when those plugins were installed but not asking anyone for a code.
 - Improved: backups run faster, and an interrupted backup resumes faster.
 - Improved: a restoration checks the free disk space before it starts.
+- Improved: WP Umbrella now tells you, in your dashboard and in your WordPress admin, when another plugin already handles two-factor authentication and ours is standing aside.
 
 = 2.27.3 (09-04-2026) =
 - New: the page cache is now cleared after an update on WP Engine.

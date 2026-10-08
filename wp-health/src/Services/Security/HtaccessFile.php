@@ -11,8 +11,8 @@ class HtaccessFile
 {
     const MARKER = 'WP Umbrella';
     const HEADERS_MARKER = 'WP Umbrella Headers';
-    const BLOCK_VERSION = 8;
-    const UPLOADS_BLOCK_VERSION = 1;
+    const BLOCK_VERSION = 10;
+    const UPLOADS_BLOCK_VERSION = 2;
     const SANDBOX_DIRNAME = 'wpu-htcheck';
     const CANARY_DIRNAME = 'wpu-canary';
     const UPLOADS_PROBE_TRANSIENT = 'wp_umbrella_uploads_php_probe';
@@ -111,6 +111,18 @@ class HtaccessFile
         $contents = file_get_contents($path);
 
         return is_string($contents) && strpos($contents, '# BEGIN ' . self::MARKER) !== false;
+    }
+
+    public function hasCurrentUploadsBlock()
+    {
+        if (!$this->hasUploadsBlock()) {
+            return false;
+        }
+
+        $contents = file_get_contents($this->getUploadsPath());
+
+        return is_string($contents)
+            && preg_match('/# BEGIN ' . self::MARKER . '.*?^# Version: ' . self::UPLOADS_BLOCK_VERSION . '$.*?# END ' . self::MARKER . '/ms', $contents) === 1;
     }
 
     public function isWritable()
@@ -223,7 +235,8 @@ class HtaccessFile
     {
         return 'wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt'
             . '|composer\.json|composer\.lock|package\.json|package-lock\.json|npm-shrinkwrap\.json'
-            . '|yarn\.lock|pnpm-lock\.yaml|Gemfile\.lock';
+            . '|yarn\.lock|pnpm-lock\.yaml|Gemfile\.lock'
+            . '|\.nfs[0-9a-f]{8,}|\.maintenance';
     }
 
     /**
@@ -294,12 +307,6 @@ class HtaccessFile
         // inside a <Files> or <FilesMatch> section, so the rewrite form of the
         // two guards below is written here, at the level of the file, against
         // the same two patterns.
-        //
-        // Both read the request rather than a resolved file, so on their own
-        // they would answer for a path that is on no disk. Apache ANDs
-        // consecutive RewriteCond lines, and -f keeps each verdict on the set
-        // its <FilesMatch> arm below covers. Anything else stays with the
-        // WordPress front controller.
         $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
         $lines[] = 'RewriteCond %{REQUEST_URI} (^|/)(' . $names . ')(/|$) [NC]';
         $lines[] = 'RewriteRule .* - [F,L]';
@@ -309,14 +316,78 @@ class HtaccessFile
         $lines[] = 'RewriteRule .* - [F,L]';
         $lines[] = '</IfModule>';
 
-        // No "Options -Indexes" here. AllowOverride is evaluated when Apache
-        // parses the file, so a host that does not grant the Options class
-        // answers 500 and takes the other twenty-nine lines down with it, and
-        // no <IfModule> wrapper can guard a directive rejected before any
-        // module is consulted. It bought nothing either way: the posture
-        // analyzer strips our own block before looking for the directive, so
-        // disable_directory_browsing never counted it. The FilesMatch rules
-        // below already deny the files a listing would help an attacker find.
+        // No "Options -Indexes" here: a host that does not grant the Options
+        // override answers 500 on it.
+        $denied = $this->getFileDenyLines();
+
+        $lines[] = '<FilesMatch "(?i)^(' . $names . ')$">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        $lines[] = '<FilesMatch "(?i)' . $suffixes . '">';
+        $lines = array_merge($lines, $denied);
+        $lines[] = '</FilesMatch>';
+
+        return $lines;
+    }
+
+    /**
+     * The blocks as v8 and v9 wrote them, frozen so they cannot drift with the
+     * current one.
+     */
+    protected function buildV8HardeningLines($withWpIncludesRule)
+    {
+        return $this->buildFrozenHardeningLines($withWpIncludesRule, 8, $this->getV8ProtectedNames());
+    }
+
+    protected function buildV9HardeningLines($withWpIncludesRule)
+    {
+        return $this->buildFrozenHardeningLines($withWpIncludesRule, 9, $this->getV8ProtectedNames() . '|\.nfs[0-9a-f]{8,}');
+    }
+
+    protected function getV8ProtectedNames()
+    {
+        return 'wp-config\.php|\.env|\.user\.ini|debug\.log|error_log|readme\.html|license\.txt'
+            . '|composer\.json|composer\.lock|package\.json|package-lock\.json|npm-shrinkwrap\.json'
+            . '|yarn\.lock|pnpm-lock\.yaml|Gemfile\.lock';
+    }
+
+    protected function buildFrozenHardeningLines($withWpIncludesRule, $version, $names)
+    {
+        $extensions = '(php[0-9]?|pht|phtm|phtml|phps|phar|sh)';
+        $suffixes = '(\.(sql\.gz|sql)(\.|$)'
+            . '|\.(old|save|copy|tmp|disabled|bak|bkp|orig|swp)$'
+            . '|\.(php[0-9]?|pht|phtm|phtml|phps|phar|inc|env)[-._]?'
+            . '(old|bak|save|orig|bkp|copy|tmp|swp|disabled|txt|1)(\.|$)'
+            . '|~$)';
+
+        $lines = [
+            '# Version: ' . $version,
+            '<IfModule mod_rewrite.c>',
+            'RewriteEngine On',
+        ];
+
+        foreach (['uploads', 'upgrade', 'languages', 'fonts', 'gravatars', 'wp-rocket-config'] as $directory) {
+            $lines[] = 'RewriteRule ^wp-content/' . $directory . '/.*\.' . $extensions . '(/|$) - [NC,F,L]';
+        }
+
+        if ($withWpIncludesRule) {
+            $lines[] = 'RewriteRule ^wp-includes/[^/]+\.php(/|$) - [NC,F,L]';
+        }
+
+        $lines[] = 'RewriteRule ^wp-includes/js/tinymce/langs/.+\.php - [NC,F,L]';
+        $lines[] = 'RewriteRule ^wp-includes/theme-compat/ - [NC,F,L]';
+        $lines[] = 'RewriteRule (^|/)\.(git|svn|hg)(/|$) - [NC,F,L]';
+
+        $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+        $lines[] = 'RewriteCond %{REQUEST_URI} (^|/)(' . $names . ')(/|$) [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
+
+        $lines[] = 'RewriteCond %{REQUEST_FILENAME} -f';
+        $lines[] = 'RewriteCond %{REQUEST_URI} ' . $suffixes . ' [NC]';
+        $lines[] = 'RewriteRule .* - [F,L]';
+        $lines[] = '</IfModule>';
+
         $denied = $this->getFileDenyLines();
 
         $lines[] = '<FilesMatch "(?i)^(' . $names . ')$">';
@@ -456,6 +527,10 @@ class HtaccessFile
         $lines = array_merge($lines, $this->getFileDenyLines());
         $lines[] = '</FilesMatch>';
 
+        $lines[] = '<FilesMatch "(?i)^\.nfs[0-9a-f]{8,}$">';
+        $lines = array_merge($lines, $this->getFileDenyLines());
+        $lines[] = '</FilesMatch>';
+
         return $lines;
     }
 
@@ -495,11 +570,6 @@ class HtaccessFile
             return $this->matchesLines($inner, $this->getLegacyBlockLines());
         }
 
-        // A block written before the headers moved into it, or before v5
-        // dropped "Options -Indexes", is still one of ours. The reconcile pass
-        // rewrites it on the next admin request, and reading a pending upgrade
-        // as tampering would raise a security alert on every hardened site the
-        // day the block changes.
         $inner = $this->withoutRetiredIndexesOption($inner);
 
         foreach ($this->getAcceptedBlockVariants() as $variant) {
@@ -511,19 +581,15 @@ class HtaccessFile
         return false;
     }
 
-    /**
-     * Both multisite shapes and all three header shapes, whatever the site
-     * reads as right now. A block is written once and read back on every
-     * posture scan, and the settings behind those two differences can change
-     * between the two moments without the file on disk changing at all. Only
-     * the rewrite of the next admin request lines them up again, and a block
-     * still carrying the earlier shape is ours, not a tampered one.
-     */
     protected function getAcceptedBlockVariants()
     {
         $rulesets = [
             $this->buildHardeningLines(true),
             $this->buildHardeningLines(false),
+            $this->buildV9HardeningLines(true),
+            $this->buildV9HardeningLines(false),
+            $this->buildV8HardeningLines(true),
+            $this->buildV8HardeningLines(false),
             $this->buildPreviousHardeningLines(true),
             $this->buildPreviousHardeningLines(false),
             $this->buildLegacyHardeningLines(true),
@@ -634,8 +700,6 @@ class HtaccessFile
         $uploadsBlockExisted = $this->hasUploadsBlock();
         $uploads = $this->writeUploadsBlock(false);
 
-        // Written before the self-check so one round of probes covers all three
-        // files, and rolled back with them if the site stops answering.
         $headersPath = $this->getHeadersPath();
         $headersSnapshot = file_exists($headersPath) ? file_get_contents($headersPath) : null;
         $headers = $this->securityHeadersEnabled()
@@ -677,17 +741,6 @@ class HtaccessFile
         return file_exists($path) ? is_writable($path) : is_writable(dirname($path));
     }
 
-    /**
-     * The root file is locked and the uploads block is carrying the protection
-     * on its own. The block is missing from the root because it cannot be
-     * written there, which is not the same thing as a block that was removed,
-     * and the posture scan has to tell the two apart before calling it
-     * tampering.
-     *
-     * An attacker able to chmod the root file could dress a removal up as this
-     * state, but they would have to leave our uploads block in place while
-     * holding write access to the file the block protects.
-     */
     public function isUploadsOnlyState()
     {
         return !$this->hasUmbrellaBlock()
@@ -695,18 +748,10 @@ class HtaccessFile
             && !$this->isRootWritable();
     }
 
-    /**
-     * The rule carrying most of the value denies PHP under uploads, and it
-     * lives in a file WordPress writes into on every media upload. A locked
-     * root .htaccess used to cost the customer the entire feature, including
-     * the half that was still within reach.
-     */
     protected function writeUploadsBlockAlone()
     {
-        // Reconcile runs twice a day on a root file that will stay locked, and
-        // the write below costs two loopback requests. Presence is what the
-        // uploads backfill settles on too, so it is enough here.
-        if ($this->hasUploadsBlock()) {
+        // A block already at the current version is left alone.
+        if ($this->hasCurrentUploadsBlock()) {
             return ['status' => 'partial', 'reason' => 'root_not_writable'];
         }
 
@@ -899,16 +944,6 @@ class HtaccessFile
     }
 
     /**
-     * Two unrelated questions used to share one boolean. Whether the site still
-     * answers is the only one a rollback can rest on. Whether the uploads
-     * canary comes back refused says how far the rules reached, and a host that
-     * hides that from a loopback request has not broken anything.
-     *
-     * sandboxCheck() already proved Apache parses the ruleset, and its first
-     * probe already got a 200 out of this same loopback before a single byte
-     * was written. A home page that stops answering here is therefore a change
-     * we caused, not a host that never let us look in the first place.
-     *
      * @return array{safe: bool, reason: string}
      */
     protected function selfCheck()
@@ -926,13 +961,6 @@ class HtaccessFile
         return ['safe' => true, 'reason' => $this->probeUploadsCanary()];
     }
 
-    /**
-     * Reports how the uploads canary answered, never whether to keep the block.
-     * Each state names a host we used to serve blindly: a redirect means the
-     * URL we probed is not the one the block governs, a 200 means PHP is still
-     * served from uploads, and no answer at all means the loopback stopped
-     * talking to us halfway through.
-     */
     protected function probeUploadsCanary()
     {
         $upload = wp_upload_dir();
@@ -984,8 +1012,6 @@ class HtaccessFile
 
         $state = $this->measureUploadsPhpExecution();
 
-        // A loopback that cannot answer is a property of the host, not a transient
-        // condition, so retrying it often only costs the customer a PHP worker.
         $ttl = $state === 'unknown' ? DAY_IN_SECONDS : 12 * HOUR_IN_SECONDS;
 
         set_transient(self::UPLOADS_PROBE_TRANSIENT, ['signature' => $signature, 'state' => $state], $ttl);
@@ -1127,7 +1153,7 @@ class HtaccessFile
         $response = wp_remote_get($url, [
             'timeout' => 10,
             'redirection' => 0,
-            'sslverify' => wp_umbrella_should_verify_ssl(),
+            'sslverify' => apply_filters('https_local_ssl_verify', false),
         ]);
 
         if (is_wp_error($response)) {

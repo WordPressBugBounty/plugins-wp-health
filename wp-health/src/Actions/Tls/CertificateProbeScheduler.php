@@ -14,6 +14,8 @@ class CertificateProbeScheduler implements ExecuteHooks, DeactivationHook
 
     const MAX_START_DELAY_SECONDS = 21600;
 
+    const DEGRADED_INTERVAL_SECONDS = 86400;
+
     public function hooks()
     {
         add_action('init', [$this, 'schedule'], 20);
@@ -26,17 +28,31 @@ class CertificateProbeScheduler implements ExecuteHooks, DeactivationHook
             return;
         }
 
-        if (false !== as_next_scheduled_action(self::ACTION_HOOK, [], self::GROUP)) {
+        $next = as_next_scheduled_action(self::ACTION_HOOK, [], self::GROUP);
+
+        if (false === $next) {
+            as_schedule_recurring_action(
+                time() + mt_rand(0, self::MAX_START_DELAY_SECONDS),
+                self::INTERVAL_SECONDS,
+                self::ACTION_HOOK,
+                [],
+                self::GROUP
+            );
+
             return;
         }
 
-        as_schedule_recurring_action(
-            time() + mt_rand(0, self::MAX_START_DELAY_SECONDS),
-            self::INTERVAL_SECONDS,
-            self::ACTION_HOOK,
-            [],
-            self::GROUP
-        );
+        if (true === $next || $next <= time() + self::DEGRADED_INTERVAL_SECONDS || !function_exists('as_schedule_single_action')) {
+            return;
+        }
+
+        $fallback = wp_umbrella_get_service('CertificateFallback');
+
+        if (!$fallback || !$fallback->isActive()) {
+            return;
+        }
+
+        as_schedule_single_action(time() + self::DEGRADED_INTERVAL_SECONDS, self::ACTION_HOOK, [], self::GROUP);
     }
 
     public function execute()

@@ -46,8 +46,10 @@ $wpUmbrellaOptions = [
     'wp_umbrella_last_htaccess_clean',
     'wp_umbrella_last_test_ping',
     'wp_umbrella_tls_probe',
+    'wp_umbrella_tls_fallback',
     'wp_umbrella_transient_update_plugins',
     'wp_umbrella_transient_update_themes',
+    'wp_umbrella_admin_update_plugins',
 ];
 
 $wpUmbrellaTransients = [
@@ -72,6 +74,7 @@ $wpUmbrellaOptionPrefixes = [
     'wp_umbrella_',
     'wp-umbrella-',
     'wpu_srn_',
+    'wpu_lbt_',
 ];
 
 /**
@@ -232,7 +235,11 @@ try {
 try {
     if (is_multisite()) {
         delete_site_option('wp_umbrella_hardening_require_2fa_admin');
+        delete_site_option('wp_umbrella_hardening_login_rate_limit');
+        delete_site_option('wp_umbrella_hardening_login_ip_blocklist');
+        delete_site_option('wp_umbrella_hardening_mask_login_errors');
         delete_site_option('wp_umbrella_hardening_htaccess_umbrella_block');
+        delete_site_option('wp_umbrella_network_uuid');
     }
 } catch (\Throwable $e) {
     error_log('WP Umbrella uninstall, network options: ' . $e->getMessage());

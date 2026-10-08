@@ -27,7 +27,7 @@ class SyncRedirects extends AbstractController
 
         $incoming = [];
         if (!empty($params['redirects']) && is_array($params['redirects'])) {
-            foreach ($params['redirects'] as $redirect) {
+            foreach (array_slice($params['redirects'], 0, RedirectRouter::MAX_REDIRECTS) as $redirect) {
                 $sourcePattern = sanitize_text_field($redirect['sourcePattern'] ?? '');
                 $matchType = sanitize_text_field($redirect['matchType'] ?? 'exact');
                 $destinationUrl = esc_url_raw($redirect['destinationUrl'] ?? '');
@@ -87,16 +87,63 @@ class SyncRedirects extends AbstractController
 
     protected function isValidRule($sourcePattern, $matchType, $destinationUrl)
     {
-        if ($sourcePattern === '' || !preg_match('#^(https?://|/)#i', $destinationUrl)) {
+        if ($sourcePattern === ''
+            || !preg_match('#^(https?://|/(?!/))#i', $destinationUrl)
+            || parse_url($destinationUrl) === false
+        ) {
+            return false;
+        }
+
+        if ($matchType === 'regex'
+            && (strlen($sourcePattern) > RedirectRouter::MAX_REGEX_PATTERN_LENGTH
+                || @preg_match($sourcePattern, '') === false)
+        ) {
+            return false;
+        }
+
+        return !$this->redirectsToItself($sourcePattern, $matchType, $destinationUrl);
+    }
+
+    protected function redirectsToItself($sourcePattern, $matchType, $destinationUrl)
+    {
+        $destinationPath = $this->localPath($destinationUrl);
+
+        if ($destinationPath === null || RedirectRouter::isProtectedPath($destinationPath)) {
             return false;
         }
 
         if ($matchType !== 'regex') {
-            return true;
+            return rtrim($sourcePattern, '/') === $destinationPath;
         }
 
-        return strlen($sourcePattern) <= RedirectRouter::MAX_REGEX_PATTERN_LENGTH
-            && @preg_match($sourcePattern, '') !== false;
+        return @preg_match($sourcePattern, $destinationPath) === 1;
+    }
+
+    /**
+     * @return string|null The path the router would see, null for another host
+     */
+    protected function localPath($destinationUrl)
+    {
+        $parts = parse_url($destinationUrl);
+
+        if (!is_array($parts)) {
+            return null;
+        }
+
+        if (isset($parts['host'])) {
+            $siteHost = parse_url(home_url(), PHP_URL_HOST);
+
+            if (!is_string($siteHost) || strcasecmp($this->bareHost($parts['host']), $this->bareHost($siteHost)) !== 0) {
+                return null;
+            }
+        }
+
+        return rtrim(isset($parts['path']) ? $parts['path'] : '/', '/');
+    }
+
+    protected function bareHost($host)
+    {
+        return preg_replace('/^www\./i', '', $host);
     }
 
     protected function normalizeRedirectType($httpCode)

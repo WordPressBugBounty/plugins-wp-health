@@ -147,6 +147,18 @@ class ValidationApiKey implements ExecuteHooksBackend
             $projectId = isset($owner['project']['id']) ? $owner['project']['id'] : null;
             $code = isset($data['code']) ? $data['code'] : null;
 
+            $storedProjectId = isset($optionsBdd['project_id']) ? $optionsBdd['project_id'] : '';
+            $clearsSigningKey = $projectId === null || $this->pairingSigningKey->isProjectChanged($storedProjectId, $projectId);
+
+            if ($clearsSigningKey && !$this->pairingSigningKey->canClearSigningKey($optionsBdd)) {
+                wp_umbrella_debug_log('validate api key: project change refused');
+
+                wp_send_json_error([
+                    'code' => 'unverified_channel',
+                ]);
+                return;
+            }
+
             // Generate a new secret token
             $secretToken = wp_umbrella_generate_random_string(128);
 
@@ -243,9 +255,6 @@ class ValidationApiKey implements ExecuteHooksBackend
                 ]);
             } elseif ($projectId === null) {
                 // Api is valid but project not exist
-                // The call below is answered by a callback this site has no key
-                // to verify, so the signing material is dropped and persisted
-                // before it goes out.
                 $newOptions = $this->pairingSigningKey->clearForNewProject($newOptions);
                 $this->optionService->setOptions($newOptions);
                 wp_cache_flush();
@@ -269,6 +278,8 @@ class ValidationApiKey implements ExecuteHooksBackend
                     'name' => empty($name) ? site_url() : $name,
                     'hosting' => $hosting,
                 ];
+
+                $data = array_merge($data, wp_umbrella_get_service('NetworkIdentity')->getData());
 
                 if ($httpAuthUser !== null && $httpAuthPassword !== null) {
                     $data['http_auth_user'] = $httpAuthUser;
@@ -357,7 +368,7 @@ class ValidationApiKey implements ExecuteHooksBackend
 
         $args = [
             'timeout' => 5,
-            'sslverify' => wp_umbrella_should_verify_ssl(),
+            'sslverify' => apply_filters('https_local_ssl_verify', false),
             'redirection' => 0,
         ];
 

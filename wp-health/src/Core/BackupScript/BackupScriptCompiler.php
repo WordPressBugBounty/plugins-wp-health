@@ -4,14 +4,6 @@ namespace WPUmbrella\Core\BackupScript;
 
 /**
  * Compiles a script generation into the single file the site runs.
- *
- * One implementation, used by the plugin when it deploys the module on a
- * customer site and by the developer entry points. It reads the manifest and
- * nothing else: no directory scan decides the order any more.
- *
- * The first line of every source is dropped, which is how the opening tag is
- * stripped, so every source must keep `<?php` alone on its first line. The class
- * guards stay written by hand in the sources.
  */
 class BackupScriptCompiler
 {
@@ -48,13 +40,22 @@ class BackupScriptCompiler
             ));
         }
 
-        $output = '';
+        return $this->concatenate($manifest, $manifest['files']);
+    }
 
-        foreach ($manifest['files'] as $relativePath) {
-            $output .= $this->readWithoutFirstLine($this->sourcePath($manifest, $relativePath));
-        }
+    /**
+     * Every declaration of a generation without its entry point, which runs
+     * the moment it is loaded. What the observation command and the tests
+     * load to read the compiled classes back.
+     *
+     * @param string $generation
+     * @return string
+     */
+    public function compileDeclarations($generation)
+    {
+        $manifest = BackupScriptManifest::generation($generation);
 
-        return "<?php \n" . $output;
+        return $this->concatenate($manifest, array_slice($manifest['files'], 0, -1));
     }
 
     /**
@@ -90,10 +91,7 @@ class BackupScriptCompiler
     }
 
     /**
-     * Sources on disk that the manifest does not declare. They are simply not
-     * compiled, which is the safe behaviour on a customer site; on a developer
-     * machine it means a file was added and never declared, and `reconcile`
-     * turns it into an error.
+     * Sources on disk that the manifest does not declare.
      *
      * @param string $generation
      * @return array
@@ -134,6 +132,28 @@ class BackupScriptCompiler
         sort($undeclared, SORT_STRING);
 
         return $undeclared;
+    }
+
+    /**
+     * @param array $manifest
+     * @param array $files
+     * @return string
+     */
+    protected function concatenate($manifest, $files)
+    {
+        $output = '';
+
+        foreach ($files as $relativePath) {
+            $output .= $this->readWithoutFirstLine($this->sourcePath($manifest, $relativePath));
+        }
+
+        // Values a generation fixes at compile time, such as the generation it
+        // is, so the compiled file carries them whichever path compiled it.
+        if (!empty($manifest['tokens'])) {
+            $output = strtr($output, $manifest['tokens']);
+        }
+
+        return "<?php \n" . $output;
     }
 
     /**

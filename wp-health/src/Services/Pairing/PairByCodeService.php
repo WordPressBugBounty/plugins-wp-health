@@ -1,6 +1,8 @@
 <?php
 namespace WPUmbrella\Services\Pairing;
 
+use WPUmbrella\Services\Tls\CertificateFallback;
+
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -106,7 +108,8 @@ class PairByCodeService
                 'site_url' => get_site_url(),
                 'plugin_version' => defined('WP_UMBRELLA_VERSION') ? WP_UMBRELLA_VERSION : '',
             ]),
-            'sslverify' => true,
+            'sslverify' => wp_umbrella_should_verify_ssl(),
+            CertificateFallback::CONNECTION_ARG => true,
             'timeout' => self::REQUEST_TIMEOUT,
         ]);
     }
@@ -138,7 +141,13 @@ class PairByCodeService
 
         $pairingService = wp_umbrella_get_service('PairingService');
 
-        $pairingService->clearSigningKeyOnProjectChange($projectId);
+        if (!$pairingService->clearSigningKeyOnProjectChange($projectId)) {
+            return [
+                'ok' => false,
+                'error' => self::ERROR_INVALID_RESPONSE,
+                'message' => 'project change refused',
+            ];
+        }
 
         if (!$pairingService->persistRequestToken($requestToken, $projectId)) {
             return [

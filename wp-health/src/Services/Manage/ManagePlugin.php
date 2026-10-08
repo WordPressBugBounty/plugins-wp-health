@@ -9,6 +9,7 @@ use Automatic_Upgrader_Skin;
 use Exception;
 use Plugin_Upgrader;
 use WP_Error;
+use WPUmbrella\Services\Plugin\UpdateLock;
 use function wp_umbrella_get_service;
 
 class ManagePlugin
@@ -116,31 +117,26 @@ class ManagePlugin
             ];
         }
 
-        // Lock per-plugin to prevent concurrent update attempts on the same plugin
         $pluginSlug = dirname($plugin);
-        $lockKey = 'wp_umbrella_update_lock_' . $pluginSlug;
-        if (get_transient($lockKey)) {
+        $lock = wp_umbrella_get_service('UpdateLock');
+        $acquired = $lock->acquire($pluginSlug);
+        if ($acquired !== UpdateLock::ACQUIRED) {
             wp_umbrella_debug_log("ManagePlugin::update lock active for '{$pluginSlug}', returning update_in_progress");
-            return [
-                'status' => 'in_progress',
-                'code' => 'update_in_progress',
-                'message' => sprintf('An update is already in progress for plugin %s', $pluginSlug),
-                'data' => ''
-            ];
+            return $this->updateInProgressResponse($pluginSlug, $lock->refusalCode($acquired));
         }
-        set_transient($lockKey, true, 300); // 5 minutes TTL — auto-expires if process dies
 
         // As a precaution, we advise you to move the plugin in all cases, as plugins are sometimes deleted.
         wp_umbrella_debug_log("ManagePlugin::update creating temp backup for '{$plugin}'");
         $result = wp_umbrella_get_service('UpgraderTempBackup')->moveToTempBackupDir([
             'slug' => dirname($plugin),
             'src' => WP_PLUGIN_DIR,
-            'dir' => 'plugins'
+            'dir' => 'plugins',
+            'main_file' => basename($plugin),
         ]);
 
         if (!$result['success'] && $requireBackup) {
             wp_umbrella_debug_log("ManagePlugin::update backup failed for '{$plugin}': " . ($result['code'] ?? 'unknown'));
-            delete_transient($lockKey);
+            $lock->release($pluginSlug);
             return [
                 'code' => 'temp_backup_required_failed',
                 'message' => sprintf('Temporary backup failed for plugin %s: %s. Update aborted to ensure rollback safety.', $plugin, $result['code'] ?? 'unknown'),
@@ -154,7 +150,7 @@ class ManagePlugin
 
         if ($data['status'] === 'error' && $tryAjax) {
             wp_umbrella_debug_log("ManagePlugin::update plugin '{$plugin}' failed: " . ($data['code'] ?? 'unknown'));
-            delete_transient($lockKey);
+            $lock->release($pluginSlug);
             return $data;
         }
 
@@ -166,7 +162,7 @@ class ManagePlugin
 
         wp_umbrella_debug_log("ManagePlugin::update plugin '{$plugin}' completed successfully");
 
-        delete_transient($lockKey);
+        $lock->release($pluginSlug);
 
         return [
             'status' => 'success',
@@ -183,6 +179,8 @@ class ManagePlugin
      *  - only_ajax: bool
      *  - require_backup: bool
      *  - backup_done: bool
+     *  - skip_lock: bool
+     *  - lock_token: string|null
      * @return array
      */
     public function bulkUpdate($plugins, $options = [])
@@ -200,20 +198,17 @@ class ManagePlugin
 
         $pluginSlug = dirname($plugin);
 
-        // Lock per-plugin to prevent concurrent update attempts on the same plugin
-        $lockKey = 'wp_umbrella_update_lock_' . $pluginSlug;
         $skipLock = isset($options['skip_lock']) && $options['skip_lock'];
-        if (!$skipLock && get_transient($lockKey)) {
-            wp_umbrella_debug_log("ManagePlugin::bulkUpdate lock active for '{$pluginSlug}', returning update_in_progress");
-            return [
-                'status' => 'in_progress',
-                'code' => 'update_in_progress',
-                'message' => sprintf('An update is already in progress for plugin %s', $pluginSlug),
-                'data' => ''
-            ];
+        $lockToken = $this->lockTokenFromOptions($options);
+        $requireBackup = isset($options['require_backup']) && $options['require_backup'];
+        $lock = wp_umbrella_get_service('UpdateLock');
+        $acquired = $skipLock ? UpdateLock::ACQUIRED : $lock->acquire($pluginSlug, $lockToken, UpdateLock::PHASE_UPDATING);
+        if ($acquired !== UpdateLock::ACQUIRED) {
+            wp_umbrella_debug_log("ManagePlugin::bulkUpdate lock active for '{$pluginSlug}', returning " . $lock->refusalCode($acquired));
+            return $this->updateInProgressResponse($pluginSlug, $lock->refusalCode($acquired));
         }
-        if (!$skipLock) {
-            set_transient($lockKey, true, 300); // 5 minutes TTL — auto-expires if process dies
+        if (!$skipLock && $lockToken !== null) {
+            $lock->finishOnShutdown($pluginSlug, $lockToken);
         }
 
         $maintenanceMode = wp_umbrella_get_service('MaintenanceMode');
@@ -224,21 +219,15 @@ class ManagePlugin
             $trace->addTrace('bulk_update_started', ['plugin' => $plugin, 'require_backup' => !empty($options['require_backup'])]);
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate started for '{$plugin}' (require_backup: " . (!empty($options['require_backup']) ? 'true' : 'false') . ')');
 
-            // Enable smart maintenance mode before backup (blocks visitors, allows WP Umbrella requests)
+            // Enable maintenance mode
             wp_umbrella_debug_log('ManagePlugin::bulkUpdate enabling maintenance mode');
             $maintenanceMode->toggleMaintenanceMode(true);
             $trace->addTrace('maintenance_mode_enabled');
 
-            // Backup is handled by:
-            // 1. The worker's PrepareUpdateBackup handler via /prepare-update (separate HTTP request, umbrella >= 2.22.1)
-            // 2. WordPress core's own move_to_temp_backup_dir (WP 6.3+, atomic rename)
-            // We no longer create an inline backup here to avoid redundant disk I/O
-            // that can cause timeouts on resource-constrained hosting.
-
-            // Track the old version for rollback status reporting
+            // Track the old version
             $oldVersion = wp_umbrella_get_service('ManagePlugin')->getVersionFromPluginFile($plugin);
 
-            // Mark update as started — the worker reads this state before deciding on rollback
+            // Mark update as started
             $stateManager->setState($pluginSlug, $stateManager::STATUS_UPDATING, [
                 'plugin' => $plugin,
                 'old_version' => $oldVersion,
@@ -256,6 +245,12 @@ class ManagePlugin
             $trace->addTrace('bulk_upgrade_started');
             $data = $pluginUpdate->bulkUpdate([$plugin], $options);
             $trace->addTrace('bulk_upgrade_done', ['status' => $data['status'] ?? 'unknown']);
+
+            if (isset($data['code']) && $data['code'] === 'update_in_progress_self') {
+                @ob_end_clean();
+
+                return $data;
+            }
 
             $pluginUpdate->ithemesCompatibility();
 
@@ -291,14 +286,18 @@ class ManagePlugin
 
             @ob_end_clean();
 
-            if (!$skipLock) {
-                delete_transient($lockKey);
+            if (!$skipLock && ($lockToken === null || ($hasError && !$requireBackup))) {
+                $lock->release($pluginSlug, $lockToken);
+            } elseif (!$skipLock) {
+                $lock->markPhase($pluginSlug, $lockToken, UpdateLock::PHASE_UPDATED);
             }
 
             return $data;
         } catch (\Throwable $e) {
-            if (!$skipLock) {
-                delete_transient($lockKey);
+            if (!$skipLock && $lockToken === null) {
+                $lock->release($pluginSlug);
+            } elseif (!$skipLock) {
+                $lock->markPhase($pluginSlug, $lockToken, UpdateLock::PHASE_UPDATED);
             }
             $trace->addTrace('exception', ['message' => $e->getMessage()]);
             wp_umbrella_debug_log("ManagePlugin::bulkUpdate exception for '{$plugin}': " . $e->getMessage());
@@ -332,15 +331,16 @@ class ManagePlugin
                 ];
             }
 
-            $requireBackup = isset($options['require_backup']) && $options['require_backup'];
-
             if ($requireBackup) {
                 // Safe update — attempt rollback via PluginUpdate
-                $rollback = wp_umbrella_get_service('PluginUpdate')->rollbackIfCorrupted($pluginSlug);
+                $rollback = wp_umbrella_get_service('PluginUpdate')->rollbackIfCorrupted($pluginSlug, null, $lockToken);
             } else {
                 // Quick update — no auto-rollback
                 $rollback = ['status' => 'not_needed', 'reason' => null];
                 wp_umbrella_debug_log("ManagePlugin::bulkUpdate quick update exception, skipping rollback for '{$pluginSlug}'");
+                if (!$skipLock && $lockToken !== null) {
+                    $lock->release($pluginSlug, $lockToken);
+                }
             }
 
             // Mark state based on rollback outcome
@@ -384,6 +384,26 @@ class ManagePlugin
                 'data' => ''
             ];
         }
+    }
+
+    protected function lockTokenFromOptions($options)
+    {
+        if (!isset($options['lock_token']) || !is_string($options['lock_token']) || $options['lock_token'] === '') {
+            return null;
+        }
+
+        return $options['lock_token'];
+    }
+
+    protected function updateInProgressResponse($pluginSlug, $code = 'update_in_progress')
+    {
+        return [
+            'status' => 'in_progress',
+            'code' => $code,
+            'message' => sprintf('An update is already in progress for plugin %s', $pluginSlug),
+            'holder' => wp_umbrella_get_service('UpdateLock')->holderFingerprint($pluginSlug),
+            'data' => ''
+        ];
     }
 
     /**

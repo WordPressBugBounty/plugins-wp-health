@@ -129,6 +129,16 @@ class AttachByApiKeyCommand
 
             $existingProjectId = isset($owner['project']['id']) ? $owner['project']['id'] : null;
 
+            $clearsSigningKey = $existingProjectId === null || $pairingSigningKey->isProjectChanged($storedProjectId, $existingProjectId);
+            if ($clearsSigningKey && !$pairingSigningKey->canClearSigningKey($storedOptions)) {
+                if ($snapshot !== null) {
+                    $this->restoreState($optionService, $snapshot);
+                    \WP_CLI::warning('Attach failed; restored previous state.');
+                }
+                \WP_CLI::error('unverified_channel: this site only accepts signed requests and the connection to WP Umbrella could not be verified, so it cannot be moved to another project.');
+                return;
+            }
+
             $secretToken = \wp_umbrella_generate_random_string(128);
             if (!\wp_umbrella_is_new_hash()) {
                 \wp_umbrella_init_new_hash();
@@ -175,9 +185,6 @@ class AttachByApiKeyCommand
             }
 
             // No existing project for this site under this owner → create one.
-            // The call below is answered by a callback this site has no key to
-            // verify, so the signing material is dropped and persisted before
-            // it goes out. Restored by the snapshot if the creation fails.
             $options = $pairingSigningKey->clearForNewProject($options);
             $optionService->setOptions($options);
             \wp_cache_flush();
@@ -186,7 +193,7 @@ class AttachByApiKeyCommand
             $contextService->requireWpRewrite();
             $name = \get_bloginfo('name');
             $hosting = \wp_umbrella_get_service('HostResolver')->getCurrentHost();
-            $createResp = $projectsService->createProjectOnApplication([
+            $createResp = $projectsService->createProjectOnApplication(array_merge([
                 'base_url' => \site_url(),
                 'home_url' => \home_url(),
                 'rest_url' => \rest_url(),
@@ -197,7 +204,7 @@ class AttachByApiKeyCommand
                 'is_multisite' => \is_multisite(),
                 'name' => empty($name) ? \site_url() : $name,
                 'hosting' => $hosting,
-            ], $apiKey);
+            ], \wp_umbrella_get_service('NetworkIdentity')->getData()), $apiKey);
 
             $newProjectId = isset($createResp['result']['id']) ? $createResp['result']['id'] : null;
             $success = isset($createResp['success']) && $createResp['success'] === 'success';

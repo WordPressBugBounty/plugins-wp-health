@@ -15,8 +15,31 @@ if (!class_exists('UmbrellaWebSocket', false)):
          * @var UmbrellaContext
          */
         protected $context;
+        protected $readBuffer = '';
+        /** relative path => size, files sent whose ACK is still expected */
+        protected $inFlight = [];
+        protected $inFlightBytes = 0;
+        /** what the mirror accepts; 1 until the upgrade response says otherwise */
+        protected $ackWindowLimit = 1;
+        /** ceiling asked by the worker (ack_window in the request); 1 switches the window off */
+        protected $ackWindowCap;
+        protected $ackWindow = 1;
+        protected $acksSinceGrowth = 0;
+        protected $ackTimeout;
+        protected $batchEndSupported = false;
 
-        const READ_CHUNK_SIZE = 1024 * 10;
+        const READ_CHUNK_SIZE = 64 * 1024;
+        const ACK_WINDOW_HEADER = 'x-umbrella-ack-window';
+        const BATCH_END_HEADER = 'x-umbrella-batch-end';
+        const ACK_WINDOW_MAX = 32;
+        /**
+         * Bytes in flight before waiting for ACKs, whatever the file count: about
+         * the bandwidth-delay product of a distant host, so big files never pile
+         * up on the mirror.
+         */
+        const ACK_WINDOW_BYTES = 4194304;
+        const ACK_WINDOW_STORE_PREFIX = 'umb_ack_window_';
+        const DATABASE_ERROR_DUMP_MESSAGE_LENGTH = 500;
 
         public function __construct($params)
         {
@@ -29,6 +52,8 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->timeout = $params['timeout'] ?? 25;
             $this->origin = $params['origin'] ?? $_SERVER['HTTP_HOST'];
             $this->context = $params['context'] ?? null;
+            $this->ackTimeout = $params['ack_timeout'] ?? 60;
+            $this->ackWindowCap = max(1, min(self::ACK_WINDOW_MAX, (int) ($params['ack_window'] ?? self::ACK_WINDOW_MAX)));
         }
 
         protected function secureRandomBytes($length)
@@ -132,13 +157,124 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
             fwrite($this->connection, $this->buildHeaders());
 
-            $response = fgets($this->connection);
+            $response = $this->readHandshake();
             if (strpos($response, 'Unauthorized') !== false) {
                 $this->close();
                 throw new UmbrellaSocketException('connection_failed', 'Connection failed');
             }
 
+            $this->configureAckWindow($response);
+            $this->configureBatchEnd($response);
+
             return true;
+        }
+
+        /**
+         * The whole upgrade response, up to the blank line. Reading only the status
+         * line left the other headers in the stream, in front of the first frame.
+         */
+        protected function readHandshake()
+        {
+            $response = '';
+
+            while (strpos($response, "\r\n\r\n") === false) {
+                $line = fgets($this->connection);
+                if ($line === false) {
+                    break;
+                }
+                $response .= $line;
+            }
+
+            return $response;
+        }
+
+        /**
+         * A mirror that can hold several files in flight says so in the upgrade
+         * response. Without the header, or with ack_window = 1 in the request, the
+         * plugin waits for every ACK, one file at a time, as it always did.
+         */
+        public function configureAckWindow($handshake)
+        {
+            $this->ackWindowLimit = 1;
+
+            if (preg_match('/^' . self::ACK_WINDOW_HEADER . ':\s*(\d+)/im', $handshake, $matches)) {
+                $this->ackWindowLimit = max(1, min($this->ackWindowCap, (int) $matches[1]));
+            }
+
+            $this->ackWindow = min($this->ackWindowLimit, $this->loadAckWindow());
+        }
+
+        public function configureBatchEnd($handshake)
+        {
+            $this->batchEndSupported = (bool) preg_match('/^' . self::BATCH_END_HEADER . ':\s*1/im', $handshake);
+        }
+
+        public function supportsBatchEnd()
+        {
+            return $this->batchEndSupported;
+        }
+
+        public function endBatch($seconds)
+        {
+            if ($this->connection === null || !$this->batchEndSupported) {
+                return false;
+            }
+
+            $this->writeFrame('__BATCH_END__');
+
+            $deadline = time() + $seconds;
+            stream_set_timeout($this->connection, max(1, $seconds));
+
+            while (($payload = $this->readMessage($deadline)) !== null) {
+                $data = json_decode($payload, true);
+                if (is_array($data) && ($data['type'] ?? '') === 'BATCH_END_ACK') {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public function getAckWindow()
+        {
+            return $this->ackWindow;
+        }
+
+        /** What the mirror and the request allow; 1 = the window is off, not merely reset. */
+        public function getAckWindowLimit()
+        {
+            return $this->ackWindowLimit;
+        }
+
+        /**
+         * A batch lasts a few dozen files, so the window reached by the previous
+         * batch is kept in the checksum scratch directory for the next one.
+         */
+        protected function getAckWindowStorePath()
+        {
+            if ($this->context === null || !$this->context->getChecksumDirectory()) {
+                return null;
+            }
+
+            return rtrim($this->context->getChecksumDirectory(), DIRECTORY_SEPARATOR)
+                . DIRECTORY_SEPARATOR . self::ACK_WINDOW_STORE_PREFIX
+                . preg_replace('/[^a-zA-Z0-9]/', '', (string) $this->context->getRequestId()) . '.txt';
+        }
+
+        protected function loadAckWindow()
+        {
+            $path = $this->getAckWindowStorePath();
+            $stored = $path !== null ? (int) @file_get_contents($path) : 0;
+
+            return max(1, $stored);
+        }
+
+        protected function persistAckWindow()
+        {
+            $path = $this->getAckWindowStorePath();
+            if ($path !== null) {
+                @file_put_contents($path, (string) $this->ackWindow);
+            }
         }
 
         public function writeFrame($message, $isBinary = false)
@@ -286,8 +422,40 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame('__DATABASE_TABLE__:' . $data);
         }
 
+        public function sendDatabaseErrorDump($tableName, $message)
+        {
+            if ($this->connection === null) {
+                return;
+            }
+
+            $message = substr((string) $message, 0, self::DATABASE_ERROR_DUMP_MESSAGE_LENGTH);
+            if (!UmbrellaUTF8::seemsUTF8($message)) {
+                $message = UmbrellaUTF8::encodeNonUTF8($message);
+            }
+
+            $data = json_encode([
+                'table' => $tableName,
+                'message' => $message,
+            ]);
+
+            $this->writeFrame('DATABASE_ERROR_DUMP:' . $data);
+        }
+
+        /**
+         * The mirror acts on a finish message at once: it reads the dictionary just
+         * sent, walks its tree, closes. Every file in flight must be written and
+         * acknowledged first, as it was when send() waited for each ACK.
+         */
+        protected function drainBeforeFinish()
+        {
+            if (count($this->inFlight) > 0) {
+                $this->drainAcks();
+            }
+        }
+
         public function sendBackupFilesFinished()
         {
+            $this->drainBeforeFinish();
             $this->sendMessage('__BACKUP_FILES_FINISHED__');
         }
 
@@ -297,6 +465,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 return;
             }
 
+            $this->drainBeforeFinish();
             $this->writeFrame('FINISH');
         }
 
@@ -311,8 +480,6 @@ if (!class_exists('UmbrellaWebSocket', false)):
                 'checksum' => $checksum,
             ]);
             $this->writeFrame('CHECKSUM:' . $data);
-
-            // return $this->waitForAckChecksum($directory);
         }
 
         public function sendStructuredLog($code, $context = [])
@@ -414,36 +581,59 @@ if (!class_exists('UmbrellaWebSocket', false)):
             $this->writeFrame("$message:" . $data);
         }
 
-        public function waitForAck($filename)
+        /**
+         * Reads ACKs until at most $keep files stay in flight and the bytes in
+         * flight are back under the cap. The window doubles each time a window's
+         * worth of ACKs came back, up to what the mirror announced; an ACK that
+         * never comes drops it back to one file at a time, as before.
+         */
+        protected function drainAcks($keep = 0)
         {
-            $startTime = time();
-            $timeout = 60;
+            $deadline = time() + $this->ackTimeout;
+            $received = 0;
 
-            while (time() - $startTime < $timeout) {
-                $data = $this->readFrameJson();
+            while (count($this->inFlight) > $keep
+                || ($this->inFlightBytes >= self::ACK_WINDOW_BYTES && count($this->inFlight) > 0)) {
+                $payload = $this->readMessage($deadline);
 
-                if ($data && $data['type'] === 'ACK' && $data['filename'] === $filename) {
-                    return true;
+                if ($payload === null) {
+                    $this->inFlight = [];
+                    $this->inFlightBytes = 0;
+                    $this->ackWindow = 1;
+                    $this->acksSinceGrowth = 0;
+                    $this->persistAckWindow();
+
+                    return false;
                 }
+
+                $data = json_decode($payload, true);
+                $filename = is_array($data) && ($data['type'] ?? '') === 'ACK' ? ($data['filename'] ?? '') : '';
+
+                if (!isset($this->inFlight[$filename])) {
+                    continue;
+                }
+
+                $this->inFlightBytes -= $this->inFlight[$filename];
+                unset($this->inFlight[$filename]);
+                $received++;
             }
 
-            return false;
+            $this->growAckWindow($received);
+
+            return true;
         }
 
-        public function waitForAckChecksum($directory)
+        protected function growAckWindow($acks)
         {
-            $startTime = time();
-            $timeout = 30;
+            $this->acksSinceGrowth += $acks;
 
-            while (time() - $startTime < $timeout) {
-                $data = $this->readFrameJson();
-
-                if ($data && $data['type'] === 'ACK_CHECKSUM' && $data['directory'] === $directory) {
-                    return true;
-                }
+            if ($this->ackWindow >= $this->ackWindowLimit || $this->acksSinceGrowth < $this->ackWindow) {
+                return;
             }
 
-            return false;
+            $this->ackWindow = min($this->ackWindowLimit, $this->ackWindow * 2);
+            $this->acksSinceGrowth = 0;
+            $this->persistAckWindow();
         }
 
         public function send($filePath)
@@ -518,7 +708,14 @@ if (!class_exists('UmbrellaWebSocket', false)):
 
                     fclose($fileHandle);
 
-                    return $this->waitForAck($relativePath);
+                    $this->inFlight[$relativePath] = $size;
+                    $this->inFlightBytes += $size;
+
+                    if (count($this->inFlight) < $this->ackWindow && $this->inFlightBytes < self::ACK_WINDOW_BYTES) {
+                        return true;
+                    }
+
+                    return $this->drainAcks($this->ackWindow - 1);
                 }
             } catch (\Exception $e) {
                 $this->sendLog('Error while sending file: ' . $filePath, true);
@@ -546,6 +743,7 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
 
             $this->send($filePath);
+            $this->drainBeforeFinish();
 
             $this->writeFrame('__FINISH_DICTIONARY_WITH_INTEGRITY__');
         }
@@ -557,46 +755,99 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
 
             $this->send($filePath);
+            $this->drainBeforeFinish();
 
             $this->writeFrame('__FINISH_SCAN_SIZE__');
         }
 
-        public function readFrame()
+        /**
+         * The next text message from the mirror, or null when none arrived before
+         * the deadline or the connection is gone. Several ACKs often share one read
+         * and a frame can straddle two, so the bytes are buffered and framed.
+         */
+        protected function readMessage($deadline)
         {
-            if ($this->connection === null || !is_resource($this->connection)) {
-                throw new UmbrellaPreventMaxExecutionTime();
+            while (true) {
+                $frame = $this->extractFrame();
+
+                if ($frame !== null) {
+                    if ($frame['opcode'] === 8) {
+                        return null;
+                    }
+                    if ($frame['opcode'] === 1) {
+                        return $frame['payload'];
+                    }
+                    continue;
+                }
+
+                if (time() >= $deadline || !is_resource($this->connection) || feof($this->connection)) {
+                    return null;
+                }
+
+                $data = @fread($this->connection, self::READ_CHUNK_SIZE);
+                if ($data === false) {
+                    return null;
+                }
+                if ($data === '') {
+                    usleep(10000);
+                    continue;
+                }
+
+                $this->readBuffer .= $data;
             }
-
-            $response = @fread($this->connection, self::READ_CHUNK_SIZE);
-            return $response;
         }
 
-        public function readFrameJson()
+        /** One complete frame from the buffer, or null while it is incomplete. */
+        protected function extractFrame()
         {
-            $response = $this->readFrame();
-            return $this->decodeWebSocketPayloadToJson($response);
-        }
+            $buffer = $this->readBuffer;
+            $length = strlen($buffer);
 
-        public function decodeWebSocketPayloadToJson($message)
-        {
-            // Clean the message from non-printable characters
-            $message = trim($message);
-
-            // Find the first '{' character
-            $startOfJson = strpos($message, '{');
-            if ($startOfJson === false) {
+            if ($length < 2) {
                 return null;
             }
 
-            // Cut the message to get only the JSON payload
-            $jsonPayload = substr($message, $startOfJson);
+            $opcode = ord($buffer[0]) & 0x0F;
+            $second = ord($buffer[1]);
+            $masked = ($second & 0x80) !== 0;
+            $payloadLength = $second & 0x7F;
+            $offset = 2;
 
-            // Remove the first character if it is a comma
-            if (substr($jsonPayload, 1, 1) == '{') {
-                $jsonPayload = substr($jsonPayload, 1);
+            if ($payloadLength === 126) {
+                if ($length < 4) {
+                    return null;
+                }
+                $payloadLength = unpack('n', substr($buffer, 2, 2))[1];
+                $offset = 4;
+            } elseif ($payloadLength === 127) {
+                if ($length < 10) {
+                    return null;
+                }
+                $payloadLength = unpack('J', substr($buffer, 2, 8))[1];
+                $offset = 10;
             }
 
-            return json_decode($jsonPayload, true);
+            $mask = '';
+            if ($masked) {
+                if ($length < $offset + 4) {
+                    return null;
+                }
+                $mask = substr($buffer, $offset, 4);
+                $offset += 4;
+            }
+
+            if ($length < $offset + $payloadLength) {
+                return null;
+            }
+
+            $payload = substr($buffer, $offset, $payloadLength);
+            if ($masked) {
+                $payload ^= str_repeat($mask, (int) ceil($payloadLength / 4));
+            }
+
+            $this->readBuffer = substr($buffer, $offset + $payloadLength);
+
+            return ['opcode' => $opcode, 'payload' => $payload];
         }
 
         public function close()
@@ -606,6 +857,9 @@ if (!class_exists('UmbrellaWebSocket', false)):
             }
 
             if (is_resource($this->connection)) {
+                if (count($this->inFlight) > 0) {
+                    $this->drainAcks();
+                }
                 fclose($this->connection);
             }
 

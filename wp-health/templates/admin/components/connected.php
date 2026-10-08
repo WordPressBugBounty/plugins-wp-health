@@ -4,6 +4,12 @@ $data = wp_umbrella_get_service('GetSettingsData')->getData();
 
 $allowTracking = $data['allow_tracking'];
 $allowOneClick = $data['allow_one_click_access'];
+
+$wpUmbrellaSettingsI18n = array(
+    'saved_title' => __('Great!', 'wp-health'),
+    'saved_message' => __('Your settings have been updated.', 'wp-health'),
+    'close' => esc_html__('Close', 'wp-health'),
+);
 ?>
 <div class="p-8">
 	<div class="flex gap-8">
@@ -21,7 +27,7 @@ $allowOneClick = $data['allow_one_click_access'];
 			<?php endif; ?>
 			<?php if(!empty($data['white_label']['email_support'])): ?>
 				<p class="my-2 text-sm">
-					<?php _e('Email Support', 'wp-health') ?>:
+					<?php esc_html_e('Email Support', 'wp-health') ?>:
 					<a
 						href="mailto:<?php echo esc_attr($data['white_label']['email_support']); ?>"
 						class="underline text-blue-500"
@@ -34,7 +40,7 @@ $allowOneClick = $data['allow_one_click_access'];
 		<?php if($data['white_label']['view_company_details']): ?>
 			<div class="bg-white rounded-lg p-8">
 				<p class="text-lg font-medium text-indigo-600 mb-1">
-					Company details
+					<?php esc_html_e('Company details', 'wp-health'); ?>
 				</p>
 				<?php if(isset($data['white_label']['company_details']['line1']) && !empty($data['white_label']['company_details']['line1'])): ?>
 					<p class="text-sm">
@@ -77,9 +83,9 @@ $allowOneClick = $data['allow_one_click_access'];
 		<?php include_once __DIR__ . '/forms/validate-api-key.php'; ?>
 		<div class="flex items-center gap-4 mt-8">
 			<div class="w-3/4">
-				<p>Enable Error Monitoring</p>
-				<a class="underline cursor-pointer inline-flex items-center gap-2" href="https://support.wp-umbrella.com/article/101-what-information-do-we-collect" target="_blank">
-					What information will we collect?
+				<p><?php esc_html_e('Enable Error Monitoring', 'wp-health'); ?></p>
+				<a class="underline cursor-pointer inline-flex items-center gap-2" href="https://support.wp-umbrella.com/en/articles/16-php-error-monitoring-in-wp-umbrella-data-collection-overview" target="_blank">
+					<?php esc_html_e('What information will we collect?', 'wp-health'); ?>
 
 					<svg class="w-3 h-3 opacity-50" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 7H6C5.46957 7 4.96086 7.21071 4.58579 7.58579C4.21071 7.96086 4 8.46957 4 9V18C4 18.5304 4.21071 19.0391 4.58579 19.4142C4.96086 19.7893 5.46957 20 6 20H15C15.5304 20 16.0391 19.7893 16.4142 19.4142C16.7893 19.0391 17 18.5304 17 18V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10 14L20 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 4H20V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 				</a>
@@ -113,9 +119,9 @@ $allowOneClick = $data['allow_one_click_access'];
 		</div>
 		<div class="flex items-center gap-4 mt-4">
 			<div class="w-3/4">
-				<p>Enable 1-Click Access</p>
-				<a class="underline cursor-pointer inline-flex items-center gap-2" href="https://support.wp-umbrella.com/article/102-understanding-wp-umbrella-1-click-access" target="_blank">
-					<span>What is the 1-Click Admin Access?</span>
+				<p><?php esc_html_e('Enable 1-Click Access', 'wp-health'); ?></p>
+				<a class="underline cursor-pointer inline-flex items-center gap-2" href="https://support.wp-umbrella.com/en/articles/23-understanding-wp-umbrella-1-click-access" target="_blank">
+					<span><?php esc_html_e('What is the 1-Click Admin Access?', 'wp-health'); ?></span>
 					<svg class="w-3 h-3 opacity-50" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11 7H6C5.46957 7 4.96086 7.21071 4.58579 7.58579C4.21071 7.96086 4 8.46957 4 9V18C4 18.5304 4.21071 19.0391 4.58579 19.4142C4.96086 19.7893 5.46957 20 6 20H15C15.5304 20 16.0391 19.7893 16.4142 19.4142C16.7893 19.0391 17 18.5304 17 18V13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M10 14L20 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15 4H20V9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
 				</a>
 			</div>
@@ -157,6 +163,8 @@ $allowOneClick = $data['allow_one_click_access'];
 
 
 <script>
+var wpUmbrellaSettingsI18n = <?php echo wp_json_encode($wpUmbrellaSettingsI18n); ?>;
+
 document.addEventListener('DOMContentLoaded', function(){
 
 	function toggleErrorMonitoring(){
@@ -201,10 +209,10 @@ document.addEventListener('DOMContentLoaded', function(){
 			document.querySelector('input[name="hidden_wp_health_allow_tracking"]').value = valueTracking === 'true' ? 'false' : 'true'
 
 			Swal.fire({
-				title: "Great!",
-				html: "Your settings have been updated.",
+				titleText: wpUmbrellaSettingsI18n.saved_title,
+				text: wpUmbrellaSettingsI18n.saved_message,
 				icon: "success",
-				confirmButtonText: "Close",
+				confirmButtonText: wpUmbrellaSettingsI18n.close,
 			})
 
 		})
@@ -254,10 +262,10 @@ document.addEventListener('DOMContentLoaded', function(){
 			document.querySelector('input[name="hidden_wp_umbrella_allow_one_click_access"]').value = valueTracking === 'true' ? 'false' : 'true'
 
 			Swal.fire({
-				title: "Great!",
-				html: "Your settings have been updated.",
+				titleText: wpUmbrellaSettingsI18n.saved_title,
+				text: wpUmbrellaSettingsI18n.saved_message,
 				icon: "success",
-				confirmButtonText: "Close",
+				confirmButtonText: wpUmbrellaSettingsI18n.close,
 			})
 		})
 	}

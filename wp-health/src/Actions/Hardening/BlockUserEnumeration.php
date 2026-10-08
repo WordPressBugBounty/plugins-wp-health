@@ -92,10 +92,6 @@ class BlockUserEnumeration implements ExecuteHooks
     }
 
     /**
-     * edit_posts is the capability WordPress itself accepts on
-     * /wp/v2/users?who=authors, and the roles that carry it read the author
-     * list from the editor. The roster stays closed to everyone below them.
-     *
      * @return bool
      */
     protected function callerMayReadAuthors()

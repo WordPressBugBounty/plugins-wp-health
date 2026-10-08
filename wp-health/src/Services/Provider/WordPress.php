@@ -6,6 +6,7 @@ if (!defined('ABSPATH')) {
 }
 
 use WPUmbrella\DataTransferObject\WordPressUpdate;
+use WPUmbrella\Services\Core\UpdateOffers;
 
 class WordPress
 {
@@ -396,8 +397,35 @@ class WordPress
         $update->wp_content_directory = $data['wp_content_directory'];
         $update->wp_plugin_directory = $data['wp_plugin_directory'];
         $update->latest = $this->hydrateLatestCore($data['wordpress_up_to_date']['latest']);
+        $update->available_versions = $this->getAvailableCoreVersions();
 
         return $update;
+    }
+
+    /**
+     * @return array
+     */
+    protected function getAvailableCoreVersions()
+    {
+        try {
+            $versions = [];
+
+            foreach ((new UpdateOffers())->available() as $version => $offer) {
+                $versions[] = [
+                    'version' => (string) $version,
+                    'php_version' => isset($offer->php_version) ? $offer->php_version : '',
+                    'mysql_version' => isset($offer->mysql_version) ? $offer->mysql_version : '',
+                ];
+            }
+
+            usort($versions, function ($a, $b) {
+                return version_compare($a['version'], $b['version']);
+            });
+
+            return $versions;
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /**

@@ -32,7 +32,7 @@ if (!class_exists('UmbrellaCleanup', false)):
             $filePath = $abspath . DIRECTORY_SEPARATOR . 'cloner.php';
 
             if(file_exists($filePath)) {
-                @unlink($filePath);
+                $this->discardFile($filePath);
             }
 
 			if(file_exists($this->context->getDictionaryPath())) {
@@ -42,6 +42,22 @@ if (!class_exists('UmbrellaCleanup', false)):
 			if(file_exists($this->context->getDirectoryDictionaryPath())) {
 				@unlink($this->context->getDirectoryDictionaryPath());
 			}
+        }
+
+        protected function discardFile($path)
+        {
+            if (is_link($path)) {
+                @unlink($path);
+                return;
+            }
+
+            $handle = @fopen($path, 'r+');
+            if ($handle !== false) {
+                @ftruncate($handle, 0);
+                @fclose($handle);
+            }
+
+            @unlink($path);
         }
 
         protected function removeDirectory($path)

@@ -18,7 +18,31 @@ class Snapshot
             'unlisted_code' => $this->getUnlistedCode(),
             'emptied_files' => $this->getEmptiedFiles(),
             'tls_probe' => $this->getTlsProbe(),
+            'translations' => wp_umbrella_get_service('LanguagesProvider')->getData(),
+            'network' => $this->getNetwork(),
+            'loopback_stats' => $this->getLoopbackStats(),
         ];
+    }
+
+    protected function getLoopbackStats()
+    {
+        try {
+            return wp_umbrella_get_service('LoopbackStats')->getData();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * @return array Empty on a single site install.
+     */
+    protected function getNetwork()
+    {
+        try {
+            return wp_umbrella_get_service('NetworkIdentity')->getData();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     protected function getTlsProbe()

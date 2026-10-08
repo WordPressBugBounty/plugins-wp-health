@@ -27,6 +27,7 @@ class UpdateMultiple extends AbstractController
         $providedUpdates = isset($params['provided_updates']) && is_array($params['provided_updates'])
             ? $params['provided_updates']
             : [];
+        $lockToken = isset($params['lock_token']) ? $params['lock_token'] : null;
 
         try {
             $data = $managePlugin->bulkUpdate($plugins, [
@@ -34,6 +35,7 @@ class UpdateMultiple extends AbstractController
                 'require_backup' => $requireBackup,
                 'backup_done' => $backupDone,
                 'provided_updates' => $providedUpdates,
+                'lock_token' => $lockToken,
             ]);
 
             return $this->returnResponse($data);
