@@ -691,9 +691,11 @@ class HtaccessFile
 
         $snapshot = file_exists($path) ? file_get_contents($path) : null;
 
-        $written = insert_with_markers($path, self::MARKER, $lines);
+        $written = insert_with_markers($path, self::MARKER, $lines) && $this->moveBlockAboveWordPress($path);
 
         if (!$written) {
+            $this->restore($path, $snapshot);
+
             return ['status' => 'error', 'reason' => 'write_failed'];
         }
 
@@ -732,6 +734,78 @@ class HtaccessFile
             'headers' => $headers,
             'self_check' => $selfCheck['reason'],
         ];
+    }
+
+    /**
+     * The multisite WordPress block ends rewrite processing for every existing
+     * file with "RewriteRule ^ - [L]", and a server that reads only rewrite
+     * rules from .htaccess has nothing else to apply, so the block has to come
+     * first. insert_with_markers() keeps a block where it is and appends a new
+     * one, which lands it under WordPress.
+     */
+    public function isBlockBelowWordPress()
+    {
+        $positions = $this->getMarkerPositions(preg_split('/\r\n|\r|\n/', $this->getContents()));
+
+        return $positions !== null && $positions['begin'] > $positions['wordpress'];
+    }
+
+    protected function moveBlockAboveWordPress($path)
+    {
+        $handle = fopen($path, 'r+');
+
+        if (!$handle) {
+            return false;
+        }
+
+        flock($handle, LOCK_EX);
+
+        $contents = stream_get_contents($handle);
+        $moved = is_string($contents) ? $this->withBlockAboveWordPress($contents) : false;
+
+        if (is_string($moved) && $moved !== $contents) {
+            ftruncate($handle, 0);
+            rewind($handle);
+            $moved = fwrite($handle, $moved) === strlen($moved) && fflush($handle);
+        }
+
+        flock($handle, LOCK_UN);
+        fclose($handle);
+
+        return $moved !== false;
+    }
+
+    protected function withBlockAboveWordPress($contents)
+    {
+        $eol = strpos($contents, "\r\n") !== false ? "\r\n" : "\n";
+        $lines = preg_split('/\r\n|\r|\n/', $contents);
+        $positions = $this->getMarkerPositions($lines);
+
+        if ($positions === null || $positions['begin'] < $positions['wordpress']) {
+            return $contents;
+        }
+
+        $block = array_splice($lines, $positions['begin'], $positions['end'] - $positions['begin'] + 1);
+        array_splice($lines, $positions['wordpress'], 0, $block);
+
+        return implode($eol, $lines);
+    }
+
+    /**
+     * @return array{wordpress: int, begin: int, end: int}|null
+     */
+    protected function getMarkerPositions(array $lines)
+    {
+        $trimmed = array_map('trim', $lines);
+        $wordpress = array_search('# BEGIN WordPress', $trimmed, true);
+        $begin = array_search('# BEGIN ' . self::MARKER, $trimmed, true);
+        $end = array_search('# END ' . self::MARKER, $trimmed, true);
+
+        if ($wordpress === false || $begin === false || $end === false || $end < $begin) {
+            return null;
+        }
+
+        return ['wordpress' => $wordpress, 'begin' => $begin, 'end' => $end];
     }
 
     protected function isRootWritable()

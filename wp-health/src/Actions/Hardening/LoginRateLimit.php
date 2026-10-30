@@ -4,8 +4,10 @@ namespace WPUmbrella\Actions\Hardening;
 use WP_Error;
 use WP_User;
 use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
+use WPUmbrella\Services\ClientIp\ClientIpShadow;
 use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
+use WPUmbrella\Actions\RestAuthenticationBypass;
 use WPUmbrella\Core\Hooks\ExecuteHooks;
 use WPUmbrella\Services\Hardening\TransientCounter;
 use WPUmbrella\Services\Hardening\TransientLock;
@@ -68,6 +70,7 @@ class LoginRateLimit implements ExecuteHooks
 
         add_filter('authenticate', [$this, 'enforce'], 20, 2);
         add_action('wp_login_failed', [$this, 'onFailure'], 10, 1);
+        add_action('application_password_failed_authentication', [$this, 'onApplicationPasswordFailure'], 10, 1);
 
         add_action('init', function () {
             (new SyncScheduler())->schedule();
@@ -89,8 +92,33 @@ class LoginRateLimit implements ExecuteHooks
         return $user;
     }
 
+    public function onApplicationPasswordFailure($error = null)
+    {
+        if (defined('XMLRPC_REQUEST') && XMLRPC_REQUEST) {
+            return;
+        }
+
+        if (!$error instanceof WP_Error || $error->get_error_code() !== 'incorrect_password') {
+            return;
+        }
+
+        if ((new RestAuthenticationBypass())->isUmbrellaRoute()) {
+            return;
+        }
+
+        $password = isset($_SERVER['PHP_AUTH_PW']) ? (string) $_SERVER['PHP_AUTH_PW'] : '';
+
+        if (strlen(preg_replace('/[^a-z\d]/i', '', $password)) !== 24) {
+            return;
+        }
+
+        $this->onFailure('');
+    }
+
     public function onFailure($username)
     {
+        (new ClientIpShadow())->observe('login_rate_limit');
+
         $ip = ClientIpResolver::resolve();
 
         if ($ip === null || $this->isBlocked($ip)) {

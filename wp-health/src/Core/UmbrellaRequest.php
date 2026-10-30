@@ -6,7 +6,7 @@ use WPUmbrella\Helpers\Controller;
 
 class UmbrellaRequest
 {
-    const REST_PREFIX = '/wp-json/wp-umbrella';
+    const REST_ROOT = '/wp-json';
 
     const REST_NAMESPACE = '/wp-umbrella';
 
@@ -19,6 +19,8 @@ class UmbrellaRequest
     protected $request = [];
 
     protected $headers = [];
+
+    protected $dispatchedRoute = null;
 
     /**
      * @var array
@@ -142,44 +144,97 @@ class UmbrellaRequest
         return  $value;
     }
 
+    public function setDispatchedRoute($route)
+    {
+        $this->dispatchedRoute = $route;
+    }
+
     /**
      * @return boolean
      */
     public function isLoginRoute()
     {
-        if ($this->getAction() !== '/v1/login') {
-            return false;
-        }
-
-        $requestedRoute = $this->getRequestedRoute();
-
-        return $requestedRoute === null || $requestedRoute === '/v1/login';
+        return $this->getAction() === '/v1/login' && $this->requestedRoutesMatchAction();
     }
 
     /**
-     * Route asked for by the URL itself, or null when the request does not
-     * carry one.
-     *
-     * @return string|null
+     * @return boolean
      */
-    public function getRequestedRoute()
+    public function requestedRoutesMatchAction()
     {
-        $restRoute = isset($this->query['rest_route']) ? (string) $this->query['rest_route'] : '';
-        if ($restRoute !== '' && strpos($restRoute, self::REST_NAMESPACE) === 0) {
-            return untrailingslashit(substr($restRoute, strlen(self::REST_NAMESPACE)));
+        $action = $this->getAction();
+
+        foreach ($this->getRequestedRoutes() as $route) {
+            if ($route !== $action) {
+                return false;
+            }
         }
 
-        $path = $this->getRequestPath();
-        if (!is_string($path)) {
-            return null;
+        return true;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getRequestedRoutes()
+    {
+        $routes = [];
+
+        $candidates = [
+            $this->dispatchedRoute,
+            $this->request['rest_route'] ?? null,
+            $this->query['rest_route'] ?? null,
+        ];
+
+        foreach ($candidates as $route) {
+            if ($route === null) {
+                continue;
+            }
+
+            $routes[] = is_string($route) ? $this->normalizeRoute($route) : '';
         }
 
-        $position = strpos($path, self::REST_PREFIX);
-        if ($position === false) {
-            return null;
+        foreach ($this->getRoutingPaths() as $path) {
+            if (preg_match('#' . preg_quote(self::REST_ROOT, '#') . '(/.*)?$#i', $path, $matches)) {
+                $routes[] = $this->normalizeRoute(isset($matches[1]) ? $matches[1] : '');
+            }
         }
 
-        return untrailingslashit(substr($path, $position + strlen(self::REST_PREFIX)));
+        return $routes;
+    }
+
+    /**
+     * @return string[]
+     */
+    protected function getRoutingPaths()
+    {
+        $paths = [];
+
+        $candidates = [
+            isset($_SERVER['REQUEST_URI']) ? explode('?', (string) $_SERVER['REQUEST_URI'], 2)[0] : null,
+            isset($_SERVER['PATH_INFO']) ? (string) $_SERVER['PATH_INFO'] : null,
+        ];
+
+        foreach ($candidates as $path) {
+            if (!is_string($path) || $path === '') {
+                continue;
+            }
+
+            $paths[] = preg_replace('#/+#', '/', rawurldecode($path));
+        }
+
+        return $paths;
+    }
+
+    protected function normalizeRoute($route)
+    {
+        $route = untrailingslashit($route);
+
+        if (strpos($route, self::REST_NAMESPACE . '/') === 0) {
+            return substr($route, strlen(self::REST_NAMESPACE));
+        }
+
+        return $route;
     }
 
     public function getRequestFrom()

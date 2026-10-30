@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 $context = isset($wpUmbrellaTwoFactor) && is_array($wpUmbrellaTwoFactor) ? $wpUmbrellaTwoFactor : [];
 
 ?>
-<form name="wpu_two_factor_codes" id="wpu-two-factor-codes" method="post" action="<?php echo esc_url(site_url('wp-login.php?action=' . $context['action'], 'login_post')); ?>">
+<form name="wpu_two_factor_codes" id="wpu-two-factor-codes" method="post" action="<?php echo esc_url($context['formAction']); ?>">
 	<p><?php echo esc_html__('Two-factor authentication is on. Save these recovery codes now: they are shown once, and each one works a single time if you lose your phone.', 'wp-health'); ?></p>
 
 	<ul style="margin:12px 0;padding:12px;background:#f6f7f7;list-style:none;font-family:monospace;font-size:14px;line-height:1.8;">

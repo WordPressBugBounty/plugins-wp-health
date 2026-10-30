@@ -39,6 +39,7 @@ class BackupScriptManifest
                         'Step/StepContext.php',
                         'Step/StepRequestContext.php',
                         'Step/StepOutcome.php',
+                        'Step/StepTlsProbe.php',
                         'Step/StepSocket.php',
                         'Step/AbstractStepHandler.php',
                         'Step/Handler/ScanStep.php',

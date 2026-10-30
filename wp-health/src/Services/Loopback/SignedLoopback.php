@@ -59,6 +59,9 @@ class SignedLoopback
         if (!empty($stripped)) {
             $events[] = 'extra_fields_stripped';
         }
+        if ($tokenState !== LoopbackToken::CONSUMED || !empty($stripped)) {
+            $events[] = 'strict_refused';
+        }
 
         $reportedKeys = $this->reportedKeys($stripped);
 

@@ -28,15 +28,34 @@ class SyncScheduler
     /**
      * Schedules the recurring sync if it is not already scheduled.
      *
+     * Two pending instances mean two recurring chains: a request checked for
+     * the sync in the gap between a run being marked complete and its next
+     * instance being created. Both chains would keep repeating forever, so
+     * they are cancelled and a single one is scheduled again.
+     *
      * @return void
      */
     public function schedule()
     {
-        if (!function_exists('as_next_scheduled_action') || !function_exists('as_schedule_recurring_action')) {
+        if (!function_exists('as_next_scheduled_action') || !function_exists('as_schedule_recurring_action') || !function_exists('as_get_scheduled_actions')) {
             return;
         }
 
-        if (false !== as_next_scheduled_action(self::ACTION_HOOK, [], self::GROUP)) {
+        $pending = as_get_scheduled_actions([
+            'hook' => self::ACTION_HOOK,
+            'args' => [],
+            'group' => self::GROUP,
+            'status' => 'pending',
+            'per_page' => 2,
+        ], 'ids');
+
+        if (count($pending) === 1) {
+            return;
+        }
+
+        if (count($pending) > 1) {
+            $this->unschedule();
+        } elseif (false !== as_next_scheduled_action(self::ACTION_HOOK, [], self::GROUP)) {
             return;
         }
 
@@ -47,7 +66,8 @@ class SyncScheduler
             self::resolveInterval(),
             self::ACTION_HOOK,
             [],
-            self::GROUP
+            self::GROUP,
+            true
         );
     }
 

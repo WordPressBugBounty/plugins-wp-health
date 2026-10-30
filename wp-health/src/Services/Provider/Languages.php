@@ -30,7 +30,26 @@ class Languages
 
         $updates = array_filter(wp_get_translation_updates(), [$this, 'hasPackage']);
 
-        return array_values(array_map([$this, 'format'], $updates));
+        return $this->unique(array_map([$this, 'format'], $updates));
+    }
+
+    /**
+     * A plugin hooking the update transient can add its pack on every pass,
+     * which lists the same pack several times.
+     */
+    protected function unique($translations)
+    {
+        $unique = [];
+
+        foreach ($translations as $translation) {
+            $key = $translation['type'] . '|' . $translation['slug'] . '|' . $translation['language'];
+
+            if (!isset($unique[$key])) {
+                $unique[$key] = $translation;
+            }
+        }
+
+        return array_values($unique);
     }
 
     /**

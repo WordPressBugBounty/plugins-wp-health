@@ -10,11 +10,13 @@ if (!defined('ABSPATH')) {
  */
 class LicenseNormalizer
 {
+    const PERSONAL_EXTRA_DATA_KEYS = ['email', 'consumer_email', 'username', 'license_name'];
+
     /**
      * Normalize license data to ensure consistent structure
      *
      * @param array $license Raw license data
-     * @return array Normalized license data
+     * @return array Normalized license data, without the license key itself
      */
     public function normalize(array $license): array
     {
@@ -36,6 +38,16 @@ class LicenseNormalizer
         // Generate masked license key if not provided
         if (!empty($normalized['license_key']) && empty($normalized['license_key_masked'])) {
             $normalized['license_key_masked'] = $this->maskLicenseKey($normalized['license_key']);
+        }
+
+        unset($normalized['license_key']);
+
+        if (is_array($normalized['extra_data'])) {
+            foreach (self::PERSONAL_EXTRA_DATA_KEYS as $key) {
+                unset($normalized['extra_data'][$key]);
+            }
+        } else {
+            $normalized['extra_data'] = [];
         }
 
         // Determine if license is active

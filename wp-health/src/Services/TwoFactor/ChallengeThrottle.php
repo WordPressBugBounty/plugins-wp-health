@@ -2,7 +2,7 @@
 namespace WPUmbrella\Services\TwoFactor;
 
 use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
-use WPUmbrella\Services\Hardening\TransientCounter;
+use WPUmbrella\Services\ClientIp\ClientIpShadow;
 
 if (!defined('ABSPATH')) {
     exit;
@@ -21,13 +21,13 @@ class ChallengeThrottle
     const WINDOW = 900;
 
     /**
-     * @var TransientCounter
+     * @var OptionRowCounter
      */
     protected $counter;
 
     public function __construct()
     {
-        $this->counter = new TransientCounter();
+        $this->counter = new OptionRowCounter();
     }
 
     /**
@@ -53,6 +53,8 @@ class ChallengeThrottle
     {
         $userCount = $this->counter->increment($this->userKey($userId), self::WINDOW);
 
+        (new ClientIpShadow())->observe('two_factor_throttle');
+
         $ipKey = $this->ipKey();
         $ipCount = $ipKey !== null ? $this->counter->increment($ipKey, self::WINDOW) : 0;
 
@@ -66,7 +68,7 @@ class ChallengeThrottle
      */
     public function clear($userId)
     {
-        delete_transient($this->userKey($userId));
+        $this->counter->reset($this->userKey($userId));
     }
 
     /**

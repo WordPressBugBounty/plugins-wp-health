@@ -277,6 +277,8 @@ class UpgraderTempBackup
             }
         }
 
+        $this->ensureRootGuard($dest_dir);
+
         $src_dir = $wp_filesystem->find_folder($args['src']);
 
         // find_folder() can return false/empty on non-standard installs (Bedrock, Composer-managed).
@@ -437,6 +439,20 @@ class UpgraderTempBackup
             'success' => true,
             'verified' => true,
         ];
+    }
+
+    protected function ensureRootGuard($rootDir)
+    {
+        global $wp_filesystem;
+
+        if (!$wp_filesystem->exists($rootDir . 'index.php')) {
+            $wp_filesystem->put_contents($rootDir . 'index.php', '<?php // Silence is golden.', FS_CHMOD_FILE);
+        }
+
+        if (!$wp_filesystem->exists($rootDir . '.htaccess')) {
+            $lines = wp_umbrella_get_service('HtaccessFile')->getDenyLines();
+            $wp_filesystem->put_contents($rootDir . '.htaccess', implode("\n", $lines) . "\n", FS_CHMOD_FILE);
+        }
     }
 
     /**

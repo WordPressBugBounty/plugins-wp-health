@@ -215,13 +215,7 @@ class RequestSettings
                 ],
                 admin_url('admin-ajax.php')
             ),
-            [
-                'timeout' => 30,
-                'blocking' => false,
-                'sslverify' => apply_filters('https_local_ssl_verify', false),
-                'user-agent' => 'WPUmbrella',
-                'body' => wp_umbrella_snapshot_request_body(),
-            ]
+            wp_umbrella_snapshot_request_args()
         );
     }
 

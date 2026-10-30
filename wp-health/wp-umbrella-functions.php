@@ -8,7 +8,7 @@ function wp_umbrella_init_defined_standalone()
     define('WP_UMBRELLA_NAME', 'WP Umbrella');
     define('WP_UMBRELLA_SLUG', 'wp-health');
     define('WP_UMBRELLA_OPTION_GROUP', 'group-wp-health');
-    define('WP_UMBRELLA_VERSION', '2.28.0');
+    define('WP_UMBRELLA_VERSION', '2.28.1');
     define('WP_UMBRELLA_GOD_HANDLER_VERSION', '1.0.1');
     define('WP_UMBRELLA_PHP_MIN', '7.4');
 
@@ -288,6 +288,25 @@ function wp_umbrella_snapshot_request_body()
     return $body;
 }
 
+/**
+ * Some hosts reject a POST to /wp-admin/ without a Referer or a user agent starting with "WordPress/".
+ *
+ * @return array
+ */
+function wp_umbrella_snapshot_request_args()
+{
+    return [
+        'timeout' => 30,
+        'blocking' => false,
+        'sslverify' => apply_filters('https_local_ssl_verify', false),
+        'user-agent' => 'WordPress/' . get_bloginfo('version') . '; ' . home_url('/') . '; WPUmbrella',
+        'headers' => [
+            'Referer' => admin_url(),
+        ],
+        'body' => wp_umbrella_snapshot_request_body(),
+    ];
+}
+
 function wp_umbrella_request_token_from_response($response)
 {
     if (!is_array($response) || !isset($response['request_token'])) {
@@ -452,9 +471,8 @@ function wp_umbrella_rollback_new_hash()
  */
 function wp_umbrella_remove_file($file)
 {
-    // Is it a sym link ?
     if (is_link($file)) {
-        $file = @readlink($file);
+        return @unlink($file);
     }
     // Try to delete.
     if (file_exists($file) && !@unlink($file)) {

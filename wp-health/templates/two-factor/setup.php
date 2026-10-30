@@ -8,7 +8,7 @@ $context = isset($wpUmbrellaTwoFactor) && is_array($wpUmbrellaTwoFactor) ? $wpUm
 $secretGroups = implode(' ', str_split($context['secret'], 4));
 
 ?>
-<form name="wpu_two_factor_setup" id="wpu-two-factor-setup" method="post" action="<?php echo esc_url(site_url('wp-login.php?action=' . $context['action'], 'login_post')); ?>">
+<form name="wpu_two_factor_setup" id="wpu-two-factor-setup" method="post" action="<?php echo esc_url($context['formAction']); ?>">
 	<?php if (!empty($context['error'])) : ?>
 		<div id="login_error"><?php echo esc_html($context['error']); ?></div>
 	<?php endif; ?>

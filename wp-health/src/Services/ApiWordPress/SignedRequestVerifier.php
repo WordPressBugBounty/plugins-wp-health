@@ -101,7 +101,7 @@ class SignedRequestVerifier
             return false;
         }
 
-        if (!$this->consumeNonce($nonce)) {
+        if (!$this->consumeNonce($nonce, $timestamp)) {
             wp_umbrella_debug_log('signed login: nonce replay rejected');
             return false;
         }
@@ -167,6 +167,11 @@ class SignedRequestVerifier
 
         if ($this->isMultipartRequest($headers)) {
             wp_umbrella_debug_log("signed request {$ctx}: unsupported content type");
+            return false;
+        }
+
+        if ($this->hasMethodOverride($headers, $query)) {
+            wp_umbrella_debug_log("signed request {$ctx}: method override rejected");
             return false;
         }
 
@@ -240,13 +245,28 @@ class SignedRequestVerifier
             return false;
         }
 
-        if (!$this->consumeNonce($nonce)) {
+        if (!$this->consumeNonce($nonce, $timestamp)) {
             wp_umbrella_debug_log("signed request {$ctx}: nonce replay rejected");
             return false;
         }
 
         wp_umbrella_debug_log("signed request {$ctx}: signature OK key_id={$storedKeyId}");
         return true;
+    }
+
+    protected function hasMethodOverride(array $headers, $query)
+    {
+        if (isset($headers['x-http-method-override'])) {
+            return true;
+        }
+
+        if (!is_string($query) || $query === '') {
+            return false;
+        }
+
+        parse_str($query, $params);
+
+        return isset($params['_method']);
     }
 
     protected function isMultipartRequest(array $headers)
@@ -280,12 +300,12 @@ class SignedRequestVerifier
         return $raw === false ? null : $raw;
     }
 
-    protected function consumeNonce($nonce)
+    protected function consumeNonce($nonce, $timestamp)
     {
         global $wpdb;
 
         $key = self::NONCE_OPTION_PREFIX . md5($nonce);
-        $expiresAt = time() + SignedRequest::FRESHNESS_WINDOW_SECONDS + 60;
+        $expiresAt = max(time(), (int) $timestamp) + SignedRequest::FRESHNESS_WINDOW_SECONDS + 60;
 
         $claimed = $wpdb->query(
             $wpdb->prepare(

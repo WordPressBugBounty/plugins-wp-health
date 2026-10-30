@@ -12,6 +12,7 @@ class Deactivate extends AbstractController
     public function executePost($params)
     {
         $plugin = isset($params['plugin']) ? $params['plugin'] : null;
+        $silent = isset($params['silent']) ? filter_var($params['silent'], FILTER_VALIDATE_BOOLEAN) : true;
 
         if (!$plugin) {
             return $this->returnResponse(['code' => 'missing_parameters', 'message' => 'No plugin'], 400);
@@ -25,7 +26,7 @@ class Deactivate extends AbstractController
 
         try {
             $trace->addTrace('deactivate_started', ['plugin' => $plugin]);
-            $data = $managePluginDeactivate->deactivate($plugin);
+            $data = $managePluginDeactivate->deactivate($plugin, $silent);
             $trace->addTrace('deactivate_done', ['status' => $data['status'] ?? 'unknown']);
 
             if ($data['status'] === 'error') {

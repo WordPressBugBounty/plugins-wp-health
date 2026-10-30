@@ -3,6 +3,7 @@ namespace WPUmbrella\Actions\Hardening;
 
 use WP_Error;
 use WPUmbrella\Actions\ActivityLog\Framework\ClientIpResolver;
+use WPUmbrella\Services\ClientIp\ClientIpShadow;
 use WPUmbrella\Actions\ActivityLog\Framework\ProtectionEventRecorder;
 use WPUmbrella\Actions\ActivityLog\Framework\SyncScheduler;
 use WPUmbrella\Actions\Hardening\AttackerIps\BloomFilter;
@@ -48,6 +49,8 @@ class LoginIpBlocklist implements ExecuteHooks
 
     public function enforce($user, $username = '', $password = '')
     {
+        (new ClientIpShadow())->observe('login_ip_blocklist');
+
         $ip = BloomFilter::canonicalizeIp(ClientIpResolver::resolve());
 
         if ($ip === null) {

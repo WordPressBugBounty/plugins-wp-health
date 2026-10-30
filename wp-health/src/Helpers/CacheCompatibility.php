@@ -25,6 +25,13 @@ abstract class CacheCompatibility
             "\WPUmbrella\Thirds\Cache\SiteGround",
             "\WPUmbrella\Thirds\Cache\RedisObjectCache",
             "\WPUmbrella\Thirds\Cache\FlyingPress",
+            "\WPUmbrella\Thirds\Cache\W3TotalCache",
+            "\WPUmbrella\Thirds\Cache\WPOptimize",
+            "\WPUmbrella\Thirds\Cache\Hummingbird",
+            "\WPUmbrella\Thirds\Cache\CacheEnabler",
+            "\WPUmbrella\Thirds\Cache\Autoptimize",
+            "\WPUmbrella\Thirds\Cache\Raidboxes",
+            "\WPUmbrella\Thirds\Cache\XCloud",
         ]);
     }
 }

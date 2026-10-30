@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
 $context = isset($wpUmbrellaTwoFactor) && is_array($wpUmbrellaTwoFactor) ? $wpUmbrellaTwoFactor : [];
 
 ?>
-<form name="wpu_two_factor_challenge" id="wpu-two-factor-challenge" method="post" action="<?php echo esc_url(site_url('wp-login.php?action=' . $context['action'], 'login_post')); ?>">
+<form name="wpu_two_factor_challenge" id="wpu-two-factor-challenge" method="post" action="<?php echo esc_url($context['formAction']); ?>">
 	<?php if (!empty($context['error'])) : ?>
 		<div id="login_error"><?php echo esc_html($context['error']); ?></div>
 	<?php endif; ?>

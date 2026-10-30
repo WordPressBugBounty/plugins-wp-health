@@ -1,6 +1,8 @@
 <?php
 use WPUmbrella\Actions\Admin\Option;
 
+include_once __DIR__ . '/ajax-response.php';
+
 $data = wp_umbrella_get_service('GetSettingsData')->getData();
 
 $wpUmbrellaApiKeyLinkTags = array(
@@ -507,15 +509,20 @@ $wpUmbrellaApiKeyI18n = array(
 				body.append('action', 'wp_umbrella_check_api_key')
 				body.append('api_key', apiKey)
 
-				const response = await fetch(form.getAttribute('action'), {
-					method: 'POST',
-					body: body
-				})
-
-				const { data: { code,  ...rest } } = await response.json();
+				const { json, failure } = await wpUmbrellaPostAjax(form.getAttribute('action'), body);
 
 				loader.classList.remove('flex');
 				loader.classList.add('hidden');
+
+				if(failure){
+					errorMessage.innerHTML = wpUmbrellaAjaxFailureHtml(failure);
+					containerError.classList.remove('hidden');
+					containerError.classList.add('flex');
+
+					return;
+				}
+
+				const { code, ...rest } = json?.data || {};
 
 				const { project_id, workspaces = [] } = rest
 
@@ -635,18 +642,26 @@ $wpUmbrellaApiKeyI18n = array(
 
 				wpuShowSecuring();
 
-				const response = await fetch(form.getAttribute('action'), {
-					method: 'POST',
-					body: body
-				})
+				const { json, failure } = await wpUmbrellaPostAjax(form.getAttribute('action'), body);
 
-				const { data : {code, critical_error, ...rest} } = await response.json();
+				const data = failure?.type === 'php_fatal' ? { code: 'wordpress_critical_error', critical_error: failure.critical_error } : (json?.data || {});
+				const { code, critical_error, ...rest } = data;
 
 				loader.classList.remove('flex')
 				loader.classList.add('hidden');
 				form.querySelector('button[type="submit"]').removeAttribute('disabled');
 
 				wpuHideSecuring(code === "success");
+
+				if(failure && failure.type !== 'php_fatal'){
+					Swal.fire({
+						html: wpUmbrellaAjaxFailureHtml(failure),
+						icon: 'error',
+						confirmButtonText: wpUmbrellaApiKeyI18n.close,
+					})
+
+					return;
+				}
 
 
 				if(code !== "success"){
@@ -715,7 +730,7 @@ $wpUmbrellaApiKeyI18n = array(
 							})
 							break;
 						case "wordpress_critical_error":
-							const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+							const escapeHtml = wpUmbrellaEscapeHtml;
 							const phpMessage = escapeHtml(critical_error?.message || wpUmbrellaApiKeyI18n.unknown_php_error);
 							const phpFile = escapeHtml(critical_error?.file || '');
 							const phpLine = critical_error?.line ? `:${escapeHtml(critical_error.line)}` : '';

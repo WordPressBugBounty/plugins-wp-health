@@ -333,58 +333,6 @@ class SecuPressEDDUpdater
         return $clean;
     }
 
-    public function show_changelog()
-    {
-        global $edd_plugin_data;
-
-        if (empty($_REQUEST['edd_sl_action']) || 'view_plugin_changelog' != $_REQUEST['edd_sl_action']) {
-            return;
-        }
-
-        if (empty($_REQUEST['plugin'])) {
-            return;
-        }
-
-        if (empty($_REQUEST['slug'])) {
-            return;
-        }
-
-        if (!current_user_can('update_plugins')) {
-            wp_die(__('You do not have permission to install plugin updates', 'secupress'), __('Error', 'secupress'), ['response' => 403]);
-        }
-
-        $data = $edd_plugin_data[$_REQUEST['slug']];
-        $beta = !empty($data['beta']) ? true : false;
-        $cache_key = md5('edd_plugin_' . sanitize_key($_REQUEST['plugin']) . '_' . $beta . '_version_info');
-        $version_info = $this->get_cached_version_info($cache_key);
-
-        if (false === $version_info) {
-            $api_params = [
-                'edd_action' => 'get_version',
-                'item_name' => isset($data['item_name']) ? $data['item_name'] : false,
-                'item_id' => isset($data['item_id']) ? $data['item_id'] : false,
-                'slug' => $_REQUEST['slug'],
-                'author' => $data['author'],
-                'url' => home_url(),
-                'beta' => !empty($data['beta'])
-            ];
-
-            $request = wp_remote_post($this->api_url, ['timeout' => 15, 'sslverify' => true, 'body' => $api_params]);
-
-            if (!is_wp_error($request)) {
-                $version_info = $this->sanitizeApiResponse(json_decode(wp_remote_retrieve_body($request)));
-            }
-
-            $this->set_version_info_cache($version_info, $cache_key);
-        }
-
-        if (!empty($version_info) && isset($version_info->sections['changelog'])) {
-            echo '<div style="background:#fff;padding:10px;">' . wp_kses_post($version_info->sections['changelog']) . '</div>';
-        }
-
-        exit;
-    }
-
     public function get_cached_version_info($cache_key = '')
     {
         if (empty($cache_key)) {

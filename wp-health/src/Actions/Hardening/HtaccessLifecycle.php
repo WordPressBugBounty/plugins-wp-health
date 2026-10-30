@@ -57,7 +57,10 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
 
         $htaccess = wp_umbrella_get_service('HtaccessFile');
 
-        if ($htaccess->getBlockVersion() === HtaccessFile::BLOCK_VERSION) {
+        $isCurrent = $htaccess->getBlockVersion() === HtaccessFile::BLOCK_VERSION;
+
+        // Only the multisite WordPress block ends rewrite processing for existing files.
+        if ($isCurrent && (!is_multisite() || !$htaccess->isBlockBelowWordPress())) {
             return;
         }
 
@@ -67,7 +70,7 @@ class HtaccessLifecycle implements ActivationHook, DeactivationHook, ExecuteHook
 
         $result = $htaccess->writeUmbrellaBlock();
 
-        if (isset($result['status']) && $result['status'] === 'ok') {
+        if (!$isCurrent && isset($result['status']) && $result['status'] === 'ok') {
             $this->lock->release(self::RECONCILE_RETRY_LOCK);
         }
     }

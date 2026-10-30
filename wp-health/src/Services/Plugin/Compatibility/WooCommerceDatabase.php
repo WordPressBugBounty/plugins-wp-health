@@ -5,6 +5,10 @@ namespace WPUmbrella\Services\Plugin\Compatibility;
 class WooCommerceDatabase
 {
 	public function updateDatabase(){
+		if (!defined('WC_PLUGIN_BASENAME')) {
+			return;
+		}
+
 		$fileName = WP_PLUGIN_DIR.'/woocommerce/includes/class-wc-install.php';
 
         if (!file_exists($fileName)) {

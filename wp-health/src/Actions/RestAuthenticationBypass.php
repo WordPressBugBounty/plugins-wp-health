@@ -21,7 +21,7 @@ class RestAuthenticationBypass implements ExecuteHooks
         return null;
     }
 
-    protected function isUmbrellaRoute()
+    public function isUmbrellaRoute()
     {
         $route = $this->getResolvedRoute();
 

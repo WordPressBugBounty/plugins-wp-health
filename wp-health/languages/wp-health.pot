@@ -137,6 +137,10 @@ msgstr ""
 msgid "Two-factor authentication"
 msgstr ""
 
+#: src/Actions/TwoFactor/LoginInterceptor.php:453
+msgid "Your two-factor authentication session has expired. Log in again to continue."
+msgstr ""
+
 #: src/Actions/TwoFactor/ProfileSection.php:193
 msgid "You have no WP Umbrella recovery codes left. Generate a new set from your profile so you can still get in if you lose your phone."
 msgstr ""

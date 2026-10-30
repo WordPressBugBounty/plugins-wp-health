@@ -5,7 +5,7 @@ Tags: monitoring, backups, backup, restore, update
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: v2.28.0
+Stable tag: v2.28.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -81,6 +81,24 @@ WP Umbrella is faster, and more reliable than alternatives like ManageWP, MainWP
 You can report security bugs through the Patchstack Vulnerability Disclosure Program. The Patchstack team helps validate, triage and handle any security vulnerabilities. [Report a security vulnerability.]( https://patchstack.com/database/vdp/dc85fd1d-7634-4195-bc42-b2f50c1aaf5b )
 
 == Changelog ==
+
+= 2.28.1 (10-30-2026) =
+- Changed: application passwords keep working for your integrations while two-factor is required for administrators.
+- Improved: your dashboard now receives the license status of your premium plugins with every sync.
+- Improved: the cache of W3 Total Cache, WP-Optimize, Hummingbird, Cache Enabler, Autoptimize, Raidboxes and xCloud is now cleared after an update.
+- Improved: the login protection now also counts failed application password attempts.
+- Improved: the hardening rules are applied more reliably, including on WordPress Multisite networks.
+- Improved: your site no longer loads an unused copy of its available updates on every page.
+- Fixed: on some sites, administrators were sent back to the login page after entering a valid two-factor code.
+- Fixed: the two-factor forms did not work behind the custom login URL of Admin and Site Enhancements (ASE).
+- Fixed: the API key and registration forms could keep loading forever, and now explain why the connection failed.
+- Fixed: premium plugin updates were not detected on some hosts, such as 20i.
+- Fixed: a translation update could be listed several times, for example with SEOPress PRO.
+- Fixed: updating an inactive WooCommerce could trigger a WordPress recovery mode email.
+- Fixed: removing the Security add-on left Patchstack files behind on your site.
+- Fixed: the activity log could run duplicate syncs on some sites.
+- Security: improved security of the requests sent by the WP Umbrella dashboard to your site.
+- Security: improved protection of the files WP Umbrella creates, uses and removes on your site.
 
 = 2.28.0 (10-06-2026) =
 - New: WP Umbrella can now detect and install your translation updates, for every language or for one language at a time.

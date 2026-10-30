@@ -99,18 +99,6 @@ class WordPressContext
         return get_site_transient($option);
     }
 
-    public function getSitemetaTransient($option)
-    {
-        /** @var wpdb $wpdb */
-        global $wpdb;
-        $option = '_site_transient_' . $option;
-
-        $result = $wpdb->get_var($wpdb->prepare("SELECT `meta_value` FROM `{$wpdb->sitemeta}` WHERE meta_key = '%s' AND `site_id` = '%s'", $option, $this->multisite));
-        $result = maybe_unserialize($result);
-
-        return $result;
-    }
-
     /**
      * @param WP_User|stdClass $user
      * @param bool             $remember

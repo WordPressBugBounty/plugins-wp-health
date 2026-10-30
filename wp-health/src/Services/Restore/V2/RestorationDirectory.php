@@ -25,19 +25,4 @@ class RestorationDirectory
 	{
 		return ! empty($this->getHashedFolder()) && file_exists($this->getPath());
 	}
-
-	public function generateHash(): string
-	{
-		$directorySuffix = sprintf('umbrella-%s', bin2hex(random_bytes(5)));
-		update_option(self::OPTION, $directorySuffix, false);
-
-		return $directorySuffix;
-	}
-
-	public function create(): bool
-	{
-		$hashedDirectory = sprintf("%s/%s", $this->getParentPath(), $this->generateHash());
-
-		return wp_mkdir_p($hashedDirectory);
-	}
 }

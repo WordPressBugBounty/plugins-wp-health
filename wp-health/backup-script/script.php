@@ -245,7 +245,8 @@ if (defined('WP_UMBRELLA_MIRROR_HOST')) {
 if (!function_exists('validHost')) {
     function validHost($host)
     {
-        if (strpos($host, 'mirror.wp-umbrella.com') !== false) {
+        $mirrorDomain = 'mirror.wp-umbrella.com';
+        if (substr($host, -strlen($mirrorDomain)) === $mirrorDomain) {
             return true;
         }
 

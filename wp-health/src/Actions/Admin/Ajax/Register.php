@@ -16,7 +16,6 @@ class Register implements ExecuteHooksBackend
     public function hooks()
     {
         add_action('wp_ajax_wp_umbrella_register', [$this, 'register']);
-        add_action('wp_ajax_wp_health_login', [$this, 'login']);
     }
 
     public function register()
@@ -73,52 +72,6 @@ class Register implements ExecuteHooksBackend
 
         wp_send_json_success([
             'user' => $result,
-        ]);
-    }
-
-    public function login()
-    {
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error([
-                'code' => 'not_authorized',
-            ]);
-            exit;
-        }
-
-        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'wp_health_login')) {
-            wp_send_json_error([
-                'code' => 'not_authorized',
-            ]);
-            exit;
-        }
-
-        if (!isset($_POST['email']) || !isset($_POST['password'])) {
-            wp_send_json_error([
-                'code' => 'missing_parameters',
-            ]);
-            exit;
-        }
-
-        $email = sanitize_email($_POST['email']);
-        $password = sanitize_text_field($_POST['password']);
-
-        try {
-            $newUser = $this->registerService->login($email, $password);
-        } catch (\Exception $e) {
-            wp_send_json_error([
-                'code' => 'unknown_error',
-            ]);
-            exit;
-        }
-
-        if (null === $newUser) {
-            wp_send_json_error([
-                'code' => 'no_user',
-            ]);
-        }
-
-        wp_send_json_success([
-            'user' => $newUser,
         ]);
     }
 }

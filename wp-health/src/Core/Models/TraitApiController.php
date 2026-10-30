@@ -83,13 +83,20 @@ trait TraitApiController
         }
 
         $umbrellaRequest = UmbrellaRequest::createFromGlobals();
+        if ($request instanceof WP_REST_Request) {
+            $umbrellaRequest->setDispatchedRoute($request->get_route());
+        }
 
         switch ($permission) {
             case Controller::PERMISSION_ONLY_API_TOKEN:
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isOnlyTokenAuthorized($umbrellaRequest);
                 break;
             case Controller::PERMISSION_WITH_SECRET_TOKEN:
-                return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($umbrellaRequest);
+                $authorized = wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($umbrellaRequest);
+                if ($authorized) {
+                    $this->recordSignatureShadow($umbrellaRequest);
+                }
+                return $authorized;
                 break;
             case Controller::PERMISSION_WITH_SIGNATURE:
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($umbrellaRequest);

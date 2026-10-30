@@ -19,7 +19,12 @@ class ClearCache
 
         $items = CacheCompatibility::getCacheCompatibilities();
         foreach ($items as $item) {
-            $available = $item::isAvailable();
+            try {
+                $available = $item::isAvailable();
+            } catch (\Throwable $e) {
+                $available = false;
+            }
+
             if (!$available) {
                 continue;
             }
@@ -41,8 +46,12 @@ class ClearCache
             return;
         }
 
+        // Adapters run third-party code: one that throws must not keep the caches after it stale.
         foreach ($collection->getIterator() as $item) {
-            $item->clear();
+            try {
+                $item->clear();
+            } catch (\Throwable $e) {
+            }
         }
     }
 }

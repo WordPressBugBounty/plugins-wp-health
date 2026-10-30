@@ -1,41 +1,9 @@
 <?php
 namespace WPUmbrella\Services\Provider;
 
-use WPUmbrella\Core\Constants\BackupData;
-
 class DatabaseTables
 {
     const NAME_SERVICE = 'DatabaseTablesProvider';
-
-    public function getSizeOfLines($tableName, $columns, $options = [])
-    {
-        $offset = $options['offset'] ?? 0;
-        $limit = $options['limit'] ?? 1000;
-
-        global $wpdb;
-
-        $columns = '`' . implode('`, `', $columns) . '`';
-
-        $query = sprintf("
-			SELECT SUM(size) as size
-			FROM (
-				SELECT CHAR_LENGTH(CONCAT({$columns}))*%s  as size
-				FROM %s
-				LIMIT %s OFFSET %s
-			) as TableSize
-		", BackupData::FACTOR_CHAR_LENGTH, esc_sql($tableName), $limit, $offset);
-
-        $result = $wpdb->get_results(
-            $query,
-            ARRAY_A
-        );
-
-        if (empty($result) || !isset($result[0])) {
-            return 0;
-        }
-
-        return $result[0]['size'];
-    }
 
     /**
      * @param string $tableName

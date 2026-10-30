@@ -139,7 +139,11 @@ trait TraitPhpController
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isOnlyTokenAuthorized($request);
                 break;
             case Controller::PERMISSION_WITH_SECRET_TOKEN:
-                return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($request);
+                $authorized = wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($request);
+                if ($authorized) {
+                    $this->recordSignatureShadow($request);
+                }
+                return $authorized;
                 break;
             case Controller::PERMISSION_WITH_SIGNATURE:
                 return wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isSignatureAuthorized($request);

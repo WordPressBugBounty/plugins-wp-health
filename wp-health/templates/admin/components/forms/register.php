@@ -1,9 +1,12 @@
 <?php
+include_once __DIR__ . '/ajax-response.php';
+
 $wpUmbrellaRegisterI18n = array(
 	'error_not_authorized' => __('Your session expired or you are not allowed to do this. Reload the page and try again.', 'wp-health'),
 	'error_network_admin_required' => __('On a WordPress network, only a network administrator can connect a site to WP Umbrella. Ask yours to create the account for this site.', 'wp-health'),
 	'error_not_available_title' => __('Registration is not possible!', 'wp-health'),
 	'error_not_available_text' => __('Please check that you do not already have an account.', 'wp-health'),
+	'error_generic' => __('Something went wrong while creating your account. Please try again. If the problem persists, contact our support at support@wp-umbrella.com.', 'wp-health'),
 	'success_title' => __('Great, Your website is connected!', 'wp-health'),
 	'success_text' => __('Head to your dashboard to manage your WordPress sites more efficiently and start exploring the features that WP Umbrella has to offer. 🙂', 'wp-health'),
 	'go_to_dashboard' => esc_html__('Go to the Dashboard', 'wp-health'),
@@ -107,17 +110,23 @@ $wpUmbrellaRegisterI18n = array(
 				form.querySelector('button[type="submit"]').setAttribute('disabled', 'disabled');
 
 
-				const response = await fetch(form.getAttribute('action'), {
-					method: 'POST',
-					body: new FormData(form)
-				})
-
-				const { success: accepted = true, data : { code, success = true } } = await response.json();
+				const { json, failure } = await wpUmbrellaPostAjax(form.getAttribute('action'), new FormData(form));
 
 				loader.classList.remove('flex')
 				loader.classList.add('hidden');
 
 				form.querySelector('button[type="submit"]').removeAttribute('disabled');
+
+				if(failure){
+					Swal.fire({
+						html: wpUmbrellaAjaxFailureHtml(failure),
+						icon: 'error',
+						confirmButtonText: wpUmbrellaRegisterI18n.close,
+					})
+					return;
+				}
+
+				const { success: accepted = true, data: { code, success = true } = {} } = json;
 
 				if(!accepted || !success){
 					switch(code){
@@ -140,6 +149,13 @@ $wpUmbrellaRegisterI18n = array(
 								titleText: wpUmbrellaRegisterI18n.error_not_available_title,
 								text: wpUmbrellaRegisterI18n.error_not_available_text,
 								icon: 'error',
+							})
+							break;
+						default:
+							Swal.fire({
+								text: wpUmbrellaRegisterI18n.error_generic,
+								icon: 'error',
+								confirmButtonText: wpUmbrellaRegisterI18n.close,
 							})
 							break;
 					}

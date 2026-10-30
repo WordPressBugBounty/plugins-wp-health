@@ -181,6 +181,7 @@ abstract class Controllers
 
                         'options' => [
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                            'signature_shadow' => true,
                         ]
                     ],
                 ]
@@ -194,6 +195,7 @@ abstract class Controllers
 
                         'options' => [
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                            'signature_shadow' => true,
                         ]
                     ],
                     [
@@ -203,6 +205,7 @@ abstract class Controllers
 
                         'options' => [
                             'permission' => Controller::PERMISSION_WITH_SECRET_TOKEN,
+                            'signature_shadow' => true,
                         ]
                     ],
                 ]
@@ -1089,9 +1092,6 @@ abstract class Controllers
                     ]
                 ]
             ],
-            '/v1/languages' => [
-                'route' => ''
-            ],
             '/v1/options/project' => [
                 'route' => '/options/project',
                 'methods' => [
@@ -1209,6 +1209,32 @@ abstract class Controllers
         }
 
         return $controllers;
+    }
+
+    /**
+     * @param string|null $action
+     * @param string|null $method
+     *
+     * @return bool
+     */
+    public static function allowsInactivePlugin($action, $method)
+    {
+        $controllers = self::getControllers();
+        if (!is_string($action) || !isset($controllers[$action]['methods'])) {
+            return false;
+        }
+
+        foreach ($controllers[$action]['methods'] as $data) {
+            if (
+                $data['method'] === $method &&
+                isset($data['options']['prevent_active']) &&
+                $data['options']['prevent_active'] === false
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function getDevControllers()

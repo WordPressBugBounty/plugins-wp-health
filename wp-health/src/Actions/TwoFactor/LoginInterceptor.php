@@ -20,6 +20,8 @@ class LoginInterceptor implements ExecuteHooks
 
     const NONCE_CHALLENGE = 'wp_umbrella_2fa_challenge';
 
+    const QUERY_EXPIRED = 'wpu_2fa_expired';
+
     /**
      * @var bool
      */
@@ -52,6 +54,7 @@ class LoginInterceptor implements ExecuteHooks
         add_action('wp_login', [$this, 'onLogin'], 5, 2);
         add_action('login_form_' . self::ACTION_SETUP, [$this, 'handleSetup']);
         add_action('login_form_' . self::ACTION_CHALLENGE, [$this, 'handleChallenge']);
+        add_filter('wp_login_errors', [$this, 'addExpiredMessage']);
     }
 
     /**
@@ -90,6 +93,7 @@ class LoginInterceptor implements ExecuteHooks
         $token = $this->loginToken->issue($user->ID, [
             'rememberme' => !empty($_POST['rememberme']),
             'redirectTo' => isset($_REQUEST['redirect_to']) ? (string) $_REQUEST['redirect_to'] : '',
+            'loginQuery' => $this->loginPageQuery(),
         ]);
 
         $this->destroyIssuedSession($user->ID);
@@ -252,6 +256,58 @@ class LoginInterceptor implements ExecuteHooks
     }
 
     /**
+     * Login URL plugins that only let wp-login.php through when their slug is
+     * in the query (ASE) would send our forms to their 404 page. The page the
+     * password was typed on carries that slug as a key without a value, so the
+     * forms keep those keys.
+     *
+     * @return array
+     */
+    protected function loginPageQuery()
+    {
+        $referer = wp_get_referer();
+
+        if (!is_string($referer) || $referer === '') {
+            return [];
+        }
+
+        $query = wp_parse_url($referer, PHP_URL_QUERY);
+
+        if (!is_string($query) || $query === '') {
+            return [];
+        }
+
+        wp_parse_str($query, $args);
+
+        $kept = [];
+
+        foreach ($args as $key => $value) {
+            if ($value !== '' || !preg_match('/^[A-Za-z0-9_-]+$/', (string) $key)) {
+                continue;
+            }
+
+            $kept[$key] = '';
+        }
+
+        return $kept;
+    }
+
+    /**
+     * @param string $token
+     * @param string $action
+     *
+     * @return string
+     */
+    protected function formAction($token, $action)
+    {
+        $payload = $this->loginToken->peek($token);
+        $args = isset($payload['loginQuery']) && is_array($payload['loginQuery']) ? $payload['loginQuery'] : [];
+        $args['action'] = $action;
+
+        return add_query_arg($args, site_url('wp-login.php', 'login_post'));
+    }
+
+    /**
      * @param \WP_User $user
      * @param string   $token
      *
@@ -330,7 +386,7 @@ class LoginInterceptor implements ExecuteHooks
                 $user->user_login,
                 $this->getIssuer()
             ),
-            'action' => self::ACTION_SETUP,
+            'formAction' => $this->formAction($token, self::ACTION_SETUP),
             'nonce' => $this->formNonce($token, self::NONCE_SETUP),
         ]);
     }
@@ -353,7 +409,7 @@ class LoginInterceptor implements ExecuteHooks
         $this->renderTemplate('recovery-codes.php', [
             'token' => $token,
             'codes' => $formatted,
-            'action' => self::ACTION_SETUP,
+            'formAction' => $this->formAction($token, self::ACTION_SETUP),
             'nonce' => $this->formNonce($token, self::NONCE_SETUP),
         ]);
     }
@@ -369,7 +425,7 @@ class LoginInterceptor implements ExecuteHooks
         $this->renderTemplate('challenge.php', [
             'token' => $token,
             'error' => $error,
-            'action' => self::ACTION_CHALLENGE,
+            'formAction' => $this->formAction($token, self::ACTION_CHALLENGE),
             'nonce' => $this->formNonce($token, self::NONCE_CHALLENGE),
         ]);
     }
@@ -430,7 +486,27 @@ class LoginInterceptor implements ExecuteHooks
      */
     protected function bounceToLogin()
     {
-        wp_safe_redirect(wp_login_url());
+        wp_safe_redirect(add_query_arg([self::QUERY_EXPIRED => '1'], wp_login_url()));
         exit;
+    }
+
+    /**
+     * @param \WP_Error $errors
+     *
+     * @return \WP_Error
+     */
+    public function addExpiredMessage($errors)
+    {
+        if (empty($_GET[self::QUERY_EXPIRED]) || !is_wp_error($errors)) {
+            return $errors;
+        }
+
+        $errors->add(
+            self::QUERY_EXPIRED,
+            __('Your two-factor authentication session has expired. Log in again to continue.', 'wp-health'),
+            'message'
+        );
+
+        return $errors;
     }
 }

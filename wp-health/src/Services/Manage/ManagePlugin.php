@@ -20,7 +20,8 @@ class ManagePlugin
 
         $response = get_site_transient($key);
 
-        set_transient($key, $response);
+        // WordPress only reads the site transient: drop the autoloaded copy older versions wrote
+        delete_transient($key);
         // Need to trigger pre_site_transient
         set_site_transient($key, $response);
     }

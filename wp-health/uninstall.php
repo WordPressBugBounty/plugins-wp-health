@@ -46,6 +46,7 @@ $wpUmbrellaOptions = [
     'wp_umbrella_last_htaccess_clean',
     'wp_umbrella_last_test_ping',
     'wp_umbrella_tls_probe',
+    'wp_umbrella_client_ip_shadow',
     'wp_umbrella_tls_fallback',
     'wp_umbrella_transient_update_plugins',
     'wp_umbrella_transient_update_themes',

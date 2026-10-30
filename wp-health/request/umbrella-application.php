@@ -38,7 +38,7 @@ function wp_umbrella_prevent_not_active()
 
     wp_umbrella_response([
         'code' => 'not_authorized'
-    ]);
+    ], 403);
     return;
 }
 
@@ -115,7 +115,11 @@ try {
 
 	$request = UmbrellaRequest::createFromGlobals();
 
-	if (!defined('WP_UMBRELLA_IS_ADMIN') && Kernel::canExecute($request)) {
+	if (!Controllers::allowsInactivePlugin($request->getAction(), $method)) {
+		wp_umbrella_prevent_not_active();
+	}
+
+	if (!defined('WP_UMBRELLA_IS_ADMIN') && Kernel::canSetupAdmin($request)) {
 		wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
 		wp_umbrella_get_service('RequestSettings')->setupAdmin();
 	}

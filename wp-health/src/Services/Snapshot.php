@@ -21,7 +21,33 @@ class Snapshot
             'translations' => wp_umbrella_get_service('LanguagesProvider')->getData(),
             'network' => $this->getNetwork(),
             'loopback_stats' => $this->getLoopbackStats(),
+            'client_ip_shadow' => $this->getClientIpShadow(),
+            'licenses' => $this->getLicenses(),
         ];
+    }
+
+    /**
+     * @return array|null Null when the detection fails.
+     */
+    protected function getLicenses()
+    {
+        try {
+            return wp_umbrella_get_service('LicenseManager')->getAllLicenses([
+                'only_active' => true,
+                'include_not_found' => false,
+            ]);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    protected function getClientIpShadow()
+    {
+        try {
+            return wp_umbrella_get_service('ClientIpShadow')->getData();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     protected function getLoopbackStats()

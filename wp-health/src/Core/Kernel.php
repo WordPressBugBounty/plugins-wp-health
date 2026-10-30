@@ -23,11 +23,21 @@ use WPUmbrella\Services\TwoFactor\TwoFactorPolicy;
 
 abstract class Kernel
 {
+    const TIER_SIGNATURE = 'signature';
+
+    const TIER_LOGIN_SIGNATURE = 'login_signature';
+
+    const TIER_SECRET_TOKEN = 'secret_token';
+
+    const TIER_API_KEY = 'api_key';
+
     protected static $container = null;
 
     protected static $universalProcess = null;
 
     protected static $apiLoad = false;
+
+    protected static $elevatedAction = null;
 
     protected static $data = ['slug' => null, 'main_file' => null, 'file' => null, 'root' => ''];
 
@@ -200,6 +210,121 @@ abstract class Kernel
      */
     public static function canExecute(UmbrellaRequest $request)
     {
+        return self::getAuthorizationTier($request) !== null;
+    }
+
+    public static function canSetupAdmin(UmbrellaRequest $request)
+    {
+        if (!$request->requestedRoutesMatchAction() || !self::isElevationEntryPoint()) {
+            return false;
+        }
+
+        return self::canSetupAdminForTier(self::getAuthorizationTier($request), $request->getAction());
+    }
+
+    protected static function isElevationEntryPoint()
+    {
+        foreach (['DOING_AJAX', 'DOING_CRON', 'XMLRPC_REQUEST', 'WP_ADMIN', 'IFRAME_REQUEST', 'WP_INSTALLING'] as $constant) {
+            if (defined($constant)) {
+                return false;
+            }
+        }
+
+        $script = isset($_SERVER['SCRIPT_FILENAME']) ? basename((string) $_SERVER['SCRIPT_FILENAME']) : '';
+        if (strtolower(substr($script, -4)) !== '.php') {
+            return true;
+        }
+
+        return in_array($script, ['index.php', 'umbrella-application.php'], true);
+    }
+
+    /**
+     * @param string|null $route
+     * @param string|null $action
+     *
+     * @return bool
+     */
+    public static function isDispatchedRouteAllowed($route, $action)
+    {
+        if (!is_string($route) || !is_string($action) || $action === '') {
+            return false;
+        }
+
+        return untrailingslashit($route) === UmbrellaRequest::REST_NAMESPACE . $action;
+    }
+
+    /**
+     * @param mixed $result
+     * @param mixed $server
+     * @param \WP_REST_Request $restRequest
+     *
+     * @return mixed
+     */
+    public static function guardRestDispatch($result, $server, $restRequest)
+    {
+        if (self::$elevatedAction === null) {
+            return $result;
+        }
+
+        if (is_object($restRequest) && self::isDispatchedRouteAllowed($restRequest->get_route(), self::$elevatedAction)) {
+            return $result;
+        }
+
+        self::dropElevatedIdentity();
+
+        return new \WP_Error('not_authorized', 'not_authorized', ['status' => 403]);
+    }
+
+    public static function dropElevatedIdentity()
+    {
+        if (self::$elevatedAction === null) {
+            return;
+        }
+
+        self::$elevatedAction = null;
+        wp_set_current_user(0);
+    }
+
+    protected static function guardElevatedRequest($action, $from)
+    {
+        self::$elevatedAction = $action;
+
+        add_filter('rest_pre_dispatch', [__CLASS__, 'guardRestDispatch'], PHP_INT_MIN, 3);
+
+        if ($from === ControllerHelper::API) {
+            add_action('parse_request', [__CLASS__, 'dropElevatedIdentity'], PHP_INT_MAX);
+        }
+    }
+
+    protected static function canSetupAdminForTier($tier, $action)
+    {
+        if ($tier === null) {
+            return false;
+        }
+
+        if ($tier !== self::TIER_API_KEY) {
+            return true;
+        }
+
+        $controllers = Controllers::getControllers();
+        if (!isset($controllers[$action]['methods'])) {
+            return false;
+        }
+
+        foreach ($controllers[$action]['methods'] as $data) {
+            if (isset($data['options']['permission']) && $data['options']['permission'] === ControllerHelper::PERMISSION_ONLY_API_TOKEN) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return string|null
+     */
+    public static function getAuthorizationTier(UmbrellaRequest $request)
+    {
         $action = $request->getAction();
         $options = [
             'with_cache' => $action !== '/v1/validation-application-token'
@@ -216,7 +341,7 @@ abstract class Kernel
                 $request->getActionHeader()
             );
             if ($verified) {
-                return true;
+                return self::TIER_SIGNATURE;
             }
         }
 
@@ -228,12 +353,12 @@ abstract class Kernel
                 $request->getParam('x-umb-login-nonce'),
                 $request->getParam('x-umb-login-keyid')
             )) {
-                return true;
+                return self::TIER_LOGIN_SIGNATURE;
             }
         }
 
         if (wp_umbrella_is_signature_only()) {
-            return false;
+            return null;
         }
 
         $bearer = $request->getAuthorizationBearer();
@@ -241,18 +366,25 @@ abstract class Kernel
             $hashedBearer = wp_umbrella_get_service('WordPressContext')->getHash($bearer);
             $response = wp_umbrella_get_service('ApiWordPressPermission')->isSecretTokenAuthorized($hashedBearer, $options);
             if (isset($response['authorized']) && $response['authorized']) {
-                return true;
+                return self::TIER_SECRET_TOKEN;
             }
         }
 
         $token = $request->getToken();
         if (!$token) {
-            return false;
+            return null;
         }
 
         $response = wp_umbrella_get_service('ApiWordPressPermission')->isTokenAuthorized($token, $options);
+        if (!isset($response['authorized']) || !$response['authorized']) {
+            return null;
+        }
 
-        return isset($response['authorized']) && $response['authorized'];
+        if (wp_umbrella_get_service('RequestPermissionsByUmbrellaRequest')->isFullyAuthorized($request)) {
+            return self::TIER_SECRET_TOKEN;
+        }
+
+        return self::TIER_API_KEY;
     }
 
     /**
@@ -469,12 +601,19 @@ abstract class Kernel
             'action' => null
         ];
 
+        $tier = null;
+        $canSetupAdmin = false;
+
         if ($request->canTryExecuteWPUmbrella()) {
             $controllers = Controllers::getControllers();
             $action = $request->getAction();
+            $tier = self::getAuthorizationTier($request);
+            $routesMatchAction = $request->requestedRoutesMatchAction();
+            $canSetupAdmin = $routesMatchAction && self::isElevationEntryPoint() && self::canSetupAdminForTier($tier, $action);
 
             if (
-                self::canExecute($request) &&
+                $tier !== null &&
+                $routesMatchAction &&
                 array_key_exists($action, $controllers) &&
                 $request->getRequestFrom() === ControllerHelper::PHP
             ) {
@@ -490,12 +629,17 @@ abstract class Kernel
                     'priority' => isset($item['priority']) ? $item['priority'] : 10,
                 ];
             } elseif (
-                self::canExecute($request) &&
+                $tier !== null &&
+                $routesMatchAction &&
                 array_key_exists($action, $controllers) &&
                 $request->getRequestFrom() === ControllerHelper::API
             ) {
                 self::$apiLoad = true;
             }
+        }
+
+        if ($canSetupAdmin && (self::$universalProcess['load'] || self::$apiLoad)) {
+            self::guardElevatedRequest($request->getAction(), $request->getRequestFrom());
         }
 
         if (self::$universalProcess['load'] || self::$apiLoad) {
@@ -515,14 +659,16 @@ abstract class Kernel
 
             self::maybeMagicLogin();
 
-            wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
+            if ($canSetupAdmin) {
+                wp_umbrella_get_service('RequestSettings')->setupAdminConstants();
 
-            self::pluginLoadedWithSetupAdmin();
+                self::pluginLoadedWithSetupAdmin();
 
-            add_action('wp_loaded', function () {
-                // Prevent for WooCommerce error
-                wp_umbrella_get_service('RequestSettings')->adminLoaded();
-            }, 1);
+                add_action('wp_loaded', function () {
+                    // Prevent for WooCommerce error
+                    wp_umbrella_get_service('RequestSettings')->adminLoaded();
+                }, 1);
+            }
 
             add_action('wp', function () {
                 require_once WP_UMBRELLA_DIR . '/request/umbrella-application.php';
@@ -533,7 +679,9 @@ abstract class Kernel
         if (self::$apiLoad) {
             self::hookThirdParties();
 
-            self::pluginLoadedWithSetupAdmin();
+            if ($canSetupAdmin) {
+                self::pluginLoadedWithSetupAdmin();
+            }
         }
 
         self::ajaxActions();
